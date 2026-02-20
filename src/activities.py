@@ -4,6 +4,7 @@ import networkx as nx
 import yaml
 from pathlib import Path
 import re
+import warnings
 
 
 
@@ -33,7 +34,7 @@ class Activity:
     
     _slug: str
     title: str
-    description: str = field(default_factory=str)
+    description: str = ''
 
 
     @classmethod
@@ -71,10 +72,40 @@ class Activity:
 
     @classmethod
     def from_dict(cls, slug: str, data: dict) -> Activity:
+        '''Constructs activity from the dictionary.'''
+
+        if not isinstance(data, dict):
+            raise TypeError(f'Activity \'{slug}\' must be a mapping, got {type(data).__name__}.')
+
+        # Show a warning if there are extra fields in the activity entry.
+        allowed_keys = {'title', 'description', 'parents'}
+        extra_keys = set(data) - allowed_keys
+        if extra_keys:
+            sorted_quoted_extra_keys = [f'\'{str(k)}\'' for k in sorted(extra_keys)]
+            extra_keys_string = ', '.join(sorted_quoted_extra_keys)
+            warnings.warn(
+                f'Activity entry with slug \'{slug}\' contains unknown fields: '
+                f'{extra_keys_string}.',
+                stacklevel=2
+            )
+
+        try:
+            title = data['title']
+        except KeyError as e:
+            raise ValueError(f'Activity \'{slug}\' is missing required field \'title\'.') from e
+        
+        if not isinstance(title, str):
+            raise TypeError(f'Field \'title\' of activity \'{slug}\' must be a string.')
+        
+        description = data.get('description', '')
+
+        if not isinstance(description, str):
+            raise TypeError(f'Field \'description\' of activity \'{slug}\' must be a string.')
+
         return cls(
             _slug=slug,
-            title=data['title'],
-            description=data.get('description', '')
+            title=title,
+            description=description
         )
     
 

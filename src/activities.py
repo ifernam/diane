@@ -251,6 +251,26 @@ class Activities:
             return self._slug_to_activity[slug]
         except KeyError as e:
             raise KeyError(f'Unknown activity: \'{slug}\'.') from e
+        
+
+    def parents(self, *activities: str | Activity) -> set:
+        '''Returns the parents of the specified activities.'''
+
+        resolved_activities = (self._resolve_activity(a) for a in activities)
+        parents = set()
+        for a in resolved_activities:
+            parents.update(self._activities_graph.predecessors(a))
+        return parents
+    
+
+    def ancestors(self, *activities: str | Activity) -> set:
+        '''Returns all ancestors of the specified activities.'''
+
+        resolved_activities = (self._resolve_activity(a) for a in activities)
+        ancestors = set()
+        for a in resolved_activities:
+            ancestors.update(nx.ancestors(self._activities_graph, a))
+        return ancestors
 
 
     def clear(self) -> None:

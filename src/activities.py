@@ -1,10 +1,12 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
+from collections.abc import Iterable
 import networkx as nx
 import yaml
 from pathlib import Path
 import re
 import warnings
+
 
 
 
@@ -66,7 +68,11 @@ class Activity:
         if not isinstance(other, Activity):
             return NotImplemented
         
-        return self.slug == other.slug
+        return self._slug == other._slug
+    
+
+    def __str__(self) -> str:
+        return self._slug
     
 
     @property
@@ -81,9 +87,6 @@ class Activity:
         '''Constructs activity from the dictionary.
         
         Ignores parents.'''
-
-        if not isinstance(data, dict):
-            raise TypeError(f'Activity \'{slug}\' must be a mapping, got {type(data).__name__}.')
 
         # Show a warning if there are extra fields in the activity
         # dictionary.
@@ -190,10 +193,10 @@ class Activities:
         child = self._resolve_activity(child)
 
         if parent is child:
-            raise ValueError('Self-loop is not allowed.')
+            raise ValueError(f'Self-loop is not allowed: {parent}.')
 
         if self._activities_graph.has_edge(parent, child):
-            return    # Connection already exists
+            return    # Connection already exists.
 
         if nx.has_path(self._activities_graph, child, parent):
             raise ValueError(
@@ -201,6 +204,40 @@ class Activities:
             )
 
         self._activities_graph.add_edge(parent, child)
+
+
+    def add_connections(self, connections: Iterable[tuple[str | Activity, str | Activity]]) \
+        -> None:
+
+        '''Adds connections between activities in the registry.
+
+        Securely adds parent -> child connection pairs with
+        validation. It is assumed that the activities themselves
+        are already contained in the registry.'''
+
+        tmp_activities_graph = self._activities_graph.copy()
+
+        for p, c in connections:
+            parent = self._resolve_activity(p)
+            child = self._resolve_activity(c)
+            
+            if parent is child:
+                raise ValueError(f'Self-loop is not allowed: {parent}.')
+            
+            if tmp_activities_graph.has_edge(parent, child):
+                continue    # Connection already exists.
+
+            tmp_activities_graph.add_edge(parent, child)
+
+        if not nx.is_directed_acyclic_graph(tmp_activities_graph):
+            cycle = nx.find_cycle(tmp_activities_graph)
+            activities_in_cycle = [edge[0] for edge in cycle] + [cycle[0][0]]
+            activities_slugs_in_cycle = [f'\'{activity}\'' for activity in activities_in_cycle]
+            cycle_string = ' -> '.join(activities_slugs_in_cycle)
+            raise ValueError(f'Cycle detected: {cycle_string}.')
+        
+        self._activities_graph = tmp_activities_graph
+
 
 
     def activity_by_slug(self, slug: str) -> Activity:
@@ -227,6 +264,13 @@ class Activities:
         '''Size of activities registry.'''
 
         return len(self._slug_to_activity)
+    
+
+    @classmethod
+    def from_dict(cls, data: dict) -> Activities:
+        '''Constructs activities registry from dictionary.'''
+
+        return NotImplemented
         
 
     @classmethod

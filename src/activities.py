@@ -96,8 +96,8 @@ class Activity:
             sorted_quoted_extra_keys = [f'\'{str(k)}\'' for k in sorted(extra_keys)]
             extra_keys_string = ', '.join(sorted_quoted_extra_keys)
             warnings.warn(
-                f'Activity dictionary corresponding to the slug \'{slug}\' contains unknown fields: '
-                f'{extra_keys_string}.',
+                f'Activity dictionary corresponding to the slug \'{slug}\' contains unknown '
+                f'fields: {extra_keys_string}.',
                 stacklevel=2
             )
 
@@ -307,15 +307,12 @@ class Activities:
         connections = []
 
         for slug, item in data.items():
-            parents = item.get('parents')
-
+            parents = item.get('parents', [])
             if parents is None:
                 parents = []
-            
-            if not isinstance(parents, list):
-                raise ValueError(
-                    f'\'parents\' of \'{slug}\' must be a list.'
-                )
+
+            if isinstance(parents, str) or not isinstance(parents, Iterable):
+                raise ValueError(f'\'parents\' of \'{slug}\' must be an iterable of strings.')
 
             child = activities.activity_by_slug(slug)
 

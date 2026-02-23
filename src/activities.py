@@ -40,17 +40,17 @@ class Activity:
 
 
     @classmethod
-    def validate_slug(cls, slug: str) -> None:
+    def _validate_slug(cls, slug: str) -> None:
         if not cls._SLUG_PATTERN.fullmatch(slug):
             raise ValueError(f'Incorrect slug format: {slug}.')
         
     
-    def validate(self) -> None:
-        Activity.validate_slug(self._slug)
+    def _validate(self) -> None:
+        Activity._validate_slug(self._slug)
 
 
     def __post_init__(self) -> None:
-        self.validate()
+        self._validate()
 
     
     def __setattr__(self, name, value):
@@ -134,7 +134,10 @@ class Activities:
 
         if not nx.is_directed_acyclic_graph(self._activities_graph):
             cycle = nx.find_cycle(self._activities_graph)
-            raise ValueError(f'Cycle detected: {cycle}.')
+            activities_in_cycle = [edge[0] for edge in cycle] + [cycle[0][0]]
+            activities_slugs_in_cycle = [f'\'{activity}\'' for activity in activities_in_cycle]
+            cycle_string = ' -> '.join(activities_slugs_in_cycle)
+            raise ValueError(f'Cycle detected: {cycle_string}.')
         
         
     def __post_init__(self) -> None:
@@ -253,7 +256,7 @@ class Activities:
             raise KeyError(f'Unknown activity: \'{slug}\'.') from e
         
 
-    def parents(self, *activities: str | Activity) -> set:
+    def parents(self, *activities: str | Activity) -> set[Activity]:
         '''Returns the parents of the specified activities.'''
 
         resolved_activities = (self._resolve_activity(a) for a in activities)
@@ -263,7 +266,7 @@ class Activities:
         return parents
     
 
-    def ancestors(self, *activities: str | Activity) -> set:
+    def ancestors(self, *activities: str | Activity) -> set[Activity]:
         '''Returns all ancestors of the specified activities.'''
 
         resolved_activities = (self._resolve_activity(a) for a in activities)
@@ -289,13 +292,50 @@ class Activities:
     @classmethod
     def from_dict(cls, data: dict) -> Activities:
         '''Constructs activities registry from dictionary.'''
+        
+        activities = cls()
 
-        return NotImplemented
+        # Load activities.
+        for slug, item in data.items():
+            if not isinstance(item, dict):
+                raise ValueError('Each activity entry must be a mapping.')
+
+            activity = Activity.from_dict(slug, item)
+            activities.add_activity(activity)
+
+        # Load connections.
+        connections = []
+
+        for slug, item in data.items():
+            parents = item.get('parents')
+
+            if parents is None:
+                parents = []
+            
+            if not isinstance(parents, list):
+                raise ValueError(
+                    f'\'parents\' of \'{slug}\' must be a list.'
+                )
+
+            child = activities.activity_by_slug(slug)
+
+            for parent_slug in parents:
+                if not isinstance(parent_slug, str):
+                    raise ValueError(f'The parent slug \'{parent_slug}\' must be a string.')
+
+                parent = activities.activity_by_slug(parent_slug)
+                connections.append((parent, child))
+            
+        activities.add_connections(connections)
+
+        return activities
         
 
     @classmethod
     def from_yaml(cls, filename: str) -> Activities:
-        '''Constructs activities registry from YAML file.'''
+        '''Constructs activities registry from YAML file.
+        
+        The root of the YAML file must be 'activities'.'''
 
         try:
             path = Path(filename)
@@ -310,41 +350,10 @@ class Activities:
             if not isinstance(activities_data, dict):
                 raise ValueError('\'activities\' must be a mapping.')
             
-            activities = cls()
-
-            # Load activities.
-            for slug, item in activities_data.items():
-                if not isinstance(item, dict):
-                    raise ValueError('Each activity entry must be a mapping.')
-
-                activity = Activity.from_dict(slug, item)
-                activities.add_activity(activity)
-
-            # Load connections.
-            for slug, item in activities_data.items():
-                parents = item.get('parents')
-
-                if parents is None:
-                    parents = []
-                
-                if not isinstance(parents, list):
-                    raise ValueError(
-                        f'\'parents\' of \'{slug}\' must be a list.'
-                    )
-
-                child = activities.activity_by_slug(slug)
-
-                for parent_slug in parents:
-                    if not isinstance(parent_slug, str):
-                        raise ValueError(f'The parent slug \'{parent_slug}\' must be a string.')
-
-                    parent = activities.activity_by_slug(parent_slug)
-                    activities.add_connection(parent, child)
-
-            return activities
+            return Activities.from_dict(activities_data)
         
         except FileNotFoundError as e:
             raise FileNotFoundError(f'File not found: {filename}.') from e
         
         except yaml.YAMLError as e:
-            raise yaml.YAMLError(f'Invalid YAML: {e}.') from e
+            raise ValueError(f'Invalid YAML: {e}.') from e

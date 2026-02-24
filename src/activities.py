@@ -222,6 +222,15 @@ class Activities:
         self._activities_graph.add_node(activity)
 
 
+    def remove_activity(self, activity: Activity) -> None:
+        '''Removes activity from the registry.'''
+
+        activity = self._resolve_activity(activity)
+
+        self._activities_graph.remove_node(activity)
+        del self._slug_to_activity[activity.slug]
+
+
     def add_connection(self, parent: Activity | str, child: Activity | str) -> None:
         '''Adds a connection between activities in the registry.
 
@@ -244,6 +253,16 @@ class Activities:
             )
 
         self._activities_graph.add_edge(parent, child)
+
+
+    def remove_connection(self, parent: Activity | str, child: Activity | str) -> None:
+        '''Removes parrent -> activity connection from the registry.'''
+
+        parent = self._resolve_activity(parent)
+        child = self._resolve_activity(child)
+
+        if self._activities_graph.has_edge(parent, child):
+            self._activities_graph.remove_edge(parent, child)
 
 
     def add_connections(self, connections: Iterable[tuple[str | Activity, str | Activity]]) \

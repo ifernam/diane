@@ -55,7 +55,7 @@ class Activity:
     
     def __setattr__(self, name, value):
         if name == '_slug' and hasattr(self, '_slug'):
-            raise AttributeError("Slug is immutable.")
+            raise AttributeError('Slug is immutable.')
         super().__setattr__(name, value)
 
 
@@ -208,18 +208,18 @@ class Activities:
     def add_activity(self, activity: Activity) -> None:
         '''Adds activity to the registry.'''
 
-        if activity.slug in self._slug_to_activity:
-            raise ValueError(f'Activity \'{activity.slug}\' already exists.')
-        
-        for a in self._slug_to_activity.values():
-            if activity.title == a.title:
-                warnings.warn(
-                    f'Duplicate activity title detected: \'{activity.title}\'.',
-                    stacklevel=2
-                )
+        if activity.slug not in self._slug_to_activity:
 
-        self._slug_to_activity[activity.slug] = activity
-        self._activities_graph.add_node(activity)
+            # Check for duplicate titles.
+            for a in self._slug_to_activity.values():
+                if activity.title == a.title:
+                    warnings.warn(
+                        f'Duplicate activity title detected: \'{activity.title}\'.',
+                        stacklevel=2
+                    )
+
+            self._slug_to_activity[activity.slug] = activity
+            self._activities_graph.add_node(activity)
 
 
     def remove_activity(self, activity: Activity) -> None:
@@ -229,6 +229,13 @@ class Activities:
 
         self._activities_graph.remove_node(activity)
         del self._slug_to_activity[activity.slug]
+
+
+    def add_activities(self, activities: Iterable[Activity]) -> None:
+        '''Adds activities to the registry.'''
+        
+        for a in activities:
+            self.add_activity(a)
 
 
     def add_connection(self, parent: Activity | str, child: Activity | str) -> None:

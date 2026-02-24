@@ -1786,11 +1786,16 @@ class TimeSet:
 
 
     @classmethod
-    def union(cls, *intervals: TimeInterval) -> TimeSet:
+    def union(cls, *arg: TimeInterval | TimeSet) -> TimeSet:
         '''Creates a 'TimeSet' as a union of time intervals.'''
 
         # Remove empty intervals.
-        nonempty_intervals = [i for i in intervals if i.is_nonempty]
+        nonempty_intervals = [
+            i
+            for ts in arg
+            for i in (ts.components if isinstance(ts, TimeSet) else [ts])
+            if i.is_nonempty
+        ]
 
         # If there are no non-empty intervals, then the union is empty.
         if not nonempty_intervals:

@@ -124,20 +124,50 @@ class Activity:
 
 @dataclass
 class Activities:
-    '''Registry of activities'''
+    '''Registry of activities.
+    
+    In addition to the slugs, the names of activities should also
+    be unique within the registry. This is not a strict requirement, but
+    rather a useful recommendation designed to avoid confusion.'''
 
     _activities_graph: nx.DiGraph = field(default_factory=nx.DiGraph)
     _slug_to_activity: dict[str, Activity] = field(default_factory=dict)
 
-    
-    def _validate(self) -> None:
 
-        if not nx.is_directed_acyclic_graph(self._activities_graph):
-            cycle = nx.find_cycle(self._activities_graph)
+    @staticmethod
+    def _validate_graph(graph: nx.DiGraph) -> None:
+        # Validates activities graph.
+
+        # Check the graph for cycles.
+        if not nx.is_directed_acyclic_graph(graph):
+            cycle = nx.find_cycle(graph)
             activities_in_cycle = [edge[0] for edge in cycle] + [cycle[0][0]]
             activities_slugs_in_cycle = [f'\'{activity}\'' for activity in activities_in_cycle]
             cycle_string = ' -> '.join(activities_slugs_in_cycle)
             raise ValueError(f'Cycle detected: {cycle_string}.')
+
+    
+    def _validate(self) -> None:
+        Activities._validate_graph(self._activities_graph)
+
+        # Check for title duplicates.
+        seen_titles = set()
+        duplicates_titles = set()
+
+        for activity in self._slug_to_activity.values():
+            title = activity.title
+            if title in seen_titles:
+                duplicates_titles.add(title)
+            else:
+                seen_titles.add(title)
+
+        if duplicates_titles:
+            quoted_duplicates_titles = [f'\'{t}\'' for t in duplicates_titles]
+            duplicates_string = ', '.join(quoted_duplicates_titles)
+            warnings.warn(
+                f'Duplicate activity titles detected: {duplicates_string}.',
+                stacklevel=2
+            )
         
         
     def __post_init__(self) -> None:
@@ -179,10 +209,17 @@ class Activities:
         '''Adds activity to the registry.'''
 
         if activity.slug in self._slug_to_activity:
-            raise ValueError(f'Activity {activity.slug} already exists.')
+            raise ValueError(f'Activity \'{activity.slug}\' already exists.')
+        
+        for a in self._slug_to_activity.values():
+            if activity.title == a.title:
+                warnings.warn(
+                    f'Duplicate activity title detected: \'{activity.title}\'.',
+                    stacklevel=2
+                )
 
-        self._activities_graph.add_node(activity)
         self._slug_to_activity[activity.slug] = activity
+        self._activities_graph.add_node(activity)
 
 
     def add_connection(self, parent: Activity | str, child: Activity | str) -> None:
@@ -232,13 +269,8 @@ class Activities:
 
             tmp_activities_graph.add_edge(parent, child)
 
-        if not nx.is_directed_acyclic_graph(tmp_activities_graph):
-            cycle = nx.find_cycle(tmp_activities_graph)
-            activities_in_cycle = [edge[0] for edge in cycle] + [cycle[0][0]]
-            activities_slugs_in_cycle = [f'\'{activity}\'' for activity in activities_in_cycle]
-            cycle_string = ' -> '.join(activities_slugs_in_cycle)
-            raise ValueError(f'Cycle detected: {cycle_string}.')
-        
+        Activities._validate_graph(tmp_activities_graph)
+
         self._activities_graph = tmp_activities_graph
 
 
@@ -281,6 +313,7 @@ class Activities:
 
         self._activities_graph.clear()
         self._slug_to_activity.clear()
+        self._validate()
 
 
     def __len__(self) -> int:

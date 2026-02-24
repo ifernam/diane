@@ -18,15 +18,19 @@ class Session:
             be empty. It should start with a capital letter and finish
             with a dot.'''
 
+    _session_id: uuid.UUID = field(default_factory=uuid.uuid4, init=False)
     _timeset: TimeSet
     _activities: set[Activity]
     comment: str = ''
-    _session_id: uuid.UUID = field(default_factory=uuid.uuid4)
 
 
     def _validate(self) -> None:
+
         if self._timeset.is_empty:
             raise ValueError('The session must be associated with a non-empty time set.')
+        
+        if not self._activities:
+            raise ValueError('The session must contain at least one activity.')
         
 
     def __post_init__(self) -> None:
@@ -50,7 +54,7 @@ class Session:
         return str(self._session_id)
     
 
-    def __setattr__(self, name, value):
+    def __setattr__(self, name, value) -> None:
         if name == '_session_id' and hasattr(self, '_session_id'):
             raise AttributeError('Session ID is immutable.')
         super().__setattr__(name, value)
@@ -64,14 +68,14 @@ class Session:
 
 
     @property
-    def timeset(self):
+    def timeset(self) -> TimeSet:
         '''Returns the session's 'TimeSet'.'''
 
         return self._timeset
     
 
     @timeset.setter
-    def timeset(self, timeset: TimeSet):
+    def timeset(self, timeset: TimeSet) -> None:
         '''Sets the session's 'TimeSet'.
 
         An empty 'TimeSet' is not permitted.
@@ -86,19 +90,19 @@ class Session:
 
 
     @property
-    def activities(self):
+    def activities(self) -> frozenset:
         '''Returns activities set.'''
 
         return frozenset(self._activities)
     
 
-    def add_activity(self, activity: Activity):
+    def add_activity(self, activity: Activity) -> None:
         '''Adds activity to the session.'''
 
         self._activities.add(activity)
 
 
-    def remove_activity(self, activity: Activity):
+    def remove_activity(self, activity: Activity) -> None:
         '''Removes activity from the session.'''
 
         self._activities.remove(activity)
@@ -115,10 +119,10 @@ class Session:
         if not sessions:
             raise ValueError('At least one session required for merge.')
         
-        for f, s in zip(sessions, sessions[1:]):
-            if f.activities != s.activities:
+        first_activities = sessions[0].activities
+        if any(s.activities != first_activities for s in sessions[1:]):
                 raise ValueError(
-                    f'Sessions {f} and {s} are not mergeable as they have different activity sets.'
+                    f'Sessions are not mergeable as they have different activity sets.'
                 )
 
         timesets = [s.timeset for s in sessions]
@@ -126,12 +130,8 @@ class Session:
 
         activities = set(sessions[0].activities)
 
-        for f, s in zip(sessions, sessions[1:]):
-            if f.comment != s.comment:
-                comment = ''
-                break
-        else:
-            comment = sessions[0].comment
+        comments = {s.comment for s in sessions}
+        comment = comments.pop() if len(comments) == 1 else ''
 
         return Session(timeset, activities, comment)
 

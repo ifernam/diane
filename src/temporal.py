@@ -52,7 +52,7 @@ class Timestamp:
         
     
     def __str__(self) -> str:
-        return f'{self.datetime_iso}, {self.timezone_iana}'
+        return f'{self.datetime_iso}'
     
 
     def __eq__(self, other: object) -> bool:

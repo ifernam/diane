@@ -5,6 +5,7 @@ from temporal import Timestamp, TimeInterval, TimeSet
 from activities import Activity
 
 
+
 @dataclass
 class Session:
     '''Represents session.
@@ -90,7 +91,7 @@ class Session:
 
 
     @property
-    def activities(self) -> frozenset:
+    def activities(self) -> frozenset[Activity]:
         '''Returns activities set.'''
 
         return frozenset(self._activities)

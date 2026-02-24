@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
-from collections.abc import Iterable
+from collections.abc import Set, Iterable
 import networkx as nx
 import yaml
 from pathlib import Path
@@ -123,7 +123,7 @@ class Activity:
 
 
 @dataclass
-class Activities:
+class Activities(Set[Activity]):
     '''Registry of activities.
     
     In addition to the slugs, the names of activities should also
@@ -203,6 +203,16 @@ class Activities:
             return item in self._slug_to_activity
         
         return False
+    
+
+    def __iter__(self):
+        return iter(self._slug_to_activity.values())
+    
+
+    def __len__(self) -> int:
+        '''Size of activities registry.'''
+
+        return len(self._slug_to_activity)
     
 
     def add_activity(self, activity: Activity) -> None:
@@ -340,12 +350,6 @@ class Activities:
         self._activities_graph.clear()
         self._slug_to_activity.clear()
         self._validate()
-
-
-    def __len__(self) -> int:
-        '''Size of activities registry.'''
-
-        return len(self._slug_to_activity)
     
 
     @classmethod

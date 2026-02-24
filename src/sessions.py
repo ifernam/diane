@@ -26,19 +26,12 @@ class Session:
 
     def _validate(self) -> None:
         if self._timeset.is_empty:
-            raise ValueError('The activity must be associated with a non-emptying time set.')
+            raise ValueError('The session must be associated with a non-empty time set.')
         
 
     def __post_init__(self) -> None:
         self._activities = self._activities.copy()
         self._validate()
-
-
-    @property
-    def session_id(self):
-        '''Returns the session ID.'''
-
-        return self._session_id
 
 
     def __eq__(self, other: object) -> bool:
@@ -55,11 +48,24 @@ class Session:
 
     def __str__(self) -> str:
         return str(self._session_id)
+    
+
+    def __setattr__(self, name, value):
+        if name == '_session_id' and hasattr(self, '_session_id'):
+            raise AttributeError('Session ID is immutable.')
+        super().__setattr__(name, value)
+
+
+    @property
+    def session_id(self) -> uuid.UUID:
+        '''Returns the session's ID.'''
+
+        return self._session_id
 
 
     @property
     def timeset(self):
-        '''This returns the session's 'TimeSet'.'''
+        '''Returns the session's 'TimeSet'.'''
 
         return self._timeset
     
@@ -112,7 +118,7 @@ class Session:
         for f, s in zip(sessions, sessions[1:]):
             if f.activities != s.activities:
                 raise ValueError(
-                    f'Sessions {f} and {s} a not mergeble as have different activities sets.'
+                    f'Sessions {f} and {s} are not mergeable as they have different activity sets.'
                 )
 
         timesets = [s.timeset for s in sessions]

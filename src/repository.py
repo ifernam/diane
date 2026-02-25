@@ -2,6 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from collections.abc import MutableSet
 import uuid
+from temporal import Timestamp, TimeInterval, TimeSet
 from activities import Activity, Activities
 from sessions import Session
 
@@ -124,3 +125,33 @@ class Repository(MutableSet[Session]):
         new_activities = activities.copy()
         self._validate_activities(new_activities)
         self._activities = new_activities
+    
+
+    def find_overlapping(self, timeset: TimeSet | TimeInterval) -> set[Session]:
+        '''Finds sessions in the repository that overlap with a given
+        time set.'''
+
+        if isinstance(timeset, TimeInterval):
+            timeset = TimeSet(timeset)
+
+        overlapping_sessions = set()
+        for session in self._id_to_session.values():
+            if session.timeset.overlaps(timeset):
+                overlapping_sessions.add(session)
+
+        return overlapping_sessions
+    
+
+    def find_contained_in(self, timeset: TimeSet | TimeInterval) -> set[Session]:
+        '''Finds sessions in the repository that contained in a given
+        time set.'''
+
+        if isinstance(timeset, TimeInterval):
+            timeset = TimeSet(timeset)
+
+        contained_sessions = set()
+        for session in self._id_to_session.values():
+            if session.timeset.is_contained_in(timeset):
+                contained_sessions.add(session)
+
+        return contained_sessions

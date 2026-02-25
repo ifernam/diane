@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
-from collections.abc import Set, Iterable
+from collections.abc import MutableSet, Iterable
 import networkx as nx
 import yaml
 from pathlib import Path
@@ -123,7 +123,7 @@ class Activity:
 
 
 @dataclass
-class Activities(Set[Activity]):
+class Activities(MutableSet[Activity]):
     '''Registry of activities.
     
     In addition to the slugs, the names of activities should also
@@ -176,7 +176,10 @@ class Activities(Set[Activity]):
     
     def _resolve_activity(self, obj: Activity | str) -> Activity:
         '''Checks for activity in the registry. If activity is found,
-        restores activity according to the slug.'''
+        restores activity according to the slug.
+        
+        Raises:
+            KeyError: if the activity is not in the registry.'''
 
         if isinstance(obj, Activity):
             slug = obj.slug
@@ -215,37 +218,53 @@ class Activities(Set[Activity]):
         return len(self._slug_to_activity)
     
 
-    def add_activity(self, activity: Activity) -> None:
+    def add(self, value: Activity) -> None:
         '''Adds activity to the registry.'''
 
-        if activity.slug not in self._slug_to_activity:
+        if value.slug not in self._slug_to_activity:
 
             # Check for duplicate titles.
             for a in self._slug_to_activity.values():
-                if activity.title == a.title:
+                if value.title == a.title:
                     warnings.warn(
-                        f'Duplicate activity title detected: \'{activity.title}\'.',
+                        f'Duplicate activity title detected: \'{value.title}\'.',
                         stacklevel=2
                     )
 
-            self._slug_to_activity[activity.slug] = activity
-            self._activities_graph.add_node(activity)
+            self._slug_to_activity[value.slug] = value
+            self._activities_graph.add_node(value)
+    
 
-
-    def remove_activity(self, activity: Activity) -> None:
+    def discard(self, value: Activity | str) -> None:
         '''Removes activity from the registry.'''
+        
+        try:
+            activity = self._resolve_activity(value)
+            self._activities_graph.remove_node(activity)
+            del self._slug_to_activity[activity.slug]
+        except KeyError:
+            pass
 
-        activity = self._resolve_activity(activity)
 
-        self._activities_graph.remove_node(activity)
-        del self._slug_to_activity[activity.slug]
+    def remove(self, value: Activity) -> None:
+        '''Removes activity from the registry.
+        
+        Raises:
+            KeyError: if the activity is not in the registry.'''
+        
+        try:
+            activity = self._resolve_activity(value)
+            self._activities_graph.remove_node(activity)
+            del self._slug_to_activity[activity.slug]
+        except KeyError as e:
+            raise KeyError(f'The activity \'{value}\' is not in the registry.') from e
 
 
     def add_activities(self, activities: Iterable[Activity]) -> None:
         '''Adds activities to the registry.'''
         
         for a in activities:
-            self.add_activity(a)
+            self.add(a)
 
 
     def add_connection(self, parent: Activity | str, child: Activity | str) -> None:
@@ -364,7 +383,7 @@ class Activities(Set[Activity]):
                 raise ValueError('Each activity entry must be a mapping.')
 
             activity = Activity.from_dict(slug, item)
-            activities.add_activity(activity)
+            activities.add(activity)
 
         # Load connections.
         connections = []

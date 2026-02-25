@@ -14,14 +14,17 @@ class Repository(MutableSet[Session]):
     _id_to_session: dict[uuid.UUID, Session] = field(default_factory=dict)
 
 
-    def _validate(self) -> None:
-
+    def _validate_activities(self, activities: Activities) -> None:
         for session_id, session in self._id_to_session.items():
-            if not session.activities <= self._activities:
+            if not session.activities <= activities:
                 raise ValueError(
                     f'The session {session_id} contains activities that are not in the registry.'
                 )
-    
+
+
+    def _validate(self) -> None:
+        self._validate_activities(self._activities)
+
 
     def __post_init__(self) -> None:
         self._validate()
@@ -105,3 +108,19 @@ class Repository(MutableSet[Session]):
             del self._id_to_session[session.session_id]
         except KeyError as e:
             raise KeyError(f'The session {value} is not in the repository.') from e
+    
+
+    @property
+    def activities(self) -> Activities:
+        '''Returns copy of the activities registry.'''
+
+        return self._activities.copy()
+        
+
+    @activities.setter
+    def activities(self, activities: Activities) -> None:
+        '''Sets the activities registry.'''
+        
+        new_activities = activities.copy()
+        self._validate_activities(new_activities)
+        self._activities = new_activities

@@ -130,9 +130,10 @@ class Activities(MutableSet[Activity]):
     be unique within the registry. This is not a strict requirement, but
     rather a useful recommendation designed to avoid confusion.'''
 
-    _activities_graph: nx.DiGraph = field(default_factory=nx.DiGraph)
-    _slug_to_activity: dict[str, Activity] = field(default_factory=dict)
 
+    _slug_to_activity: dict[str, Activity] = field(default_factory=dict)
+    _activities_graph: nx.DiGraph = field(default_factory=nx.DiGraph)
+    
 
     @staticmethod
     def _validate_graph(graph: nx.DiGraph) -> None:
@@ -369,6 +370,10 @@ class Activities(MutableSet[Activity]):
         self._activities_graph.clear()
         self._slug_to_activity.clear()
         self._validate()
+    
+
+    def copy(self) -> Activities:
+        return Activities(self._slug_to_activity.copy(), self._activities_graph.copy())
     
 
     @classmethod

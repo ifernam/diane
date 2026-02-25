@@ -135,4 +135,3 @@ class Session:
         comment = comments.pop() if len(comments) == 1 else ''
 
         return Session(timeset, activities, comment)
-

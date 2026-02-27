@@ -140,7 +140,7 @@ class Session:
 
         Raises:
             ValueError: if sessions have different sets
-            of activities.'''
+            of activities or if zero sessions are given.'''
         
         if not sessions:
             raise ValueError('At least one session required for merge.')
@@ -162,3 +162,33 @@ class Session:
         comment = '\n'.join(s.comment for s in sessions if s.comment)
 
         return Session(timeset, activities, comment)
+
+
+    def absorb(self, other: Session) -> None:
+        '''One session absorbs another if their activities coincide.
+        
+        If the activities in two sessions are the same, the time set
+        and comment from the other session are added to this one.
+        
+        Raises:
+            ValueError: if sessions have different sets
+            of activities.'''
+        
+        # Avoid self-absorption.
+        if self == other:
+            return
+        
+        if self.activities != other.activities:
+            raise ValueError(
+                    f'Session cannot absorb another if they have different activities.'
+                )
+        
+        # Unite time sets.
+        self.timeset |= other.timeset
+
+        # Concatenate of comments via line breaks.
+        if other.comment:
+            if self.comment:
+                self.comment += "\n" + other.comment
+            else:
+                self.comment = other.comment

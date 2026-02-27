@@ -11,13 +11,12 @@ class Session:
     '''Represents session.
     
     Attributes:
-        _session_id: The unique integer identifier for a session. Cannot
+        _session_id: The unique 'UUID' identifier for a session. Cannot
             be changed.
         _timeset: Time of session.
         _activities: Set of activities.
         comment: The session comment string. Can be changed. This may
-            be empty. It should start with a capital letter and finish
-            with a dot.'''
+            be empty.'''
 
     _session_id: uuid.UUID = field(default_factory=uuid.uuid4, init=False)
     _timeset: TimeSet
@@ -145,21 +144,30 @@ class Session:
         if not sessions:
             raise ValueError('At least one session required for merge.')
         
-        first_activities = sessions[0].activities
-        if any(s.activities != first_activities for s in sessions[1:]):
+        # Remove duplicates by ID, leaving only the first occurrence
+        # of each session.
+        unique_sessions = []
+        seen_ids = set()
+        for s in sessions:
+            if s.session_id not in seen_ids:
+                seen_ids.add(s.session_id)
+                unique_sessions.append(s)
+        
+        first_activities = unique_sessions[0].activities
+        if any(s.activities != first_activities for s in unique_sessions[1:]):
                 raise ValueError(
-                    f'Sessions are not mergeable as they have different activies.'
+                    f'Sessions are not mergeable as they have different activities.'
                 )
 
         # Unite time sets.
-        timesets = [s.timeset for s in sessions]
+        timesets = [s.timeset for s in unique_sessions]
         timeset = TimeSet.union(*timesets)
 
         # As activities are same, we can take them from one session.
-        activities = set(sessions[0].activities)
+        activities = set(unique_sessions[0].activities)
 
         # Concatenate of comments from given sessions via line breaks.
-        comment = '\n'.join(s.comment for s in sessions if s.comment)
+        comment = '\n'.join(s.comment for s in unique_sessions if s.comment)
 
         return Session(timeset, activities, comment)
 

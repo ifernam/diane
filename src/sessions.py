@@ -85,7 +85,7 @@ class Session:
             ValueError: if 'TimeSet' is empty.'''
 
         if timeset.is_empty:
-            raise ValueError('The activity must be associated with a non-empty time set.')
+            raise ValueError('The session must be associated with a non-empty time set.')
 
         self._timeset = timeset
 
@@ -97,6 +97,22 @@ class Session:
         return frozenset(self._activities)
     
 
+    @activities.setter
+    def activities(self, activities: set[Activity]) -> None:
+        '''Sets session activities.
+        
+        Set of activities must be non-empty.
+        
+        Raises:
+            ValueError: if we try to set an empty set of activities.'''
+
+        if not activities:
+            raise ValueError('Set of activities must be non-empty.')
+        
+        self._activities = activities.copy()
+
+    
+
     def add_activity(self, activity: Activity) -> None:
         '''Adds activity to the session.'''
 
@@ -104,14 +120,23 @@ class Session:
 
 
     def remove_activity(self, activity: Activity) -> None:
-        '''Removes activity from the session.'''
+        '''Removes activity from the session.
+        
+        Raises:
+            ValueError: if we try to remove the last activity.'''
+
+        if len(self._activities) == 1:
+            raise ValueError('Session must contain at least one activity.')
 
         self._activities.remove(activity)
 
 
     @classmethod
     def merge(cls, *sessions: Session) -> Session:
-        '''Combines sessions with the same set of activities.
+        '''Merges sessions with the same set of activities.
+
+        If sessions have same activities, a new session will be created
+        that unites the time sets and comments of the original ones.
 
         Raises:
             ValueError: if sessions have different sets
@@ -123,15 +148,17 @@ class Session:
         first_activities = sessions[0].activities
         if any(s.activities != first_activities for s in sessions[1:]):
                 raise ValueError(
-                    f'Sessions are not mergeable as they have different activity sets.'
+                    f'Sessions are not mergeable as they have different activies.'
                 )
 
+        # Unite time sets.
         timesets = [s.timeset for s in sessions]
         timeset = TimeSet.union(*timesets)
 
+        # As activities are same, we can take them from one session.
         activities = set(sessions[0].activities)
 
-        comments = {s.comment for s in sessions}
-        comment = comments.pop() if len(comments) == 1 else ''
+        # Concatenate of comments from given sessions via line breaks.
+        comment = '\n'.join(s.comment for s in sessions if s.comment)
 
         return Session(timeset, activities, comment)

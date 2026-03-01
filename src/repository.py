@@ -2,9 +2,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from collections.abc import MutableSet
 import uuid
-from temporal import Timestamp, TimeInterval, TimeSet
+from temporal import TimeInterval, TimeSet
 from activities import Activity, Activities
 from sessions import Session
+
 
 
 @dataclass
@@ -16,6 +17,9 @@ class Repository(MutableSet[Session]):
 
 
     def _validate_activities(self, activities: Activities) -> None:
+        ''' Checks that all session activities are in the given activity
+        registry.'''
+
         for session_id, session in self._id_to_session.items():
             if not session.activities <= activities:
                 raise ValueError(
@@ -69,7 +73,7 @@ class Repository(MutableSet[Session]):
         try:
             return self._id_to_session[session_id]
         except KeyError as e:
-            raise KeyError(f'Unknown session: \'{session_id}\'.') from e
+            raise KeyError(f'Unknown session: {session_id}.') from e
     
 
     def add(self, value: Session) -> None:
@@ -122,9 +126,8 @@ class Repository(MutableSet[Session]):
     def activities(self, activities: Activities) -> None:
         '''Sets the activities registry.'''
         
-        new_activities = activities.copy()
-        self._validate_activities(new_activities)
-        self._activities = new_activities
+        self._validate_activities(activities)
+        self._activities = activities.copy()
     
 
     def find_overlapping(self, timeset: TimeSet | TimeInterval) -> set[Session]:
@@ -143,8 +146,8 @@ class Repository(MutableSet[Session]):
     
 
     def find_contained_in(self, timeset: TimeSet | TimeInterval) -> set[Session]:
-        '''Finds sessions in the repository that contained in a given
-        time set.'''
+        '''Finds sessions in the repository that are contained
+        in a given time set.'''
 
         if isinstance(timeset, TimeInterval):
             timeset = TimeSet(timeset)
@@ -155,3 +158,32 @@ class Repository(MutableSet[Session]):
                 contained_sessions.add(session)
 
         return contained_sessions
+    
+
+    def merge(self, *sessions: Session | uuid.UUID) -> None:
+        '''Merges sessions with the same set of activities.
+
+        If sessions have same activities, a new session will be created
+        that unites the time sets and comments of the original ones.
+        As a result, a new session appears in the repository,
+        and the old ones are removed.
+
+        Raises:
+            ValueError: if sessions cannot be merged.'''
+        
+        if not sessions:
+            raise ValueError('At least one session required for merge.')
+        
+        resolved_sessions = [self._resolve_session(s) for s in sessions]
+
+        # Remove duplicates by ID, leaving only the first occurrence
+        # of each session.
+        sessions_to_merge = list(dict.fromkeys(resolved_sessions))
+
+        try:
+            merged = Session.merge(*sessions_to_merge)
+            self.add(merged)
+            for s in sessions:
+                self.discard(s)
+        except ValueError as e:
+            raise ValueError(f'Sessions cannot be merged: {e}.') from e

@@ -1476,7 +1476,36 @@ class TimeInterval:
             return False
 
         return True
+    
 
+    @staticmethod
+    def dist(first: TimeInterval, second: TimeInterval) -> datetime.timedelta | None:
+        '''Returns the distance between intervals.
+        
+        If the intervals overlap, returns zero. If the distance
+        is not defined in a case where at least one of the intervals
+        is empty, the result is 'None'.'''
+
+        if first.is_empty or second.is_empty:
+            return None
+
+        if first.is_left_of(second):
+            if first.end is None or second.start is None:
+                raise AssertionError(
+                    'Since the intervals are non-empty and do not intersect, the left interval '
+                    'must be bounded on the right and the right interval must be bounded '
+                    'on the left.')
+            return second.start - first.end
+        elif first.is_right_of(second):
+            if first.start is None or second.end is None:
+                raise AssertionError(
+                    'Since the intervals are non-empty and do not intersect, the left interval '
+                    'must be bounded on the right and the right interval must be bounded '
+                    'on the left.')
+            return first.start - second.end
+        else:
+            # Intervals overlap.
+            return datetime.timedelta()
 
 
 @dataclass(frozen=True)
@@ -1626,6 +1655,54 @@ class TimeSet:
         '''Checks whether a given time set is contained in another.'''
 
         return other.contains(self)
+    
+
+    def is_left_of(self, other: TimeInterval | TimeSet) -> bool:
+        '''Checks that the time set lies strictly to the left
+        of the other time set or time interval and does not intersect
+        with it.
+        
+        This is automatically true if any of the time sets are empty.'''
+
+        if self.is_empty or other.is_empty:
+            return True
+        # From this point onwards, both time sets are considered
+        # to be non-empty.
+
+        if self.end is not None and other.start is not None:
+            # 'self' is bounded on the right and 'other' is bounded
+            # on the left.
+
+            if self.end < other.start:
+                return True
+            if self.end == other.start:
+                return self.is_end_included is False or other.is_start_included is False
+            
+        return False
+    
+
+    def is_right_of(self, other: TimeInterval | TimeSet) -> bool:
+        '''Checks that the time set lies strictly to the right
+        of the other time set or time interval and does not intersect
+        with it.
+        
+        This is automatically true if any of the time sets are empty.'''
+
+        if self.is_empty or other.is_empty:
+            return True
+        # From this point onwards, both time sets are considered
+        # to be non-empty.
+
+        if other.end is not None and self.start is not None:
+            # 'other' is bounded on the right and 'self' is bounded
+            # on the left.
+
+            if other.end < self.start:
+                return True
+            if other.end == self.start:
+                return other.is_end_included is False or self.is_start_included is False
+            
+        return False
     
 
     def intersection_with_interval(self, other: TimeInterval) -> TimeSet:
@@ -1936,6 +2013,50 @@ class TimeSet:
     
 
     @property
+    def is_start_specified(self) -> bool:
+        '''Returns whether the start of the time set is specified.'''
+
+        if self.is_empty:
+            return False
+        
+        return self.first_component.is_start_specified
+    
+
+    @property
+    def is_end_specified(self) -> bool:
+        '''Returns whether the end of the time set is specified.'''
+
+        if self.is_empty:
+            return False
+        
+        return self.last_component.is_end_specified
+    
+
+    @property
+    def is_start_included(self) -> bool | None:
+        '''If the start of the time set is specified, returns whether
+        it is included in the time set or not. If the start
+        is not specified, it returns 'None'.'''
+
+        if self.is_start_specified:
+            return self.first_component.is_start_included
+        else:
+            return None
+    
+
+    @property
+    def is_end_included(self) -> bool | None:
+        '''If the end of the time set is specified, returns whether
+        it is included in the time set or not. If the end
+        is not specified, it returns 'None'.'''
+
+        if self.is_end_specified:
+            return self.last_component.is_end_included
+        else:
+            return None
+    
+
+    @property
     def inf(self) -> Timestamp | None:
         '''Returns the infimum of the time set. If it is not defined,
         when the time set is empty or unbounded on the left, returns
@@ -2022,6 +2143,63 @@ class TimeSet:
         return total
     
 
+    def span_duration(self) -> datetime.timedelta | None:
+        '''Return the duration of the minimal interval covering
+        the whole set.
+
+        This is the time span from the earliest start to the latest end.
+        Returns zero for an empty set, 'None' if the set
+        is unbounded.'''
+
+        if self.is_empty:
+            return datetime.timedelta()
+        
+        if self.start is None or self.end is None:
+            return None
+        
+        return self.end - self.start
+    
+
+    @property
+    def min_component_duration(self) -> datetime.timedelta | None:
+        '''Returns the duration of the minimum component.
+
+        If there are no components in 'TimeSet', i.e. if 'TimeSet'
+        is empty, or if the minimum component is unbounded, returns
+        'None'.'''
+
+        min_duration = None
+
+        def duration_key(d: datetime.timedelta | None):
+            return (d is None, d)
+
+        for c in self.components:
+            min_duration = min(min_duration, c.duration, key=duration_key)
+
+        return min_duration
+    
+
+    @property
+    def max_gap_duration(self) -> datetime.timedelta:
+        '''Returns the duration of the maximum gap.
+        
+        If there are no gaps, returns zero duration.'''
+
+        max_gap = datetime.timedelta()
+        for f, s in zip(self.components, self.components[1:]):
+            start, end = f.end, s.start
+            
+            if start is None or end is None:
+                raise AssertionError(
+                    '\'TimeSet\' state is incorrect: any non-last component should be bounded '
+                    'on the right and any non-first component on the left.'
+                )
+
+            max_gap = max(max_gap, end - start)
+
+        return max_gap
+    
+
     def closure(self) -> TimeSet:
         '''Creates a topological closure of the time set.'''
 
@@ -2032,3 +2210,85 @@ class TimeSet:
         '''Creates a topological interior of the time set.'''
 
         return TimeSet.union(*map(TimeInterval.interior, self.components))
+    
+
+    @staticmethod
+    def dist(first: TimeInterval | TimeSet, second: TimeInterval | TimeSet) -> datetime.timedelta | None:
+        '''Returns the distance between time sets or time intervals.
+        
+        If the time sets or time intervals overlap, returns zero.
+        If the distance is not defined in a case where at least one
+        of the time sets or time intervals is empty, returns 'None'.'''
+
+        if first.is_empty or second.is_empty:
+            return None
+        
+        if isinstance(first, TimeInterval):
+            first = TimeSet(first)
+
+        if isinstance(second, TimeInterval):
+            second = TimeSet(second)
+
+        if first.is_left_of(second):
+            if first.end is None or second.start is None:
+                raise AssertionError(
+                    'Since the time sets are non-empty, the left time set must be bounded '
+                    'on the right and the right time set must be bounded on the left.'
+                )
+            return second.start - first.end
+        elif first.is_right_of(second):
+            if first.start is None or second.end is None:
+                raise AssertionError(
+                    'Since the time sets are non-empty, the left time set must be bounded '
+                    'on the right and the right time set must be bounded on the left.'
+                )
+            return first.start - second.end
+        else:
+            # Find the minimum distance between the components.
+            i, j = 0, 0
+            first_is_left_of_second = None
+            dist = None
+
+            def dist_key(dist: datetime.timedelta | None):
+                return (dist is None, dist)
+
+            while i < first.components_number and j < second.components_number:
+                if first.components[i].is_left_of(second.components[j]):
+                    
+                    if first_is_left_of_second is False:
+                        components_dist = TimeInterval.dist(
+                            first.components[i],
+                            second.components[j - 1]
+                        )
+                        dist = min(dist, components_dist, key=dist_key)
+
+                    first_is_left_of_second = True
+                    i += 1
+                elif first.components[i].is_right_of(second.components[j]):
+
+                    if first_is_left_of_second is True:
+                        components_dist = TimeInterval.dist(
+                            first.components[i - 1],
+                            second.components[j]
+                        )
+                        dist = min(dist, components_dist, key=dist_key)
+                    
+                    first_is_left_of_second = False
+                    j += 1
+                else:
+                    # Components overlap.
+                    return datetime.timedelta()
+            else:
+                if first_is_left_of_second is True:
+                    components_dist = TimeInterval.dist(
+                            first.components[i - 1],
+                            second.components[j]
+                        )
+                else:
+                    components_dist = TimeInterval.dist(
+                            first.components[i],
+                            second.components[j - 1]
+                        )
+                dist = min(dist, components_dist, key=dist_key)
+
+            return dist

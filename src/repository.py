@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from collections.abc import MutableSet
 import uuid
-from temporal import TimeInterval, TimeSet
+from temporal import Timestamp, TimeInterval, TimeSet
 from activities import Activity, Activities
 from sessions import Session
 
@@ -160,8 +160,51 @@ class Repository(MutableSet[Session]):
         return contained_sessions
     
 
-    def merge(self, *sessions: Session | uuid.UUID) -> None:
-        '''Merges sessions with the same set of activities.
+    def find_closest_in_time_to(self, session: uuid.UUID | Session) -> Session:
+        '''Returns the session closest in time to the given one.
+        
+        Raises:
+            KeyError: if no other sessions in the repository.'''
+
+        session = self._resolve_session(session)
+
+        def closest_key(s: Session):
+            dist = TimeSet.dist(session.timeset, s.timeset)
+            return dist is None, dist
+
+        considered_sessions  = {s for s in self._id_to_session.values() if s != session}
+        if not considered_sessions:
+            raise KeyError('No other sessions in the repository.')
+        
+        closest = min(considered_sessions, key=closest_key)
+
+        return closest
+    
+
+    def last(self) -> Session:
+        '''Returns the last completed session.
+        
+        Raises:
+            KeyError: if there are no sessions completed up to present
+            in the repository.'''
+
+        up_to_present = self.find_contained_in(TimeInterval.leftclosed(Timestamp.now()))
+
+        if not up_to_present:
+            raise KeyError('There are no sessions completed up to present in the repository.')
+
+        def last_key(s: Session):
+            return (
+                s.timeset.end is None,
+                s.timeset.end,
+                s.timeset.is_end_included)
+        
+        return max(up_to_present, key=last_key)
+
+
+    def merge(self, *sessions: Session | uuid.UUID) -> Session:
+        '''Merges sessions with the same set of activities and returns
+        the result.
 
         If sessions have same activities, a new session will be created
         that unites the time sets and comments of the original ones.
@@ -182,8 +225,11 @@ class Repository(MutableSet[Session]):
 
         try:
             merged = Session.merge(*sessions_to_merge)
-            self.add(merged)
-            for s in sessions:
-                self.discard(s)
         except ValueError as e:
             raise ValueError(f'Sessions cannot be merged: {e}.') from e
+        
+        self.add(merged)
+        for s in sessions:
+            self.discard(s)
+
+        return merged

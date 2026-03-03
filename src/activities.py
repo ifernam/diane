@@ -15,23 +15,19 @@ class Activity:
     '''Represents a human activity.
     
     Attributes:
-        _slug: The unique string identifier for an activity. Cannot
-            be changed. A slug consists of lowercase letters, digits
-            and underscores only. It cannot contain more than one
-            consecutive underscore. It must not begin or end with
-            an underscore.
+        slug: The unique string identifier for an activity. Cannot
+            be changed. Format: lowercase letters, digits,
+            and underscores (non-consecutive, not leading/trailing).
+            Must contain at least one letter.
             
         title: The human-readable name of the activity. Can be changed.
-            It should start with a capital letter and finish without
-            a dot.
         
         description: The activity description string. Can be changed.
             This may be empty if the activity is clearly understood from
-            its name. It should start with a capital letter and finish
-            with a dot.'''
+            its name.'''
 
 
-    _SLUG_PATTERN = re.compile(r'[a-z0-9]+(_[a-z0-9]+)*')
+    _SLUG_PATTERN = re.compile(r'^(?=.*[a-z])[a-z0-9]+(_[a-z0-9]+)*$')
 
     
     _slug: str
@@ -42,7 +38,7 @@ class Activity:
     @classmethod
     def _validate_slug(cls, slug: str) -> None:
         if not cls._SLUG_PATTERN.fullmatch(slug):
-            raise ValueError(f'Incorrect slug format: {slug}.')
+            raise ValueError(f'Incorrect slug format: \'{slug}\'.')
         
     
     def _validate(self) -> None:
@@ -84,9 +80,17 @@ class Activity:
 
     @classmethod
     def from_dict(cls, slug: str, data: dict) -> Activity:
-        '''Constructs activity from the dictionary.
+        '''Constructs an activity from a dictionary.
         
-        Ignores parents.'''
+        Slug must be specified as a separate argument. Ignores parents.
+        
+        Example dictionary:
+            studying_algebra = {
+                'title':  'Studying algebra',
+                'description': '',
+                'parents': ['studying_math', 'studying']
+            }
+        '''
 
         # Show a warning if there are extra fields in the activity
         # dictionary.
@@ -176,8 +180,8 @@ class Activities(MutableSet[Activity]):
         
     
     def _resolve_activity(self, obj: Activity | str) -> Activity:
-        '''Checks for activity in the registry. If activity is found,
-        restores activity according to the slug.
+        '''Checks for an activity in the registry. If the activity
+        is found, retrieves it by its slug.
         
         Raises:
             KeyError: if the activity is not in the registry.'''
@@ -214,13 +218,13 @@ class Activities(MutableSet[Activity]):
     
 
     def __len__(self) -> int:
-        '''Size of activities registry.'''
+        '''Returns the size of the activities registry.'''
 
         return len(self._slug_to_activity)
     
 
     def add(self, value: Activity) -> None:
-        '''Adds activity to the registry.'''
+        '''Adds an activity to the registry.'''
 
         if value.slug not in self._slug_to_activity:
 
@@ -237,7 +241,7 @@ class Activities(MutableSet[Activity]):
     
 
     def discard(self, value: Activity | str) -> None:
-        '''Removes activity from the registry.'''
+        '''Removes an activity from the registry.'''
         
         try:
             activity = self._resolve_activity(value)
@@ -247,8 +251,8 @@ class Activities(MutableSet[Activity]):
             pass
 
 
-    def remove(self, value: Activity) -> None:
-        '''Removes activity from the registry.
+    def remove(self, value: Activity | str) -> None:
+        '''Removes an activity from the registry.
         
         Raises:
             KeyError: if the activity is not in the registry.'''
@@ -271,7 +275,7 @@ class Activities(MutableSet[Activity]):
     def add_connection(self, parent: Activity | str, child: Activity | str) -> None:
         '''Adds a connection between activities in the registry.
 
-        Securely adds a parent -> child connection with validation.
+        Safely adds a parent -> child connection validating for cycles.
         It is assumed that the activities themselves are already
         contained in the registry.'''
 
@@ -293,7 +297,7 @@ class Activities(MutableSet[Activity]):
 
 
     def remove_connection(self, parent: Activity | str, child: Activity | str) -> None:
-        '''Removes parrent -> activity connection from the registry.'''
+        '''Removes a parent -> child connection from the registry.'''
 
         parent = self._resolve_activity(parent)
         child = self._resolve_activity(child)
@@ -302,12 +306,12 @@ class Activities(MutableSet[Activity]):
             self._activities_graph.remove_edge(parent, child)
 
 
-    def add_connections(self, connections: Iterable[tuple[str | Activity, str | Activity]]) \
+    def add_connections(self, connections: Iterable[tuple[Activity | str, Activity | str]]) \
         -> None:
 
         '''Adds connections between activities in the registry.
 
-        Securely adds parent -> child connection pairs with
+        Safely adds parent -> child connection pairs with
         validation. It is assumed that the activities themselves
         are already contained in the registry.'''
 
@@ -332,7 +336,7 @@ class Activities(MutableSet[Activity]):
 
 
     def activity_by_slug(self, slug: str) -> Activity:
-        '''Restores activity by slug.
+        '''Retrieves an activity by its slug.
         
         Raises:
             KeyError: if the activity with the specified slug
@@ -378,7 +382,7 @@ class Activities(MutableSet[Activity]):
 
     @classmethod
     def from_dict(cls, data: dict) -> Activities:
-        '''Constructs activities registry from dictionary.'''
+        '''Constructs an activities registry from a dictionary.'''
         
         activities = cls()
 
@@ -417,7 +421,7 @@ class Activities(MutableSet[Activity]):
 
     @classmethod
     def from_yaml(cls, filename: str) -> Activities:
-        '''Constructs activities registry from YAML file.
+        '''Constructs an activities registry from a YAML file.
         
         The root of the YAML file must be 'activities'.'''
 

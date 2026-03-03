@@ -348,7 +348,7 @@ class Activities(MutableSet[Activity]):
             raise KeyError(f'Unknown activity: \'{slug}\'.') from e
         
 
-    def parents(self, *activities: str | Activity) -> set[Activity]:
+    def parents(self, *activities: Activity | str) -> set[Activity]:
         '''Returns the parents of the specified activities.'''
 
         resolved_activities = (self._resolve_activity(a) for a in activities)
@@ -358,7 +358,7 @@ class Activities(MutableSet[Activity]):
         return parents
     
 
-    def ancestors(self, *activities: str | Activity) -> set[Activity]:
+    def ancestors(self, *activities: Activity | str) -> set[Activity]:
         '''Returns all ancestors of the specified activities.'''
 
         resolved_activities = (self._resolve_activity(a) for a in activities)
@@ -366,6 +366,26 @@ class Activities(MutableSet[Activity]):
         for a in resolved_activities:
             ancestors.update(nx.ancestors(self._activities_graph, a))
         return ancestors
+    
+
+    def children(self, *activities: Activity | str) -> set[Activity]:
+        '''Returns all children of the specified activities.'''
+
+        resolved = (self._resolve_activity(a) for a in activities)
+        children = set()
+        for a in resolved:
+            children.update(self._activities_graph.successors(a))
+        return children
+
+
+    def descendants(self, *activities: Activity | str) -> set[Activity]:
+        '''Returns all descendants of the specified activities.'''
+
+        resolved = (self._resolve_activity(a) for a in activities)
+        descendants = set()
+        for a in resolved:
+            descendants.update(nx.descendants(self._activities_graph, a))
+        return descendants
 
 
     def clear(self) -> None:
@@ -373,7 +393,6 @@ class Activities(MutableSet[Activity]):
 
         self._activities_graph.clear()
         self._slug_to_activity.clear()
-        self._validate()
     
 
     def copy(self) -> Activities:
@@ -444,4 +463,4 @@ class Activities(MutableSet[Activity]):
             raise FileNotFoundError(f'File not found: {filename}.') from e
         
         except yaml.YAMLError as e:
-            raise ValueError(f'Invalid YAML: {e}.') from e
+            raise ValueError(f'Invalid YAML file \'{filename}\': {e}.') from e

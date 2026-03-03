@@ -130,7 +130,7 @@ class Activity:
 class Activities(MutableSet[Activity]):
     '''Registry of activities.
     
-    In addition to the slugs, the names of activities should also
+    In addition to the slugs, the titles of activities should also
     be unique within the registry. This is not a strict requirement, but
     rather a useful recommendation designed to avoid confusion.'''
 
@@ -386,6 +386,29 @@ class Activities(MutableSet[Activity]):
         for a in resolved:
             descendants.update(nx.descendants(self._activities_graph, a))
         return descendants
+    
+
+    def root_activities(self) -> set[Activity]:
+        '''Returns all activities that have no parents (roots).'''
+
+        return {a for a in self._activities_graph.nodes
+                if self._activities_graph.in_degree(a) == 0}
+
+
+    def leaf_activities(self) -> set[Activity]:
+        '''Returns all activities that have no children (leaves).'''
+        
+        return {a for a in self._activities_graph.nodes
+                if self._activities_graph.out_degree(a) == 0}
+
+
+    def isolated_activities(self) -> set[Activity]:
+        '''Returns all activities that have neither parents nor children
+        (isolated).'''
+
+        return {a for a in self._activities_graph.nodes
+                if self._activities_graph.in_degree(a) == 0
+                and self._activities_graph.out_degree(a) == 0}
 
 
     def clear(self) -> None:

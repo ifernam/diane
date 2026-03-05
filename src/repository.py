@@ -2,6 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from collections.abc import MutableSet
 import uuid
+
 from temporal import Timestamp, TimeInterval, TimeSet
 from activities import Activity, Activities
 from sessions import Session

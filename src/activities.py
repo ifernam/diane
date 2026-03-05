@@ -462,13 +462,16 @@ class Activities(MutableSet[Activity]):
         
 
     @classmethod
-    def from_yaml(cls, filename: str) -> Activities:
+    def from_yaml(cls, filename: str | Path) -> Activities:
         '''Constructs an activities registry from a YAML file.
         
         The root of the YAML file must be 'activities'.'''
 
         try:
-            path = Path(filename)
+            if isinstance(filename, str):
+                path = Path(filename)
+            else:
+                path = filename
 
             with path.open('r', encoding='utf-8') as f:
                 data = yaml.safe_load(f)

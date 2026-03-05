@@ -150,6 +150,67 @@ class Timestamp:
     
 
     @classmethod
+    def from_iso_iana(cls, iso_str: str, iana_zone: str) -> Timestamp:
+        '''Creates a timestamp from an ISO 8601 string with offset
+        and an IANA time zone.
+
+        The ISO string must contain an offset (e.g.,
+        '2026-03-04T15:15+03:00'). The method verifies that the offset
+        is consistent with the actual offset of the IANA zone at that
+        moment. If they match, the returned timestamp stores the local
+        time in the given IANA zone.
+
+        Args:
+            iso_str: ISO 8601 datetime string that includes an offset
+                (or 'Z' for UTC).
+            iana_zone: IANA time zone name (e.g., 'Europe/Moscow').
+
+        Returns:
+            A new 'Timestamp' object representing the same moment but
+            normalised to the specified IANA zone.
+
+        Raises:
+            ValueError: If the ISO string cannot be parsed, if the IANA
+                zone is unknown, or if the offset in the ISO string
+                does not match the zone's offset for that moment.'''
+        
+        # Normalise 'Z' to '+00:00' for Python < 3.11.
+        if sys.version_info < (3, 11) and iso_str.endswith('Z'):
+            iso_str = iso_str[:-1] + '+00:00'
+
+        # Parse the ISO string (must include offset).
+        try:
+            dt_iso = datetime.datetime.fromisoformat(iso_str)
+        except ValueError as e:
+            raise ValueError(f'Invalid ISO 8601 datetime string: \'{iso_str}\'.') from e
+
+        if dt_iso.tzinfo is None:
+            raise ValueError('ISO string must contain an offset (e.g., \'+03:00\' or \'Z\').')
+
+        # Convert to UTC to obtain the absolute moment.
+        dt_utc = dt_iso.astimezone(cls._UTC)
+
+        # Create the target IANA time zone.
+        try:
+            tz = zoneinfo.ZoneInfo(iana_zone)
+        except Exception as e:
+            raise ValueError(f'Invalid IANA time zone: \'{iana_zone}\'.') from e
+
+        # Convert the UTC moment to the target zone.
+        dt_local = dt_utc.astimezone(tz)
+
+        # Verify that the offset from the ISO string matches the zone's offset.
+        if dt_iso.utcoffset() != dt_local.utcoffset():
+            raise ValueError(
+                f'Offset from ISO string ({dt_iso.utcoffset()}) does not match the offset of zone '
+                f'\'{iana_zone}\' ({dt_local.utcoffset()}) at that moment.'
+            )
+
+        # Return a new timestamp (the internal datetime is already in the target zone).
+        return cls(dt_local)
+    
+
+    @classmethod
     def now(cls) -> Timestamp:
         '''Creates a new timestamp with the current local time.'''
 

@@ -2,12 +2,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import uuid
 import datetime
+
 from sessions import Session
 from repository import Repository
 
 
 
-class Assistant(Repository):
+class AssistedRepository(Repository):
     '''Smart add-on to sessions repository.'''
 
 
@@ -53,7 +54,7 @@ class Assistant(Repository):
         except ValueError as e:
             raise ValueError(f'Sessions cannot be merged: {e}.') from e
         
-        if not Assistant.is_good(merged):
+        if not AssistedRepository.is_good(merged):
             raise ValueError(f'The sessions were not merged because the result was not good.')
         
         self.add(merged)

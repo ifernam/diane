@@ -24,10 +24,10 @@ class RepositoryManager(AssistedRepository):
         self._tracking_state = {}
         activities = Activities.from_yaml(self._datadir / '.diane/activities.yaml')
         super().__init__(activities)
-        self._update_state()
+        self._load_state()
 
 
-    def _update_state(self) -> None:
+    def _load_state(self) -> None:
 
         path = self._datadir / '.diane/tracking.yaml'
         if not path.exists():
@@ -68,7 +68,9 @@ class RepositoryManager(AssistedRepository):
                 start_timezone_iana = item['start_timezone']
                 ts = Timestamp.from_iso_iana(start_time_iso, start_timezone_iana)
             except KeyError as e:
-                raise ValueError(f'Missing required field in tracking entry for \'{slug}\': {e}.') from e
+                raise ValueError(
+                    f'Missing required field in tracking entry for \'{slug}\': {e}.'
+                ) from e
             except ValueError as e:
                 raise ValueError(f'Invalid timestamp data for \'{slug}\': {e}.') from e
 
@@ -93,14 +95,45 @@ class RepositoryManager(AssistedRepository):
 
     
     def start(self, *activities: str) -> None:
+        '''Start tracking one or more activities.
+
+        The activities are marked as being tracked from the current
+        moment. If an activity is already being tracked, a warning
+        is issued and it is not started again. Unknown activity slugs
+        cause a `ValueError` with a list of all unrecognised slugs.
+
+        Args:
+            *activities: One or more activity slugs to start tracking.
+                Duplicates are ignored (only the first occurrence
+                is considered).
+
+        Raises:
+            ValueError: If no activities are provided, or if any
+                of the slugs are not found in the activities
+                registry.'''
 
         if not activities:
             raise ValueError('Specify at least one activity for tracking.')
         
         # Remove duplicates, preserving order.
         unique_slugs = list(dict.fromkeys(activities))
-        activities_to_start = [self._activities.activity_by_slug(slug) for slug in unique_slugs]
+        
+        activities_to_start = []
+        unknown_slugs = []
 
+        for slug in unique_slugs:
+            try:
+                activities_to_start.append(self._activities.activity_by_slug(slug))
+            except KeyError:
+                unknown_slugs.append(slug)
+
+        if unknown_slugs:
+            if len(unknown_slugs) == 1:
+                raise ValueError(f'Unknown activity: \'{unknown_slugs[0]}\'.')
+            else:
+                quoted = ', '.join(f'\'{s}\'' for s in unknown_slugs)
+                raise ValueError(f'Unknown activities: {quoted}.')
+        
         now = Timestamp.now()
         changed = False
 
@@ -116,3 +149,98 @@ class RepositoryManager(AssistedRepository):
 
         if changed:
             self._save_state()
+
+
+    def stop(self, *activities: str, all: bool = False, comment: str = '') -> list[Session]:
+        '''For each distinct start time among the stopped activities,
+        a separate session is created covering the interval from that
+        start time until now (`[start, now)`). The sessions are added
+        to the repository and merged with neighbouring sessions
+        if possible (via `add_and_merge`).
+
+        If `all=True`, all currently tracked activities are stopped
+        (the `activities` argument is ignored). Otherwise, the given
+        activity slugs are resolved; any unknown slugs raise
+        a `ValueError`, and any activities that are not currently being
+        tracked produce a warning and are skipped.
+
+        After successful creation of all sessions, the stopped
+        activities are removed from the tracking state and the state
+        is saved to disk.
+
+        Args:
+            *activities: Activity slugs to stop tracking. Ignored
+                if `all=True`.
+            all: If `True`, stop all tracked activities instead
+                of a specific list.
+            comment: Optional comment to attach to every session
+                created.
+
+        Returns:
+            A list of the final merged sessions (as returned
+            by `add_and_merge`), one per distinct start time group.
+
+        Raises:
+            ValueError: If `all=False` and no activities are provided,
+                or if any of the given slugs are not found
+                in the activities registry.'''
+
+        if all:
+            if not self._tracking_state:
+                warnings.warn('No activities are currently being tracked.')
+                return []
+            activities_to_stop = list(self._tracking_state.keys())
+        else:
+            if not activities:
+                raise ValueError('Specify at least one activity to stop.')
+            unique_slugs = list(dict.fromkeys(activities))
+            activities_to_stop = []
+            unknown_slugs = []
+
+            for slug in unique_slugs:
+                try:
+                    activities_to_stop.append(self._activities.activity_by_slug(slug))
+                except KeyError:
+                    unknown_slugs.append(slug)
+
+            if unknown_slugs:
+                if len(unknown_slugs) == 1:
+                    raise ValueError(f'Unknown activity: \'{unknown_slugs[0]}\'.')
+                else:
+                    quoted = ', '.join(f'\'{s}\'' for s in unknown_slugs)
+                    raise ValueError(f'Unknown activities: {quoted}.')
+
+        
+        # We only keep the ones that are actually being tracked.
+        tracked = {}
+        for a in activities_to_stop:
+            start = self._tracking_state.get(a)
+            if start is None:
+                warnings.warn(f'Activity \'{a}\' is not being tracked.', stacklevel=2)
+            else:
+                tracked[a] = start
+
+        if not tracked:
+            return []
+
+        # Group activities by start time.
+        groups = {}
+        for a, start in tracked.items():
+            groups.setdefault(start, []).append(a)
+
+        now = Timestamp.now()
+        created_sessions = []
+
+        for start_time, acts in groups.items():
+            interval = TimeInterval.closedopen(start_time, now)
+            timeset = TimeSet(interval)
+            session = Session(timeset, acts, comment)
+            merged = self.add_and_merge(session)
+            created_sessions.append(merged)
+
+        # Remove stopped activities from those being tracked.
+        for act in tracked:
+            del self._tracking_state[act]
+        self._save_state()
+
+        return created_sessions

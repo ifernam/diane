@@ -7,6 +7,7 @@ import datetime
 import zoneinfo
 import tzlocal
 import sys
+import warnings
 
 
 
@@ -895,6 +896,166 @@ class TimeInterval:
             # If both boundaries are not specified, the interval
             # is considered to be the entire timeline.
             return TimeInterval.timeline()
+    
+
+    @classmethod
+    def from_dict(cls, time_data: dict, date_iso: str = '') -> TimeInterval:
+        '''Create a closed-open interval or a point from a dictionary.
+
+        The dictionary must contain:
+            - `start_time` / `end_time`: ISO time strings including
+                offset, e.g. '10:30+03:00');
+            - 'start_timezone' / 'end_timezone' : IANA zone names
+                (e.g. 'Europe/Moscow').
+
+        If `date_iso` is provided (YYYY-MM-DD), it is combined with
+        the time strings to form full ISO datetimes. In this mode,
+        if `end_time` starts with '24:', it is interpreted as the end
+        of that day (validated, then replaced with '00:' and the date
+        advanced). If `date_iso` is omitted, `start_time` and `end_time`
+        must be complete ISO datetime strings including date and offset.
+
+        Args:
+            `time_data`: Dictionary with the four required keys.
+            `date_iso`: Optional common date in YYYY-MM-DD format.
+                If provided, the time strings are interpreted as times
+                of that day, and '24:' in end_time is handled specially.
+                If omitted, start_time and end_time must be full ISO
+                datetime strings.
+            
+
+        Returns:
+            `TimeInterval`: closed-open interval or point.
+
+        Raises:
+            `ValueError`: if any key is missing, values are invalid,
+                offsets mismatch, or start > end.
+
+        Example:
+            >>> TimeInterval.from_dict({
+            ...     'start_time': '09:00+03:00',
+            ...     'start_timezone': 'Europe/Moscow',
+            ...     'end_time': '18:00+03:00',
+            ...     'end_timezone': 'Europe/Moscow'
+            ... }, '2026-03-09')
+            [2026-03-09T09:00:00+03:00; 2026-03-09T18:00:00+03:00)
+
+            Using '24:00' to denote the end of the day:
+            >>> TimeInterval.from_dict({
+            ...     'start_time': '09:00Z',
+            ...     'start_timezone': 'UTC',
+            ...     'end_time': '24:00Z',
+            ...     'end_timezone': 'UTC'
+            ... }, 2026-03-09')
+            [2026-03-09T09:00:00+00:00; 2026-03-10T00:00:00+00:00)
+
+            Without a common date (full ISO strings expected):
+            >>> TimeInterval.from_dict({
+            ...     'start_time': '2026-03-09T09:00+03:00',
+            ...     'start_timezone': 'Europe/Moscow',
+            ...     'end_time': '2026-03-10T18:00+03:00',
+            ...     'end_timezone': 'Europe/Moscow'
+            ... })
+            [2026-03-09T09:00:00+03:00; 2026-03-10T18:00:00+03:00)
+        '''
+
+        if not isinstance(time_data, dict):
+            raise TypeError('\'time_data\' must be a dict.')
+        
+        # Checking for extra keys in the dictionary.
+        allowed_keys = {'start_time', 'start_timezone', 'end_time', 'end_timezone'}
+        extra_keys = set(time_data) - allowed_keys
+        if extra_keys:
+            extra_keys_str = ', '.join(f'\'{k}\'' for k in sorted(extra_keys))
+            warnings.warn(
+                f'Time interval dictionary contains unknown fields: {extra_keys_str}.',
+                stacklevel=2
+            )
+        
+        # Helper to fetch required string values.
+        def get_str(key: str) -> str:
+            try:
+                value = time_data[key]
+            except KeyError:
+                raise ValueError(f'Time interval dictionary missing required key \'{key}\'.')
+            if not isinstance(value, str):
+                raise TypeError(f'Value \'{key}\' must be a string, got \'{type(value).__name__}\'.')
+            return value
+
+        start_time_iso = get_str('start_time')
+        start_timezone_iana = get_str('start_timezone')
+        end_time_iso = get_str('end_time')
+        end_timezone_iana = get_str('end_timezone')
+
+        if date_iso:
+            # Parse the base date.
+            try:
+                date = datetime.date.fromisoformat(date_iso)
+            except ValueError as e:
+                raise ValueError(f'Invalid date format \'{date_iso}\'. Expected \'YYYY-MM-DD\'.') from e
+        
+            start_date = date
+            end_date = date
+
+            if start_time_iso.startswith('24:'):
+                raise ValueError('24:00 is only allowed for \'end_time\'.')
+            
+            def split_time_and_offset(ts: str):
+                pos = max(ts.rfind('+'), ts.rfind('-'))
+
+                if pos != -1:
+                    return ts[:pos], ts[pos:]
+
+                if ts.endswith('Z'):
+                    return ts[:-1], 'Z'
+
+                return ts, ''
+        
+            # Handle 24:00 end time.
+            if end_time_iso.startswith('24:'):
+                time_part, offset_part = split_time_and_offset(end_time_iso)
+
+                if not offset_part:
+                    raise ValueError(f'End time \'{end_time_iso}\' must include UTC offset.')
+
+                # Validate that `time_part` is midnight.
+                try:
+                    # Temporarily replace '24' with '00' to parse the time part.
+                    fake_time_part = '00' + time_part[2:]
+                    parsed = datetime.time.fromisoformat(fake_time_part)
+                    if parsed != datetime.time.min:
+                        raise ValueError('Time part after \'24:\' is not midnight.')
+                except ValueError as e:
+                    raise ValueError(f'Invalid end time \'{end_time_iso}\': if hour is 24, minutes/seconds must be zero.') from e
+                
+                # Adjust: replace '24' with '00' in time part, keep offset.
+                end_time_iso = '00' + time_part[2:] + offset_part
+                end_date += datetime.timedelta(days=1)
+
+            # Build full ISO datetime strings.
+            start_datetime_iso = f'{start_date.isoformat()}T{start_time_iso}'
+            end_datetime_iso = f'{end_date.isoformat()}T{end_time_iso}'
+        else:
+            start_datetime_iso = start_time_iso
+            end_datetime_iso = end_time_iso
+
+        # Create timestamps using the existing factory that checks offset vs IANA zone.
+        try:
+            start_ts = Timestamp.from_iso_iana(start_datetime_iso, start_timezone_iana)
+        except ValueError as e:
+            raise ValueError(f'Incorrect start time format. {e}') from e
+        
+        try:
+            end_ts = Timestamp.from_iso_iana(end_datetime_iso, end_timezone_iana)
+        except ValueError as e:
+            raise ValueError(f'Incorrect end time format. {e}') from e
+
+        if start_ts < end_ts:
+            return TimeInterval.closedopen(start_ts, end_ts)
+        elif start_ts == end_ts:
+            return TimeInterval.point(start_ts)
+        else:
+            raise ValueError('The start of a time interval cannot be later than its end.')
     
 
     @classmethod

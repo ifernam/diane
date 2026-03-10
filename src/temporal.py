@@ -2382,6 +2382,14 @@ class TimeSet:
         return self.end - self.start
     
 
+    def _component_duration_extreme(self, func):
+        return func(
+            (c.duration for c in self.components),
+            key=lambda d: (d is None, d),
+            default=None
+        )
+    
+
     @property
     def min_component_duration(self) -> datetime.timedelta | None:
         """Return the minimal duration among the components.
@@ -2394,11 +2402,22 @@ class TimeSet:
         components are unbounded.
         """
 
-        return min(
-            (c.duration for c in self.components),
-            key=lambda d: (d is None, d),
-            default=None
-        )
+        return self._component_duration_extreme(min)
+    
+
+    @property
+    def max_component_duration(self) -> datetime.timedelta | None:
+        """Return the maximal duration among the components.
+
+        Compute the maximal duration of all components in the `TimeSet`.
+        Unbounded components have duration `None` and dominate any
+        finite duration.
+
+        Return `None` if the `TimeSet` has no components or if at least
+        one component is unbounded.
+        """
+
+        return self._component_duration_extreme(max)
     
 
     @property

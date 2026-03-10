@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from functools import total_ordering
-from typing import overload
+from typing import overload, Iterator
 from enum import Enum, auto
 import datetime
 import zoneinfo
@@ -2392,7 +2392,7 @@ class TimeSet:
 
     @property
     def min_component_duration(self) -> datetime.timedelta | None:
-        """Return the minimal duration among the components.
+        '''Return the minimal duration among the components.
 
         Compute the minimal duration of all components in the `TimeSet`.
         Unbounded components have duration `None` and are ignored when
@@ -2400,14 +2400,14 @@ class TimeSet:
 
         Return `None` if the `TimeSet` has no components or if all
         components are unbounded.
-        """
+        '''
 
         return self._component_duration_extreme(min)
     
 
     @property
     def max_component_duration(self) -> datetime.timedelta | None:
-        """Return the maximal duration among the components.
+        '''Return the maximal duration among the components.
 
         Compute the maximal duration of all components in the `TimeSet`.
         Unbounded components have duration `None` and dominate any
@@ -2415,18 +2415,14 @@ class TimeSet:
 
         Return `None` if the `TimeSet` has no components or if at least
         one component is unbounded.
-        """
+        '''
 
         return self._component_duration_extreme(max)
     
 
-    @property
-    def max_gap_duration(self) -> datetime.timedelta:
-        '''Returns the duration of the maximum gap.
-        
-        If there are no gaps, returns zero duration.'''
+    def _gaps(self) -> Iterator[datetime.timedelta]:
+        '''Generate durations of gaps between consecutive components.'''
 
-        max_gap = datetime.timedelta()
         for f, s in zip(self.components, self.components[1:]):
             start, end = f.end, s.start
             
@@ -2435,10 +2431,30 @@ class TimeSet:
                     '\'TimeSet\' state is incorrect: any non-last component should be bounded '
                     'on the right and any non-first component on the left.'
                 )
+            
+            yield end - start
+    
 
-            max_gap = max(max_gap, end - start)
+    @property
+    def max_gap_duration(self) -> datetime.timedelta:
+        '''Return the maximum gap duration between components.
+    
+        If there are no gaps (less than two components), return zero
+        duration.
+        '''
 
-        return max_gap
+        return max(self._gaps(), default=datetime.timedelta())
+    
+
+    @property
+    def min_gap_duration(self) -> datetime.timedelta:
+        '''Return the minimum gap duration between components.
+
+        If there are no gaps (less than two components), return zero
+        duration.
+        '''
+
+        return min(self._gaps(), default=datetime.timedelta())
     
 
     def closure(self) -> TimeSet:

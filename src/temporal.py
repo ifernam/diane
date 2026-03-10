@@ -1730,20 +1730,23 @@ class TimeInterval:
             return datetime.timedelta()
 
 
+
 @dataclass(frozen=True)
 class TimeSet:
-    '''Disjoint union of time intervals 'TimeInterval'.
+    '''A disjoint union of time intervals that are pairwise disconnected
+    and chronologically ordered.
     
-    All component intervals must be non-empty and in chronological 
-    order. They must also not overlap. Furthermore, all their pairwise
-    unions must be disconnected. In other words, each interval
-    is connected component of the 'TimeSet'.'''
+    Each component interval must be non-empty and placed
+    in chronological order. Intervals must not overlap, and the union
+    of any two distinct intervals must be disconnected. In other words,
+    each component interval is a connected component of the time set.
+    '''
 
     _intervals: tuple[TimeInterval, ...]
 
 
     def _is_valid(self) -> bool:
-        '''Checks whether the 'TimeSet' is set correctly.'''
+        '''Check whether the 'TimeSet' is set correctly.'''
 
         # 'TimeSet' must not contain any empty intervals.
         for i in self._intervals:
@@ -1760,6 +1763,18 @@ class TimeSet:
     
 
     def __init__(self, *intervals: TimeInterval):
+        '''Initialize a `TimeSet` with the provided intervals.
+        
+        Args:
+            `*intervals`: Time intervals that must satisfy
+                the invariants (non-empty, chronologically ordered,
+                pairwise disconnected).
+
+        Raises:
+            `ValueError`: If the intervals do not satisfy
+                the invariants.
+        '''
+
         object.__setattr__(self, '_intervals', tuple(intervals))
 
         if not self._is_valid():
@@ -1767,20 +1782,32 @@ class TimeSet:
     
 
     def __str__(self) -> str:
+        '''Return a string representation of the time set.
+
+        For an empty set, return the empty set symbol '∅'. For
+        a non-empty set, return the components joined by the union
+        symbol '⊔'.
+        '''
+
         if self.is_empty:
-            # Returns the empty set symbol.
+            # Return the empty set symbol.
             return '\u2205'
         else:
             return ' \u2294 '.join(map(str, self._intervals))
     
 
     def __bool__(self) -> bool:
-        '''Checks whether the time set is non-empty.'''
+        '''Return `True` if the time set is non-empty, `False`
+        otherwise.'''
 
         return bool(self._intervals)
     
 
     def __contains__(self, other: object) -> bool:
+        '''Return `True` if the time set contains the given object.
+
+        The object may be a `Timestamp`, a `TimeInterval`, or another
+        `TimeSet`.'''
 
         if isinstance(other, Timestamp | TimeInterval | TimeSet):
             return self.contains(other)
@@ -1789,8 +1816,8 @@ class TimeSet:
     
 
     def __or__(self, other: TimeInterval | TimeSet) -> TimeSet:
-        '''The union of two time sets, or a time set with a time
-        interval.'''
+        '''Return the union of this time set with another time set
+        or a time interval.'''
 
         if isinstance(other, TimeInterval):
             return TimeSet.union(*self._intervals, other)
@@ -1802,8 +1829,8 @@ class TimeSet:
     
 
     def __and__(self, other: TimeInterval | TimeSet) -> TimeSet:
-        '''The intersection of two time sets, or a time set with a time
-        interval.'''
+        '''Return the intersection of this time set with another time
+        set or a time interval.'''
 
         if isinstance(other, TimeInterval):
             return self.intersection_with_interval(other)
@@ -1815,8 +1842,8 @@ class TimeSet:
     
 
     def __sub__(self, other: TimeInterval | TimeSet):
-        '''The difference of two time sets, or a time set with a time
-        interval.'''
+        '''Return the difference of this time set and another time set
+        or time interval.'''
 
         if isinstance(other, TimeInterval):
             other = TimeSet(other)
@@ -1828,20 +1855,22 @@ class TimeSet:
     
 
     def contains_timestamp(self, moment: Timestamp) -> bool:
-        '''Checks whether the given moment in time falls within the time
+        '''Return `True` if the given moment is contained in the time
         set.'''
 
         return any(moment in c for c in self.components)
     
 
     def contains_timeinterval(self, interval: TimeInterval) -> bool:
-        '''Checks whether the time set contains a time interval.'''
+        '''Return `True` if the given time interval is completely
+        contained in the time set.'''
 
         return any(interval.is_contained_in(c) for c in self.components)
     
 
     def contains_timeset(self, timeset: TimeSet) -> bool:
-        '''Checks whether the time set contains another one.'''
+        '''Return `True` if this time set contains the given time
+        set.'''
 
         i, j = 0, 0
 
@@ -1860,8 +1889,8 @@ class TimeSet:
     
 
     def contains(self, other: Timestamp | TimeInterval | TimeSet) -> bool:
-        '''Checks whether the time set contains another one, a time
-        interval or a time moment.'''
+        '''Return `True` if this time set contains the given timestamp,
+        time interval, or another time set.'''
 
         if isinstance(other, Timestamp):
             return self.contains_timestamp(other)
@@ -1874,17 +1903,19 @@ class TimeSet:
 
 
     def is_contained_in(self, other: TimeSet) -> bool:
-        '''Checks whether a given time set is contained in another.'''
+        '''Return `True` if this time set is contained in the given time
+        set.'''
 
         return other.contains(self)
     
 
     def is_left_of(self, other: TimeInterval | TimeSet) -> bool:
-        '''Checks that the time set lies strictly to the left
-        of the other time set or time interval and does not intersect
-        with it.
-        
-        This is automatically true if any of the time sets are empty.'''
+        '''Return `True` if this time set lies strictly to the left
+        of the given object with no intersection.
+
+        The object may be a `TimeInterval` or a `TimeSet`. This is
+        automatically true if any of the sets are empty.
+        '''
 
         if self.is_empty or other.is_empty:
             return True
@@ -1904,11 +1935,12 @@ class TimeSet:
     
 
     def is_right_of(self, other: TimeInterval | TimeSet) -> bool:
-        '''Checks that the time set lies strictly to the right
-        of the other time set or time interval and does not intersect
-        with it.
-        
-        This is automatically true if any of the time sets are empty.'''
+        '''Return `True` if this time set lies strictly to the right
+        of the given object with no intersection.
+
+        The object may be a `TimeInterval` or a `TimeSet`. This is
+        automatically true if any of the sets are empty.
+        '''
 
         if self.is_empty or other.is_empty:
             return True
@@ -1928,7 +1960,8 @@ class TimeSet:
     
 
     def intersection_with_interval(self, other: TimeInterval) -> TimeSet:
-        '''The intersection of the time set with a time interval.'''
+        '''Return the intersection of this time set with the given time
+        interval.'''
 
         # The intersection with the empty set is empty.
         if self.is_empty or other.is_empty:
@@ -1954,7 +1987,8 @@ class TimeSet:
 
     
     def intersection_with_timeset(self, other: TimeSet) -> TimeSet:
-        '''The intersection of two time sets.'''
+        '''Return the intersection of this time set with another time
+        set.'''
 
         # The intersection with the empty set is empty.
         if self.is_empty or other.is_empty:
@@ -1994,7 +2028,8 @@ class TimeSet:
     
 
     def overlaps_with_interval(self, interval: TimeInterval) -> bool:
-        '''Checks whether the time set overlaps with a time interval.'''
+        '''Return `True` if this time set overlaps with the given time
+        interval.'''
 
         # The intersection with the empty set is empty.
         if self.is_empty or interval.is_empty:
@@ -2015,7 +2050,8 @@ class TimeSet:
     
 
     def overlaps_with_timeset(self, timeset: TimeSet) -> bool:
-        '''Checks whether the time set overlaps with another one.'''
+        '''Return `True` if this time set overlaps with another time
+        set.'''
 
         # The intersection with the empty set is empty.
         if self.is_empty or timeset.is_empty:
@@ -2040,8 +2076,8 @@ class TimeSet:
     
 
     def overlaps(self, other: TimeInterval | TimeSet) -> bool:
-        '''Checks whether the time set overlaps with a time interval
-        or another time set.'''
+        '''Return `True` if this time set overlaps with the given time
+        interval or another time set.'''
 
         if isinstance(other, TimeInterval):
             return self.overlaps_with_interval(other)
@@ -2052,7 +2088,8 @@ class TimeSet:
     
 
     def complement(self) -> TimeSet:
-        '''The complement of the time set.'''
+        '''Create the complement of this time set (all points
+        not in the set).'''
 
         # The complement of empty time set is the entire time line.
         if self.is_empty:
@@ -2072,21 +2109,26 @@ class TimeSet:
 
     @classmethod
     def empty(cls) -> TimeSet:
-        '''Creates empty time set.'''
+        '''Return the empty time set.'''
 
         return cls()
     
 
     @classmethod
     def timeline(cls) -> TimeSet:
-        '''Creates the entire time line.'''
+        '''Create a time set representing the entire timeline.'''
 
         return cls(TimeInterval.timeline())
 
 
     @classmethod
     def union(cls, *arg: TimeInterval | TimeSet) -> TimeSet:
-        '''Creates a 'TimeSet' as a union of time intervals.'''
+        '''Create a `TimeSet` that is the union of the given time
+        intervals and time sets.
+
+        Empty components are automatically discarded, and touching
+        intervals are merged.
+        '''
 
         # Remove empty intervals.
         nonempty_intervals = [
@@ -2142,24 +2184,25 @@ class TimeSet:
 
     @property
     def is_nonempty(self) -> bool:
-        '''Checks whether the time set is non-empty.'''
+        '''Return `True` if the time set is non-empty.'''
 
         return bool(self._intervals)
 
 
     @property
     def is_empty(self) -> bool:
-        '''Checks whether the time set is empty.'''
+        '''Return `True` if the time set is empty.'''
 
         return not self._intervals
     
 
     @property
     def is_bounded(self) -> bool:
-        '''Checks whether the time set is bounded.
+        '''Return `True` if the time set is bounded.
         
         Here, boundedness is understood in a mathematical sense.
-        Therefore an empty set is considered bounded.'''
+        Therefore the empty time set is considered to be bounded.
+        '''
 
         if self.is_empty:
             return True
@@ -2172,24 +2215,26 @@ class TimeSet:
 
     @property
     def is_connected(self) -> bool:
-        '''Checks whether the time set is connected.
+        '''Return `True` if the time set is connected.
         
         A time set is connected if it has no more than one connected 
-        component.'''
+        component.
+        '''
 
         return len(self._intervals) <= 1
     
 
     @property
     def is_point(self) -> bool:
-        '''Checks whether the time set is a point.'''
+        '''Return `True` if the time set consists of a single point.'''
 
         return len(self._intervals) == 1 and self._intervals[0].is_point
     
 
     @property
     def is_open(self) -> bool:
-        '''Checks whether the time set is open.'''
+        '''Return `True` if the time set is an open set
+        (in the topological sense).'''
 
         if self.is_empty:
             return True
@@ -2201,7 +2246,8 @@ class TimeSet:
 
     @property
     def is_closed(self) -> bool:
-        '''Checks whether the time set is closed.'''
+        '''Return `True` if the time set is a closed set
+        (in the topological sense).'''
 
         if self.is_empty:
             return True
@@ -2213,20 +2259,19 @@ class TimeSet:
 
     @property
     def start(self) -> Timestamp | None:
-        '''Returns the start of the time set. If it is not defined,
-        when the time set is empty or unbounded on the left, returns
-        'None'.'''
+        '''Return the start of the time set, or `None` if unbounded
+        on the left or empty.'''
 
         if self.is_empty:
             return None
         
         return self.first_component.start
     
+
     @property
     def end(self) -> Timestamp | None:
-        '''Returns the end of the time set. If it is not defined,
-        when the time set is empty or unbounded on the right, returns
-        'None'.'''
+        '''Return the end of the time set, or `None` if unbounded
+        on the right or empty.'''
 
         if self.is_empty:
             return None
@@ -2236,7 +2281,8 @@ class TimeSet:
 
     @property
     def is_start_specified(self) -> bool:
-        '''Returns whether the start of the time set is specified.'''
+        '''Return `True` if the start of the time set is specified
+        (not at infinity).'''
 
         if self.is_empty:
             return False
@@ -2246,7 +2292,8 @@ class TimeSet:
 
     @property
     def is_end_specified(self) -> bool:
-        '''Returns whether the end of the time set is specified.'''
+        '''Return `True` if the end of the time set is specified
+        (not at infinity).'''
 
         if self.is_empty:
             return False
@@ -2256,9 +2303,8 @@ class TimeSet:
 
     @property
     def is_start_included(self) -> bool | None:
-        '''If the start of the time set is specified, returns whether
-        it is included in the time set or not. If the start
-        is not specified, it returns 'None'.'''
+        '''Return `True` if the start is included, `False` if excluded,
+        `None` if unspecified.'''
 
         if self.is_start_specified:
             return self.first_component.is_start_included
@@ -2268,9 +2314,8 @@ class TimeSet:
 
     @property
     def is_end_included(self) -> bool | None:
-        '''If the end of the time set is specified, returns whether
-        it is included in the time set or not. If the end
-        is not specified, it returns 'None'.'''
+        '''Return `True` if the end is included, `False` if excluded,
+        `None` if unspecified.'''
 
         if self.is_end_specified:
             return self.last_component.is_end_included
@@ -2280,9 +2325,8 @@ class TimeSet:
 
     @property
     def inf(self) -> Timestamp | None:
-        '''Returns the infimum of the time set. If it is not defined,
-        when the time set is empty or unbounded on the left, returns
-        'None'.'''
+        '''Return the infimum (greatest lower bound) of the time set,
+        or `None` if unbounded on the left or empty.'''
 
         if self.is_empty:
             return None
@@ -2292,9 +2336,8 @@ class TimeSet:
 
     @property
     def sup(self) -> Timestamp | None:
-        '''Returns the supremum of the time set. If it is not defined,
-        when the time set is empty or unbounded on the right, returns
-        'None'.'''
+        '''Return the supremum (least upper bound) of the time set,
+        or `None` if unbounded on the right or empty.'''
         
         if self.is_empty:
             return None
@@ -2304,20 +2347,28 @@ class TimeSet:
 
     @property
     def components_number(self) -> int:
-        '''Returns the number of connected components.'''
+        '''Return the number of connected components.'''
 
         return len(self._intervals)
     
 
     @property
     def components(self) -> tuple[TimeInterval, ...]:
-        '''Returns connected components of the time set.'''
+        '''Return a tuple of the connected components.'''
         
         return self._intervals
 
 
     def component(self, component_number: int) -> TimeInterval:
-        '''Returns the connected component with the specified number.'''
+        '''Return the component at the given index.
+
+        Args:
+            `component_number`: Index of the desired component
+                (0-based).
+
+        Raises:
+            `IndexError`: If the index is out of range.
+        '''
 
         try:
             return self._intervals[component_number]
@@ -2327,7 +2378,11 @@ class TimeSet:
 
     @property
     def first_component(self) -> TimeInterval:
-        '''Returns the first connected component of the time set.'''
+        '''Return the first (leftmost) connected component.
+
+        Raises:
+            `IndexError`: If the time set is empty.
+        '''
 
         try:
             return self._intervals[0]
@@ -2337,7 +2392,11 @@ class TimeSet:
 
     @property
     def last_component(self) -> TimeInterval:
-        '''Returns the last connected component of the time set.'''
+        '''Return the last (rightmost) connected component.
+
+        Raises:
+            `IndexError`: If the time set is empty.
+        '''
 
         try:
             return self._intervals[-1]
@@ -2346,11 +2405,11 @@ class TimeSet:
         
 
     def duration(self) -> datetime.timedelta | None:
-        '''Determines the duration of the time set.
+        '''Return the total duration of the time set, or `None`
+        if the time set is unbounded.
 
-        If the duration is not defined (in the case of an unbounded time
-        set), returns 'None'. The duration of an empty time set
-        is zero.'''
+        For an empty time set, return zero.
+        '''
 
         if not self.is_bounded:
             return None
@@ -2367,11 +2426,12 @@ class TimeSet:
 
     def span_duration(self) -> datetime.timedelta | None:
         '''Return the duration of the minimal interval covering
-        the whole set.
+        the whole time set.
 
         This is the time span from the earliest start to the latest end.
-        Returns zero for an empty set, 'None' if the set
-        is unbounded.'''
+        Return zero for an empty time set, `None` if the time set
+        is unbounded.
+        '''
 
         if self.is_empty:
             return datetime.timedelta()
@@ -2394,11 +2454,11 @@ class TimeSet:
     def min_component_duration(self) -> datetime.timedelta | None:
         '''Return the minimal duration among the components.
 
-        Compute the minimal duration of all components in the `TimeSet`.
+        Compute the minimal duration of all components in the time set.
         Unbounded components have duration `None` and are ignored when
         a finite duration exists.
 
-        Return `None` if the `TimeSet` has no components or if all
+        Return `None` if the time set has no components or if all
         components are unbounded.
         '''
 
@@ -2409,11 +2469,11 @@ class TimeSet:
     def max_component_duration(self) -> datetime.timedelta | None:
         '''Return the maximal duration among the components.
 
-        Compute the maximal duration of all components in the `TimeSet`.
+        Compute the maximal duration of all components in the time set.
         Unbounded components have duration `None` and dominate any
         finite duration.
 
-        Return `None` if the `TimeSet` has no components or if at least
+        Return `None` if the time set has no components or if at least
         one component is unbounded.
         '''
 
@@ -2458,24 +2518,29 @@ class TimeSet:
     
 
     def closure(self) -> TimeSet:
-        '''Creates a topological closure of the time set.'''
+        '''Create the topological closure of this time set.'''
 
         return TimeSet.union(*map(TimeInterval.closure, self.components))
     
 
     def interior(self) -> TimeSet:
-        '''Creates a topological interior of the time set.'''
+        '''Create the topological interior of this time set.'''
 
         return TimeSet.union(*map(TimeInterval.interior, self.components))
     
 
     @staticmethod
-    def dist(first: TimeInterval | TimeSet, second: TimeInterval | TimeSet) -> datetime.timedelta | None:
-        '''Returns the distance between time sets or time intervals.
+    def dist(
+        first: TimeInterval | TimeSet, 
+        second: TimeInterval | TimeSet
+    ) -> datetime.timedelta | None:
+        '''Calculate the distance between two time sets or time
+        intervals.
         
-        If the time sets or time intervals overlap, returns zero.
-        If the distance is not defined in a case where at least one
-        of the time sets or time intervals is empty, returns 'None'.'''
+        If the sets overlap, return zero.
+        If the distance is undefined (e.g., one of them is empty),
+        return `None`.
+        '''
 
         if first.is_empty or second.is_empty:
             return None

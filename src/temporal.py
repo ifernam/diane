@@ -2384,21 +2384,21 @@ class TimeSet:
 
     @property
     def min_component_duration(self) -> datetime.timedelta | None:
-        '''Returns the duration of the minimum component.
+        """Return the minimal duration among the components.
 
-        If there are no components in 'TimeSet', i.e. if 'TimeSet'
-        is empty, or if the minimum component is unbounded, returns
-        'None'.'''
+        Compute the minimal duration of all components in the `TimeSet`.
+        Unbounded components have duration `None` and are ignored when
+        a finite duration exists.
 
-        min_duration = None
+        Return `None` if the `TimeSet` has no components or if all
+        components are unbounded.
+        """
 
-        def duration_key(d: datetime.timedelta | None):
-            return (d is None, d)
-
-        for c in self.components:
-            min_duration = min(min_duration, c.duration, key=duration_key)
-
-        return min_duration
+        return min(
+            (c.duration for c in self.components),
+            key=lambda d: (d is None, d),
+            default=None
+        )
     
 
     @property

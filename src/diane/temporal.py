@@ -2090,6 +2090,36 @@ class TimeSet:
             return NotImplemented
 
         return self & other.complement()
+
+
+    def _scan(self, other: TimeSet) -> Iterator[tuple[TimeInterval, TimeInterval]]:
+        '''Search for pairs of overlapping intervals in this time set
+        and another one.'''
+
+        i, j = 0, 0
+        while i < self.components_number and j < other.components_number:
+            self_interval = self.components[i]
+            other_interval = other.components[j]
+
+            if self_interval.is_left_of(other_interval):
+                i += 1
+                continue
+
+            if self_interval.is_right_of(other_interval):
+                j += 1
+                continue
+            
+            # Intervals overlap.
+            yield self_interval, other_interval
+
+            # Increment the pointer of the interval that ends earlier.
+            if (
+                (self_interval.end is None, self_interval.end) <
+                (other_interval.end is None, other_interval.end)
+            ):
+                i += 1
+            else:
+                j += 1
     
 
     def contains_timestamp(self, moment: Timestamp) -> bool:
@@ -2228,41 +2258,12 @@ class TimeSet:
         '''Return the intersection of this time set with another time
         set.'''
 
-        # The intersection with the empty set is empty.
-        if self.is_empty or other.is_empty:
-            return TimeSet.empty()
-        # From this point onwards, time sets are considered to be
-        # non-empty.
+        result = []
+        for self_interval, other_interval in self._scan(other):
+            intersection = self_interval & other_interval
+            result.append(intersection)
 
-        intersection_intervals: list[TimeInterval] = []
-        i, j = 0, 0
-
-        while i < self.components_number and j < other.components_number:
-            self_interval = self._intervals[i]
-            other_interval = other._intervals[j]
-
-            if self_interval.is_left_of(other_interval):
-                i += 1
-            elif self_interval.is_right_of(other_interval):
-                j += 1
-            else:
-                # The intervals overlap.
-
-                intersection_interval = self_interval & other_interval
-                if not intersection_interval.is_empty:
-                    intersection_intervals.append(intersection_interval)
-
-                # Increment the pointer of the interval that ends
-                # earlier.
-                if (
-                    (self_interval.end is None, self_interval.end) <
-                    (other_interval.end is None, other_interval.end)
-                ):
-                    i += 1
-                else:
-                    j += 1
-
-        return TimeSet(*intersection_intervals)
+        return TimeSet(*result)
     
 
     def overlaps_with_interval(self, interval: TimeInterval) -> bool:
@@ -2287,30 +2288,11 @@ class TimeSet:
         return False
     
 
-    def overlaps_with_timeset(self, timeset: TimeSet) -> bool:
+    def overlaps_with_timeset(self, other: TimeSet) -> bool:
         '''Return `True` if this time set overlaps with another time
         set.'''
 
-        # The intersection with the empty set is empty.
-        if self.is_empty or timeset.is_empty:
-            return False
-        # From this point onwards, time sets are considered to be
-        # non-empty.
-
-        i, j = 0, 0
-
-        while i < self.components_number and j < timeset.components_number:
-            self_interval = self.components[i]
-            other_interval = timeset.components[j]
-
-            if self_interval.is_left_of(other_interval):
-                i += 1
-            elif self_interval.is_right_of(other_interval):
-                j += 1
-            else:
-                return True
-
-        return False
+        return next(self._scan(other), None) is not None
     
 
     def overlaps(self, other: TimeInterval | TimeSet) -> bool:

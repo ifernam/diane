@@ -2,9 +2,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from collections.abc import MutableSet
 
-from temporal import Timestamp, TimeInterval, TimeSet
-from activities import Activity, Activities
-from sessions import Session
+from diane.temporal import Timestamp, TimeInterval, TimeSet
+from diane.activities import Activity, Activities
+from diane.sessions import Session
 
 
 

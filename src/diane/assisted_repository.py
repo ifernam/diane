@@ -1,8 +1,8 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 
-from sessions import Session
-from repository import Repository
+from diane.sessions import Session
+from diane.repository import Repository
 
 
 

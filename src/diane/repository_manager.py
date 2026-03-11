@@ -4,10 +4,10 @@ from pathlib import Path
 import yaml
 import warnings
 
-from temporal import Timestamp, TimeInterval, TimeSet
-from activities import Activity, Activities
-from sessions import Session
-from assisted_repository import AssistedRepository
+from diane.temporal import Timestamp, TimeInterval, TimeSet
+from diane.activities import Activity, Activities
+from diane.sessions import Session
+from diane.assisted_repository import AssistedRepository
 
 
 

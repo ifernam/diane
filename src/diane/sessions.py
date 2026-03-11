@@ -2,8 +2,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from collections.abc import Iterable
 
-from temporal import TimeSet
-from activities import Activity
+from diane.temporal import TimeSet
+from diane.activities import Activity
 
 
 

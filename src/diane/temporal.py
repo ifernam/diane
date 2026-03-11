@@ -2145,8 +2145,8 @@ class TimeSet:
         # Sort intervals chronologically.
         def sort_key(i: TimeInterval):
             return (
-                i.start is not None, i.start,
-                i.end is None, i.end
+                i.start is not None, i.start, not i.is_start_included,
+                i.end is None, i.end, i.is_end_included
             )
 
         nonempty_intervals.sort(key=sort_key)

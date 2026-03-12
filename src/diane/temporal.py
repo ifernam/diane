@@ -2300,21 +2300,25 @@ class TimeSet:
         '''Return `True` if this time set overlaps with the given time
         interval.'''
 
-        # The intersection with the empty set is empty.
         if self.is_empty or interval.is_empty:
             return False
-        # From this point onwards, a time set and a time interval
-        # are considered to be non-empty.
+        
+        if interval.start is None:
+            # Left ray.
+            return self.first_component.overlaps(interval)
+        
+        if interval.end is None:
+            # Right ray.
+            return self.last_component.overlaps(interval)
+        
+        key = (interval.start is not None, interval.start)
+        pos = bisect.bisect_left(self._start_keys, key)
 
-        for i in self.components:
-            if i.is_left_of(interval):
-                continue
-            elif i.is_right_of(interval):
-                break
-            else:
-                # The intervals overlap.
-                return True
-
+        if pos > 0 and self._intervals[pos-1].overlaps(interval):
+            return True
+        
+        if pos < len(self._intervals) and self._intervals[pos].overlaps(interval):
+            return True
         return False
     
 

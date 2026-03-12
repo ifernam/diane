@@ -12,7 +12,7 @@ import bisect
 
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 @total_ordering
 class Timestamp:
     '''Local date and time along with the time zone.
@@ -290,7 +290,7 @@ class Timestamp:
 
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class TimeInterval:
     '''A time interval representing a connected subset of the time line.
 
@@ -1970,7 +1970,7 @@ class TimeInterval:
 
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class TimeSet:
     '''A disjoint union of time intervals that are pairwise disconnected
     and chronologically ordered.

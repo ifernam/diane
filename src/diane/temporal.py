@@ -2257,31 +2257,31 @@ class TimeSet:
         return False
     
 
-    def intersection_with_interval(self, other: TimeInterval) -> TimeSet:
+    def intersection_with_interval(self, interval: TimeInterval) -> TimeSet:
         '''Return the intersection of this time set with the given time
         interval.'''
 
-        # The intersection with the empty set is empty.
-        if self.is_empty or other.is_empty:
+        if self.is_empty or interval.is_empty:
             return TimeSet.empty()
-        # From this point onwards, a time set and a time interval
-        # are considered to be non-empty.
 
-        intersection_intervals: list[TimeInterval] = []
+        key = (interval.start is not None, interval.start)
+        pos = bisect.bisect_left(self._start_keys, key)
 
-        for i in self._intervals:
-            if i.is_left_of(other):
-                continue
-            elif i.is_right_of(other):
+        start_idx = pos
+        if pos and self._intervals[pos - 1].overlaps(interval):
+            start_idx -= 1
+
+        result = []
+
+        for comp in self._intervals[start_idx:]:
+            if comp.is_right_of(interval):
                 break
-            else:
-                # The intervals overlap.
 
-                intersection_interval = i & other
-                if intersection_interval.is_nonempty:
-                    intersection_intervals.append(intersection_interval)
+            inter = comp & interval
+            if inter.is_nonempty:
+                result.append(inter)
 
-        return TimeSet(*intersection_intervals)
+        return TimeSet(*result)
 
     
     def intersection_with_timeset(self, other: TimeSet) -> TimeSet:
@@ -2319,6 +2319,7 @@ class TimeSet:
         
         if pos < len(self._intervals) and self._intervals[pos].overlaps(interval):
             return True
+        
         return False
     
 

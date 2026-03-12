@@ -8,6 +8,7 @@ import zoneinfo
 import tzlocal
 import sys
 import warnings
+import bisect
 
 
 
@@ -1981,6 +1982,8 @@ class TimeSet:
     '''
 
     _intervals: tuple[TimeInterval, ...]
+    _starts: tuple[Timestamp | None, ...]    # Cached starts of components.
+    _start_keys: tuple[tuple[bool, Timestamp], ...]
 
 
     def _is_valid(self) -> bool:
@@ -2014,6 +2017,8 @@ class TimeSet:
         '''
 
         object.__setattr__(self, '_intervals', tuple(intervals))
+        object.__setattr__(self, '_starts', tuple(i.start for i in intervals))
+        object.__setattr__(self, '_start_keys', tuple((s is not None, s) for s in self._starts))
 
         if not self._is_valid():
             raise ValueError('The \'TimeSet\' has been set incorrectly.')
@@ -2126,14 +2131,39 @@ class TimeSet:
         '''Return `True` if the given moment is contained in the time
         set.'''
 
-        return any(moment in c for c in self.components)
+        if self.is_empty:
+            return False
+
+        pos = bisect.bisect_right(self._start_keys, (True, moment)) - 1
+
+        if pos < 0:
+            return False
+
+        return moment in self._intervals[pos]
     
 
     def contains_timeinterval(self, interval: TimeInterval) -> bool:
         '''Return `True` if the given time interval is completely
-        contained in the time set.'''
+        contained in this time set.'''
 
-        return any(interval.is_contained_in(c) for c in self.components)
+        if interval.is_empty:
+            return True
+        
+        if self.is_empty:
+            return False
+        
+        if interval.start is None:
+            # Left ray.
+            return self.first_component.contains(interval)
+        
+        if interval.end is None:
+            # Right ray.
+            return self.last_component.contains(interval)
+        
+        pos = bisect.bisect_right(self._start_keys, (True, interval.start)) - 1
+        if pos < 0:
+            return False
+        return self._intervals[pos].contains(interval)
     
 
     def contains_timeset(self, timeset: TimeSet) -> bool:

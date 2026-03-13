@@ -200,7 +200,7 @@ class Timestamp:
         # Create the target IANA time zone.
         try:
             tz = zoneinfo.ZoneInfo(iana_zone)
-        except Exception as e:
+        except zoneinfo.ZoneInfoNotFoundError as e:
             raise ValueError(f'Invalid IANA time zone: \'{iana_zone}\'.') from e
 
         # Convert the UTC moment to the target zone.
@@ -264,10 +264,8 @@ class Timestamp:
 
         try:
             tz = zoneinfo.ZoneInfo(timezone_iana)
-        except Exception as e:
-            # 'ZoneInfo' raises 'ZoneInfoNotFoundError' (subclass
-            # of Exception) on bad names.
-            raise ValueError(f'Invalid IANA time zone: {timezone_iana}') from e
+        except zoneinfo.ZoneInfoNotFoundError as e:
+            raise ValueError(f'Invalid IANA time zone: \'{timezone_iana}\'.') from e
 
         dt = self._dt.astimezone(tz)
         return Timestamp(dt)

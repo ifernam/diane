@@ -32,6 +32,8 @@ class Timestamp:
 
 
     _dt: datetime.datetime
+    _dt_utc: datetime.datetime = field(init=False)
+    _hash: int = field(init=False)
     
 
     @staticmethod
@@ -49,8 +51,15 @@ class Timestamp:
 
 
     def __post_init__(self) -> None:
-        if not Timestamp._is_valid_dt(self._dt):
+        object.__setattr__(self, '_dt_utc', self._dt.astimezone(Timestamp._UTC))
+
+        if (
+            not Timestamp._is_valid_dt(self._dt)
+            or not Timestamp._is_valid_dt(self._dt_utc)
+        ):
             raise ValueError('The time zone has been set incorrectly.')
+        
+        object.__setattr__(self, '_hash', hash(self._dt_utc))
         
     
     def __str__(self) -> str:
@@ -63,12 +72,11 @@ class Timestamp:
         if not isinstance(other, Timestamp):
             return NotImplemented
         
-        return self._dt.astimezone(Timestamp._UTC) == other._dt.astimezone(Timestamp._UTC)
+        return self._dt_utc == other._dt_utc
     
 
     def __hash__(self) -> int:
-        dt_utc = self._dt.astimezone(Timestamp._UTC)
-        return hash(dt_utc)
+        return self._hash
     
 
     def __lt__(self, other: object) -> bool:
@@ -77,7 +85,7 @@ class Timestamp:
         if not isinstance(other, Timestamp):
             return NotImplemented
         
-        return self._dt.astimezone(Timestamp._UTC) < other._dt.astimezone(Timestamp._UTC)
+        return self._dt_utc < other._dt_utc
     
 
     def __add__(self, other: datetime.timedelta) -> Timestamp:
@@ -86,9 +94,8 @@ class Timestamp:
         if not isinstance(other, datetime.timedelta):
             return NotImplemented
 
+        dt_utc_new = self._dt_utc + other
         tz = self._dt.tzinfo
-        dt_utc = self._dt.astimezone(Timestamp._UTC)
-        dt_utc_new = dt_utc + other
         dt_new = dt_utc_new.astimezone(tz)
         return Timestamp(dt_new)
     
@@ -109,9 +116,7 @@ class Timestamp:
             return self + (-other)
 
         if isinstance(other, Timestamp):
-            self_dt_utc = self._dt.astimezone(Timestamp._UTC)
-            other_dt_utc = other._dt.astimezone(Timestamp._UTC)
-            return self_dt_utc - other_dt_utc    # 'timedelta'.
+            return self._dt_utc - other._dt_utc
 
         return NotImplemented
     
@@ -236,11 +241,6 @@ class Timestamp:
     
 
     @property
-    def datetime(self) -> datetime.datetime:
-        return self._dt
-    
-
-    @property
     def datetime_iso(self) -> str:
         '''Returns the timestamp in ISO 8601 format in the time zone
         in which it was recorded.'''
@@ -277,16 +277,14 @@ class Timestamp:
         '''Creates a new timestamp by converting the given one
         to UTC.'''
         
-        dt_utc = self._dt.astimezone(Timestamp._UTC)
-        return Timestamp(dt_utc)
+        return Timestamp(self._dt_utc)
     
 
     @property
     def utc_iso(self) -> str:
         '''Returns an ISO 8601 string in UTC.'''
     
-        dt_utc = self._dt.astimezone(Timestamp._UTC)
-        return dt_utc.replace(tzinfo=None).isoformat() + 'Z'
+        return self._dt_utc.replace(tzinfo=None).isoformat() + 'Z'
 
 
 

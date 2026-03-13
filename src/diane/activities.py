@@ -9,7 +9,7 @@ import warnings
 
 
 
-@dataclass
+@dataclass(slots=True)
 class Activity:
     '''Represents a human activity.
     
@@ -48,12 +48,6 @@ class Activity:
 
     def __post_init__(self) -> None:
         self._validate()
-
-    
-    def __setattr__(self, name, value):
-        if name == '_slug' and hasattr(self, '_slug'):
-            raise AttributeError('Slug is immutable.')
-        super().__setattr__(name, value)
 
 
     def __hash__(self) -> int:

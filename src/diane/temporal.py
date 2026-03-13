@@ -38,27 +38,44 @@ class Timestamp:
     
 
     @staticmethod
-    def _is_valid_dt(dt: datetime.datetime) -> bool:
-        '''Check that the 'datetime' variable contains a valid
-        `ZoneInfo` time zone.'''
+    def _validate_dt(dt: datetime.datetime) -> None:
+        '''Validate that the `datetime` has a valid `ZoneInfo` timezone.
+
+        Args:
+            `dt`: The `datetime` to validate.
+
+        Raises:
+            `ValueError`: If the `datetime` is naive, has no UTC offset,
+                or its timezone is not a `ZoneInfo` instance.
+        '''
 
         if dt.tzinfo is None:
-            return False
+            raise ValueError(f'No time zone has been specified for the timestamp: \'{dt}\'.')
+        
         try:
-            utc_off = dt.tzinfo.utcoffset(dt)
-        except Exception:
-            return False
-        return utc_off is not None and isinstance(dt.tzinfo, zoneinfo.ZoneInfo)
+            utc_off = dt.utcoffset()
+        except Exception as e:
+            raise ValueError(f'Failed to get UTC offset for \'{dt}\'. {e}') from e
+        
+        if utc_off is None:
+            raise ValueError(f'UTC offset is None for \'{dt}\' (invalid value).')
+
+        if not isinstance(dt.tzinfo, zoneinfo.ZoneInfo):
+            raise ValueError(
+                f'Timezone must be a \'ZoneInfo\' instance, got \'{type(dt.tzinfo).__name__}\' '
+                f'for \'{dt}\'.'
+            )
 
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, '_dt_utc', self._dt.astimezone(Timestamp._UTC))
 
-        if (
-            not Timestamp._is_valid_dt(self._dt)
-            or not Timestamp._is_valid_dt(self._dt_utc)
-        ):
-            raise ValueError('The time zone has been set incorrectly.')
+        object.__setattr__(self, '_dt_utc', self._dt.astimezone(Timestamp._UTC))
+        
+        try:
+            Timestamp._validate_dt(self._dt)
+            Timestamp._validate_dt(self._dt_utc)
+        except ValueError as e:
+            raise ValueError(f'The timestamp \'{self}\' has been set incorrectly. {e}') from e
         
         object.__setattr__(self, '_hash', hash(self._dt_utc))
         

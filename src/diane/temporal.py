@@ -17,15 +17,16 @@ import bisect
 class Timestamp:
     '''Local date and time along with the time zone.
 
-    Contains an aware datetime timestamp with a 'ZoneInfo' time zone.
+    Contains an aware `datetime` timestamp with a `ZoneInfo` time zone.
 
     Requirements:
-    - 'tzinfo' must be 'zoneinfo.ZoneInfo'.
+    - `tzinfo` must be `zoneinfo.ZoneInfo`.
 
     Notes:
-    - This class strictly stores 'tzinfo' as 'zoneinfo.ZoneInfo'
+    - This class strictly stores `tzinfo` as `zoneinfo.ZoneInfo`
       instances (IANA names).
-    - Dependency: 'tzlocal' (for detecting local IANA zone name).'''
+    - Dependency: `tzlocal` (for detecting local IANA zone name).
+    '''
 
 
     _UTC = zoneinfo.ZoneInfo('Etc/UTC')    # UTC time zone.
@@ -38,8 +39,8 @@ class Timestamp:
 
     @staticmethod
     def _is_valid_dt(dt: datetime.datetime) -> bool:
-        '''Checks that the 'datetime' variable contains a valid
-        'ZoneInfo' time zone.'''
+        '''Check that the 'datetime' variable contains a valid
+        `ZoneInfo` time zone.'''
 
         if dt.tzinfo is None:
             return False
@@ -63,11 +64,18 @@ class Timestamp:
         
     
     def __str__(self) -> str:
+        '''Return the ISO 8601 string representation of the timestamp
+        in its original time zone.'''
+
         return f'{self.datetime_iso}'
     
 
     def __eq__(self, other: object) -> bool:
-        '''Compares two timestamps in UTC.'''
+        '''Return `True` if this timestamp represents the same moment
+        in time as another one (based on UTC).
+        
+        Don't take time zones into account.
+        '''
 
         if not isinstance(other, Timestamp):
             return NotImplemented
@@ -76,11 +84,18 @@ class Timestamp:
     
 
     def __hash__(self) -> int:
+        '''Return the hash value based on the UTC moment
+        of the timestamp.
+        
+        Don't take time zones into account.
+        '''
+
         return self._hash
     
 
     def __lt__(self, other: object) -> bool:
-        '''Less-than comparison based on absolute (UTC) time.'''
+        '''Return `True` if this timestamp is earlier than another one
+        in absolute (UTC) time.'''
     
         if not isinstance(other, Timestamp):
             return NotImplemented
@@ -89,7 +104,16 @@ class Timestamp:
     
 
     def __add__(self, other: datetime.timedelta) -> Timestamp:
-        '''Time shift by a specified interval.'''
+        '''Return a new `Timestamp` shifted forward by the given
+        `timedelta`.
+
+        Args:
+            `other`: The `timedelta` to add.
+
+        Returns:
+            A new `Timestamp` representing the moment `other` later than
+            this one.
+        '''
 
         if not isinstance(other, datetime.timedelta):
             return NotImplemented
@@ -109,8 +133,22 @@ class Timestamp:
     
 
     def __sub__(self, other: datetime.timedelta | Timestamp) -> Timestamp | datetime.timedelta:
-        '''The offset of a timestamp by a specified interval,
-        or the difference between two timestamps.'''
+        '''Return the difference between two timestamps
+        or a shifted timestamp.
+
+        - If `other` is a `timedelta`, return a new `Timestamp` shifted
+            backward by that amount.
+        - If `other` is a `Timestamp`, return the `timedelta` between
+            this and the other timestamp (`self - other`).
+
+        Return `NotImplemented` for unsupported types.
+
+        Args:
+            `other`: A `timedelta` or another `Timestamp`.
+
+        Returns:
+            `Timestamp` if `other` is `timedelta`, else `timedelta`.
+        '''
 
         if isinstance(other, datetime.timedelta):
             return self + (-other)
@@ -123,14 +161,27 @@ class Timestamp:
 
     @classmethod
     def from_utc(cls, dt_iso: str) -> Timestamp:
-        '''Parse an ISO 8601 string and return a 'Timestamp' in UTC.
+        '''Create a `Timestamp` in UTC from an ISO 8601 string.
 
-        Any strings containing timestamps with a non-zero offset are rejected.
+        The string may be naive (assumed UTC), end with 'Z', or have
+        a zero offset. Non-zero offsets are rejected.
 
         Accepted examples:
          - '2026-01-20T10:36'         (assumed UTC),
          - '2026-01-20T10:36Z'        (UTC),
-         - '2026-01-20T10:36+00:00'   (zero offset).'''
+         - '2026-01-20T10:36+00:00'   (zero offset).
+
+        Args:
+            `dt_iso`: ISO 8601 datetime string.
+
+        Returns:
+            A new `Timestamp` representing the given moment in UTC.
+
+        Raises:
+            `ValueError`: If the string cannot be parsed,
+                or if it contains a non-zero offset.
+ 
+        '''
         
         # Manually replace the suffix 'Z' with zero offset '+00:00'
         # for older versions of Python (< 3.11).
@@ -158,28 +209,29 @@ class Timestamp:
 
     @classmethod
     def from_iso_iana(cls, iso_str: str, iana_zone: str) -> Timestamp:
-        '''Creates a timestamp from an ISO 8601 string with offset
+        '''Create a timestamp from an ISO 8601 string with offset
         and an IANA time zone.
 
-        The ISO string must contain an offset (e.g.,
-        '2026-03-04T15:15+03:00'). The method verifies that the offset
-        is consistent with the actual offset of the IANA zone at that
-        moment. If they match, the returned timestamp stores the local
-        time in the given IANA zone.
+        The ISO string must contain an offset
+        (e.g., '2026-03-04T15:15+03:00'). The method verifies that
+        the offset is consistent with the actual offset of the IANA zone
+        at that moment. If they match, the returned timestamp stores
+        the local time in the given IANA zone.
 
         Args:
-            iso_str: ISO 8601 datetime string that includes an offset
+            `iso_str`: ISO 8601 datetime string that includes an offset
                 (or 'Z' for UTC).
-            iana_zone: IANA time zone name (e.g., 'Europe/Moscow').
+            `iana_zone`: IANA time zone name (e.g., 'Europe/Moscow').
 
         Returns:
-            A new 'Timestamp' object representing the same moment but
+            A new `Timestamp` object representing the same moment but
             normalised to the specified IANA zone.
 
         Raises:
-            ValueError: If the ISO string cannot be parsed, if the IANA
-                zone is unknown, or if the offset in the ISO string
-                does not match the zone's offset for that moment.'''
+            `ValueError`: If the ISO string cannot be parsed,
+                if the IANA zone is unknown, or if the offset in the ISO
+                string does not match the zone's offset for that moment.
+        '''
         
         # Normalise 'Z' to '+00:00' for Python < 3.11.
         if sys.version_info < (3, 11) and iso_str.endswith('Z'):
@@ -219,7 +271,15 @@ class Timestamp:
 
     @classmethod
     def now(cls) -> Timestamp:
-        '''Creates a new timestamp with the current local time.'''
+        '''Create a new `Timestamp` representing the current local time.
+
+        Returns:
+            A `Timestamp` set to the current date and time in the local
+            time zone.
+
+        Raises:
+            `RuntimeError`: If the local time zone cannot be determined.
+        '''
 
         try:
             tz = zoneinfo.ZoneInfo(tzlocal.get_localzone_name())
@@ -232,7 +292,15 @@ class Timestamp:
 
     @classmethod
     def now_utc(cls) -> Timestamp:
-        '''Creates a new timestamp with the current time in UTC.'''
+        '''Create a new `Timestamp` representing the current time
+        in UTC.
+
+        Returns:
+            A `Timestamp` set to the current date and time in UTC.
+
+        Raises:
+            `RuntimeError`: If the UTC time cannot be obtained.
+        '''
         
         try:
             return cls(datetime.datetime.now(Timestamp._UTC))
@@ -242,15 +310,28 @@ class Timestamp:
 
     @property
     def datetime_iso(self) -> str:
-        '''Returns the timestamp in ISO 8601 format in the time zone
-        in which it was recorded.'''
+        '''Return the timestamp in ISO 8601 format in the time zone
+        in which it was recorded.
+        
+        Returns:
+            ISO 8601 formatted string,
+            e.g., '2026-03-13T15:30:00+03:00'.
+        '''
         
         return self._dt.isoformat()
     
 
     @property
     def timezone_iana(self) -> str:
-        '''Returns the time zone of this timestamp in IANA format.'''
+        '''Return the IANA time zone name of this timestamp.
+
+        Returns:
+            The IANA zone key (e.g., 'America/New_York').
+
+        Raises:
+            `ValueError`: If the stored time zone is not a `ZoneInfo`
+                instance (should never happen).
+        '''
 
         if not isinstance(self._dt.tzinfo, zoneinfo.ZoneInfo):
             raise ValueError('The time zone has been set incorrectly.')
@@ -259,8 +340,19 @@ class Timestamp:
     
 
     def to_timezone(self, timezone_iana: str) -> Timestamp:
-        '''Creates a new timestamp by converting the given one to
-        the specified time zone.'''
+        '''Convert this timestamp to the specified IANA time zone.
+
+        Args:
+            `timezone_iana`: IANA time zone name
+            (e.g., 'America/New_York').
+
+        Returns:
+            A new `Timestamp` representing the same moment
+            in the specified zone.
+
+        Raises:
+            `ValueError`: If the IANA zone name is invalid.
+        '''
 
         try:
             tz = zoneinfo.ZoneInfo(timezone_iana)
@@ -272,15 +364,23 @@ class Timestamp:
 
 
     def to_utc(self) -> Timestamp:
-        '''Creates a new timestamp by converting the given one
-        to UTC.'''
+        '''Convert this timestamp to UTC.
+
+        Returns:
+            A new `Timestamp` representing the same moment in UTC.
+        '''
         
         return Timestamp(self._dt_utc)
     
 
     @property
     def utc_iso(self) -> str:
-        '''Returns an ISO 8601 string in UTC.'''
+        '''Return the ISO 8601 string representation of this timestamp
+        in UTC.
+
+        Returns:
+            A string like '2026-03-13T12:00:00Z'.
+        '''
     
         return self._dt_utc.replace(tzinfo=None).isoformat() + 'Z'
 
@@ -1206,7 +1306,7 @@ class TimeInterval:
         of this interval.
 
         The new interval contains every point that lies strictly
-        to the left ofevery point in the current interval.
+        to the left of every point in the current interval.
         If the current interval is empty, the result is the entire
         timeline.
 

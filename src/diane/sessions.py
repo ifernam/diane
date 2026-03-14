@@ -9,13 +9,19 @@ from diane.activities import Activity
 
 @dataclass(frozen=True, init=False)
 class Session:
-    '''Represents session.
-    
+    '''Represents a session -- a time interval(s) during which
+    activities occur.
+
+    A session is defined by a non-empty time set, a non-empty set
+    of activities, and an optional comment. Instances are immutable
+    and hashable based on the time set and activities (the comment
+    is not part of the equality/hash).
+
     Attributes:
-        _timeset: Time of session.
-        _activities: Set of activities.
-        comment: The session comment string. This may be empty.
-        '''
+        `_timeset`: `TimeSet` of the session.
+        `_activities`: `frozenset` of `Activity` objects.
+        `comment`: Free-form text comment (may be empty).
+    '''
 
     _timeset: TimeSet
     _activities: frozenset[Activity]
@@ -23,6 +29,15 @@ class Session:
 
 
     def _validate(self) -> None:
+        '''Validate the session's internal state.
+
+        The session must have a non-empty time set and contain at least
+        one activity.
+
+        Raises:
+            `ValueError`: If the time set is empty or the activities set
+                is empty.
+        '''
 
         if self._timeset.is_empty:
             raise ValueError('The session must be associated with a non-empty time set.')
@@ -37,6 +52,20 @@ class Session:
         activities: Iterable[Activity],
         comment: str = ''
     ) -> None:
+        '''Initialize a `Session`.
+
+        Args:
+            `timeset`: `TimeSet` representing the session's time.
+            `activities`: Iterable of `Activity` objects. Must
+                not be empty.
+            `comment`: Optional comment string. Defaults to empty
+                string.
+
+        Raises:
+            `ValueError`: If timeset is empty or activities iterable
+                is empty.
+        '''
+
         object.__setattr__(self, '_timeset', timeset)
         object.__setattr__(self, '_activities', frozenset(activities))
         object.__setattr__(self, 'comment', comment)
@@ -45,6 +74,8 @@ class Session:
 
 
     def __eq__(self, other: object) -> bool:
+        '''Return `True` if this session equals another based on time
+        set and activities.'''
 
         if not isinstance(other, Session):
             return NotImplemented
@@ -56,38 +87,63 @@ class Session:
 
 
     def __hash__(self) -> int:
+        '''Return a hash based on the time set and activities.'''
+
         return hash((self._timeset, self._activities))
     
 
     def __str__(self) -> str:
+        '''Return a human-readable string representation
+        of the session.'''
+
         activities_string = ', '.join(f'\'{a.slug}\'' for a in self._activities)
         return f'{self._timeset} -> {activities_string}'
 
 
     @property
     def timeset(self) -> TimeSet:
-        '''Returns the session's 'TimeSet'.'''
+        '''Return the session's time set.
+
+        Returns:
+            `TimeSet`: The time interval(s) during which the session
+                takes place.
+        '''
 
         return self._timeset
 
 
     @property
     def activities(self) -> frozenset[Activity]:
-        '''Returns activities set.'''
+        '''Return the set of activities performed during the session.
+
+        Returns:
+            `frozenset[Activity]`: An immutable set of `Activity`
+                instances.
+        '''
 
         return self._activities
 
 
     @classmethod
     def merge(cls, *sessions: Session) -> Session:
-        '''Merge sessions with the same activities.
+        '''Merge multiple sessions with identical activities.
 
-        If sessions have the same activities, create a new session that
-        unites the time sets and comments of the original ones.
+        Create a new session that combines the time sets and comments
+        of all provided sessions. The resulting time set is the union
+        of all individual time sets. Comments are concatenated
+        in the order of the input sessions, separated by a newline
+        character. Empty comments are ignored.
+
+        Args:
+            `*sessions`: Variable number of `Session` objects to merge.
+
+        Returns:
+            `Session`: A new `Session` instance with the united time
+            set, the common activities, and the concatenated comments.
 
         Raises:
-            `ValueError`: If no sessions are given or if sessions have
-                different sets of activities.
+            `ValueError`: If no sessions are provided,
+                or if the sessions have different sets of activities.
         '''
         
         if not sessions:

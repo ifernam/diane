@@ -26,6 +26,7 @@ class Session:
     _timeset: TimeSet
     _activities: frozenset[Activity]
     comment: str = ''
+    _hash: int = field(init=False, hash=False)
 
 
     def _validate(self) -> None:
@@ -70,6 +71,8 @@ class Session:
         object.__setattr__(self, '_activities', frozenset(activities))
         object.__setattr__(self, 'comment', comment)
 
+        object.__setattr__(self, '_hash', hash((timeset, self._activities)))
+
         self._validate()
 
 
@@ -89,7 +92,7 @@ class Session:
     def __hash__(self) -> int:
         '''Return a hash based on the time set and activities.'''
 
-        return hash((self._timeset, self._activities))
+        return self._hash
     
 
     def __str__(self) -> str:

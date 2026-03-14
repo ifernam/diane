@@ -14,7 +14,8 @@ class Session:
     Attributes:
         _timeset: Time of session.
         _activities: Set of activities.
-        comment: The session comment string. This may be empty.'''
+        comment: The session comment string. This may be empty.
+        '''
 
     _timeset: TimeSet
     _activities: frozenset[Activity]
@@ -79,38 +80,33 @@ class Session:
 
     @classmethod
     def merge(cls, *sessions: Session) -> Session:
-        '''Merges sessions with same activities.
+        '''Merge sessions with the same activities.
 
-        If sessions have same activities, a new session will be created
-        that unites the time sets and comments of the original ones.
-        Ignores duplicates by time set and activities, leaving only
-        the first occurrence of each session.
+        If sessions have the same activities, create a new session that
+        unites the time sets and comments of the original ones.
 
         Raises:
-            ValueError: if sessions have different sets
-                of activities or if no sessions are given.'''
+            `ValueError`: If no sessions are given or if sessions have
+                different sets of activities.
+        '''
         
         if not sessions:
             raise ValueError('At least one session required for merge.')
         
-        # Remove duplicates by time set and activities, leaving only
-        # the first occurrence of each session.
-        unique_sessions = list(dict.fromkeys(sessions))
-        
-        first_activities = unique_sessions[0].activities
-        if any(s.activities != first_activities for s in unique_sessions[1:]):
+        first_activities = sessions[0].activities
+        if any(s.activities != first_activities for s in sessions[1:]):
                 raise ValueError(
                     'Sessions are not mergeable as they have different activities.'
                 )
 
         # Unite time sets.
-        timesets = [s.timeset for s in unique_sessions]
-        timeset = TimeSet.union(*timesets)
+        timeset = TimeSet.union(*(s.timeset for s in sessions))
 
-        # As activities are same, we can take them from one session.
-        activities = unique_sessions[0].activities
+        # As activities are same, take them from the first session.
+        activities = sessions[0].activities
 
-        # Concatenate of comments from given sessions via line breaks.
-        comment = '\n'.join(s.comment for s in unique_sessions if s.comment)
+        # Concatenate the comments from the given sessions via line
+        # breaks.
+        comment = '\n'.join(s.comment for s in sessions if s.comment)
 
         return Session(timeset, activities, comment)

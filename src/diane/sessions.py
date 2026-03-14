@@ -7,7 +7,7 @@ from diane.activities import Activity
 
 
 
-@dataclass(frozen=True, init=False)
+@dataclass(frozen=True, init=False, slots=True)
 class Session:
     '''Represents a session -- a time interval(s) during which
     activities occur.
@@ -71,9 +71,9 @@ class Session:
         object.__setattr__(self, '_activities', frozenset(activities))
         object.__setattr__(self, 'comment', comment)
 
-        object.__setattr__(self, '_hash', hash((timeset, self._activities)))
-
         self._validate()
+
+        object.__setattr__(self, '_hash', hash((timeset, self._activities)))
 
 
     def __eq__(self, other: object) -> bool:

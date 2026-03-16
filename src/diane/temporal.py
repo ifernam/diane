@@ -404,6 +404,194 @@ class Timestamp:
 
 
 @dataclass(frozen=True, slots=True)
+@total_ordering
+class Endpoint:
+    '''Represents an endpoint of a time interval or of a time set.'''
+    
+
+    class Kind(Enum):
+        '''Represents an endpoint type.'''
+
+        NEG_INF = -1  # An endpoint lies at negative infinity.
+        FINITE = 0    # A finite endpoint.
+        POS_INF = 1   # An endpoint lies at positive infinity.
+
+
+    class Side(Enum):
+        '''Represents a side (start/end) of an endpoint.'''
+
+        LEFT = -1       # An endpoint is the start of an interval
+                        # or a time set.
+        LEFT_RIGHT = 0  # An endpoint is both the start and the end.
+                        # This occurs when an interval or a time set
+                        # is a single point.
+        RIGHT = 1       # An endpoint is the end of an interval
+                        # or a time set.
+    
+
+    _kind: Kind
+    _timestamp: Timestamp | None  # `Timestamp` for the `FINITE` kind,
+                                  # `None` for infinities.
+    _side: Side                   # `LEFT`/`RIGHT`/`LEFT_RIGH`.
+    _included: bool | None        # `True`/`False` for the `FINITE`
+                                  # kind, `None` for infinities.
+    
+
+    def _validate(self) -> None:
+        '''Check that the endpoint has been set correctly.
+        
+        Raises:
+            `ValueError`: If the endpoint has been set incorrectly.
+        '''
+
+        # Validate timestamp.
+        if self._kind is Endpoint.Kind.FINITE and self._timestamp is None:
+            raise ValueError(
+                'The endpoint of the \'FINITE\' kind must have an explicitly specified timestamp.'
+            )
+        if self._kind is not Endpoint.Kind.FINITE and self._timestamp is not None:
+            raise ValueError(
+                'The endpoint of an infinite kind must not have an explicitly specified '
+                'timestamp. It must be \'None\'.'
+            )
+        
+        # Validate side.
+        if self._kind is Endpoint.Kind.NEG_INF and self._side is Endpoint.Side.RIGHT:
+            raise ValueError(
+                'The endpoint at negative infinity cannot be the end of an interval or a time set.'
+            )
+        if self._kind is Endpoint.Kind.POS_INF and self._side is Endpoint.Side.LEFT:
+            raise ValueError(
+                'The endpoint at positive infinity cannot be the start of an interval or a time '
+                'set.'
+            )
+        if self._kind is not Endpoint.Kind.FINITE and self._side is Endpoint.Side.LEFT_RIGHT:
+            raise ValueError(
+                'The endpoint at infinity cannot be the start/end of a single-point interval.'
+            )
+        
+        # Validate including option.
+        if self._kind is not Endpoint.Kind.FINITE and self._included is True:
+            raise ValueError(
+                'A time interval or a time set cannot include the endpoint at infinity. '
+                '\'included\' must be \'None\'.'
+            )
+        if self._kind is not Endpoint.Kind.FINITE and self._included is False:
+            raise ValueError(
+                'A time interval or a time set cannot include or exclude the endpoint '
+                'at infinity. \'included\' must be \'None\'.'
+            )
+        if self._side is Endpoint.Side.LEFT_RIGHT and not self._included:
+            raise ValueError('A single-point interval or timeset contains its boundary.')
+    
+
+    def _key(self):
+        kind_key = self._kind.value
+        timestamp_key = self._timestamp
+        side_key = 1 - self._side.value
+        included_key = self._included if self._side is Endpoint.Side.RIGHT else not self._included
+
+        return (kind_key, timestamp_key, side_key, included_key)
+        
+
+    def __post_init__(self) -> None:
+        try:
+            self._validate()
+        except ValueError as e:
+            raise ValueError(f'The endpoint has been set incorrectly. {e}') from e
+    
+
+    def __lt__(self, other: object) -> bool:
+        '''Return `True` if this endpoint is less than another one
+        according to the ordering key.'''
+
+        if not isinstance(other, Endpoint):
+            return NotImplemented
+        
+        return self._key() < other._key()
+    
+    
+    @classmethod
+    def left_finite(cls, timestamp: Timestamp, included: bool=True) -> Endpoint:
+        '''Create a left-sided finite endpoint.
+        
+        Args:
+            `timestamp` (`Timestamp`): The timestamp.
+            `included` (`bool`): The `True`/`False` option specifies
+                whether the endpoint is included/excluded
+                in the interval or in the time set. Defaults to `True`
+                (included).
+        '''
+
+        return cls(
+            _kind=Endpoint.Kind.FINITE,
+            _timestamp=timestamp,
+            _side=Endpoint.Side.LEFT,
+            _included=included
+        )
+    
+    @classmethod
+    def right_finite(cls, timestamp: Timestamp, included: bool=False) -> Endpoint:
+        '''Create a right-sided finite endpoint.
+        
+        Args:
+            `timestamp` (`Timestamp`): The timestamp.
+            `included` (`bool`): The `True`/`False` option specifies
+                whether the endpoint is included/excluded
+                in the interval or in the time set. Defaults to `False`
+                (excluded).
+        '''
+
+        return cls(
+            _kind=Endpoint.Kind.FINITE,
+            _timestamp=timestamp,
+            _side=Endpoint.Side.RIGHT,
+            _included=included
+        )
+        
+    
+    @classmethod
+    def left_infinite(cls) -> Endpoint:
+        '''Create a left-sided endpoint on infinity.'''
+
+        return cls(
+            _kind=Endpoint.Kind.NEG_INF,
+            _timestamp=None,
+            _side=Endpoint.Side.LEFT,
+            _included=None
+        )
+
+    
+    @classmethod
+    def leftright(cls, timestamp: Timestamp) -> Endpoint:
+        '''Create an endpoint of a single-point interval.
+        
+        This endpoint is both the start and the end. This occurs when
+        an interval is a single point.
+        '''
+
+        return cls(
+            _kind=Endpoint.Kind.FINITE,
+            _timestamp=timestamp,
+            _side=Endpoint.Side.LEFT_RIGHT,
+            _included=True
+        )
+    
+
+    @classmethod
+    def right_infinite(cls) -> Endpoint:
+        '''Create a right-sided endpoint on infinity.'''
+
+        return cls(
+            _kind=Endpoint.Kind.POS_INF,
+            _timestamp=None,
+            _side=Endpoint.Side.RIGHT,
+            _included=None
+        )
+
+
+
+@dataclass(frozen=True, slots=True)
 class TimeInterval:
     '''A time interval representing a connected subset of the time line.
 

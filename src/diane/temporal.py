@@ -462,11 +462,11 @@ class Endpoint:
         # Validate timestamp.
         if self._kind is Endpoint.Kind.FINITE and self._timestamp is None:
             raise ValueError(
-                'The endpoint of the \'FINITE\' kind must have an explicitly specified timestamp.'
+                'The endpoint of the finite kind must have an explicitly specified timestamp.'
             )
         if self._kind is not Endpoint.Kind.FINITE and self._timestamp is not None:
             raise ValueError(
-                'The endpoint of an infinite kind must not have an explicitly specified '
+                'The endpoint of the infinite kind must not have an explicitly specified '
                 'timestamp. It must be \'None\'.'
             )
         
@@ -786,8 +786,146 @@ class Endpoint:
 
 
 
+@dataclass(frozen=True, slots=True)
+@total_ordering
 class Duration:
-    pass
+
+    class Kind(Enum):
+        '''Represents a duration kind (finite/infinite).'''
+
+        FINITE = 0    # A finite endpoint.
+        INFINITE = 1  # An endpoint lies at infinity.
+
+
+    _kind: Kind = Kind.FINITE
+
+    # `None` for the `INFINITE` kind.
+    _value: datetime.timedelta | None = field(default_factory=datetime.timedelta)
+
+
+    def _validate(self) -> None:
+
+        if self._kind is Duration.Kind.FINITE and self._value is None:
+            raise ValueError(
+                'The duration of the finite kind must have an explicitly specified value.'
+            )
+        if self._kind is Duration.Kind.INFINITE and self._value is not None:
+            raise ValueError(
+                'The duration of the infinite kind must not have an explicitly specified '
+                'value. It must be \'None\'.'
+            )
+
+
+    def __post_init__(self) -> None:
+
+        self._validate()
+
+
+    def _key(self) -> tuple[int, datetime.timedelta | None]:
+        return (self._kind.value, self._value)
+
+    
+    def __eq__(self, other: object) -> bool:
+
+        if isinstance(other, Duration):
+            return self._key() == other._key()
+        
+        return False
+    
+
+    def __lt__(self, other: object) -> bool:
+
+        if isinstance(other, Duration):
+            return self._key() < other._key()
+        
+        if isinstance(other, datetime.timedelta):
+            return self._key() < (Duration.Kind.FINITE.value, other)
+        
+        return NotImplemented
+    
+
+    @property
+    def is_finite(self) -> bool:
+        return self._kind is Duration.Kind.FINITE
+
+
+    @property
+    def is_infinite(self) -> bool:
+        return self._kind is Duration.Kind.INFINITE
+    
+
+    @property
+    def value(self) -> datetime.timedelta:
+
+        if self._value is None:
+            raise ValueError('The infinite duration has no specified value.')
+
+        return self._value
+    
+
+    def __add__(self, other: object) -> Duration:
+
+        if isinstance(other, Duration):
+            if self.is_infinite or other.is_infinite:
+                return Duration.infinity()
+
+            return Duration(_kind=Duration.Kind.FINITE, _value=(self.value + other.value))
+
+        if isinstance(other, datetime.timedelta):
+            if self.is_infinite:
+                return Duration.infinity()
+            
+            return Duration(_kind=Duration.Kind.FINITE, _value=(self.value + other))
+        
+        return NotImplemented
+    
+
+    __radd__ = __add__
+
+
+    def __sub__(self, other: object) -> Duration:
+
+        if isinstance(other, Duration):
+            if other.is_infinite:
+                raise ValueError('Subtracting infinity is undefined.')
+
+            if self.is_infinite:
+                return Duration.infinity()
+            
+            return Duration(_kind=Duration.Kind.FINITE, _value=(self.value - other.value))
+
+        if isinstance(other, datetime.timedelta):
+            if self.is_infinite:
+                return Duration.infinity()
+            
+            return Duration(_kind=Duration.Kind.FINITE, _value=(self.value - other))
+        
+        return NotImplemented
+    
+
+    def __rsub__(self, other: object) -> Duration:
+
+        if isinstance(other, Duration):
+            if self.is_infinite:
+                raise ValueError('Subtracting infinity is undefined.')
+
+            if other.is_infinite:
+                return Duration.infinity()
+            
+            return Duration(_kind=Duration.Kind.FINITE, _value=(other.value - self.value))
+
+        if isinstance(other, datetime.timedelta):
+            if self.is_infinite:
+                raise ValueError('Subtracting infinity is undefined.')
+            
+            return Duration(_kind=Duration.Kind.FINITE, _value=(other - self.value))
+        
+        return NotImplemented
+    
+
+    @classmethod
+    def infinity(cls) -> Duration:
+        return cls(_kind=Duration.Kind.INFINITE, _value=None)
 
 
 

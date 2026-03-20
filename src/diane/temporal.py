@@ -412,15 +412,8 @@ class Endpoint:
     class Kind(Enum):
         '''Represents an endpoint type.'''
 
-        NEG_INF = -1  # An endpoint lies at negative infinity.
         FINITE = 0    # A finite endpoint.
-        POS_INF = 1   # An endpoint lies at positive infinity.
-    
-
-    _INFINITE_KINDS = {
-        Kind.NEG_INF,
-        Kind.POS_INF
-    }
+        INFINITE = 1  # An endpoint lies at infinity.
 
 
     class Side(Enum):
@@ -451,12 +444,12 @@ class Endpoint:
                     raise AssertionError(f'The unknown endpoint side: \'{self}\'.')
     
 
-    _kind: Kind                   # `NEG_ING`/`FINITE`/`POS_INF`.
+    _kind: Kind                   # `FINITE`/`INFINITE`.
     _timestamp: Timestamp | None  # `Timestamp` for the `FINITE` kind,
-                                  # `None` for infinities.
+                                  # `None` for `INFINITE`.
     _side: Side                   # `LEFT`/`RIGHT`.
     _included: bool | None        # `True`/`False` for the `FINITE`
-                                  # kind, `None` for infinities.
+                                  # kind, `None` for `INFINITE`.
     
 
     def _validate(self) -> None:
@@ -477,23 +470,8 @@ class Endpoint:
                 'timestamp. It must be \'None\'.'
             )
         
-        # Validate side.
-        if self._kind is Endpoint.Kind.NEG_INF and self._side is not Endpoint.Side.LEFT:
-            raise ValueError(
-                'The endpoint at negative infinity must be the start of an interval or a time set.'
-            )
-        if self._kind is Endpoint.Kind.POS_INF and self._side is not Endpoint.Side.RIGHT:
-            raise ValueError(
-                'The endpoint at positive infinity must be the end of an interval or a time set.'
-            )
-        
         # Validate including option.
-        if self._kind in Endpoint._INFINITE_KINDS and self._included is True:
-            raise ValueError(
-                'A time interval or a time set cannot include the endpoint at infinity. '
-                '\'included\' must be \'None\'.'
-            )
-        if self._kind in Endpoint._INFINITE_KINDS and self._included is False:
+        if self._kind is Endpoint.Kind.INFINITE and self._included is not None:
             raise ValueError(
                 'A time interval or a time set cannot include or exclude the endpoint '
                 'at infinity. \'included\' must be \'None\'.'
@@ -501,7 +479,7 @@ class Endpoint:
     
 
     def _key(self):
-        kind_key = self._kind.value
+        kind_key = self.side.value*self._kind.value
         timestamp_key = self._timestamp
         included_key = 0 if self._included else -self._side.value
 
@@ -509,18 +487,18 @@ class Endpoint:
     
 
     @staticmethod
-    def _key_for_timestamps(other: Endpoint | Timestamp):
+    def _key_for_timestamps(point: Endpoint | Timestamp):
 
-        if isinstance(other, Endpoint):
-            kind_key = other._kind.value
-            timestamp_key = other._timestamp
-            included_key = 0 if other._included is True else -1
-            if other._side is Endpoint.Side.LEFT:
+        if isinstance(point, Endpoint):
+            kind_key = point.side.value*point._kind.value
+            timestamp_key = point._timestamp
+            included_key = 0 if point._included is True else -1
+            if point._side is Endpoint.Side.LEFT:
                 included_key = -included_key
 
-        elif isinstance(other, Timestamp):
+        elif isinstance(point, Timestamp):
             kind_key = Endpoint.Kind.FINITE.value
-            timestamp_key = other
+            timestamp_key = point
             included_key = 0
 
         else:
@@ -538,16 +516,13 @@ class Endpoint:
     
     def __str__(self) -> str:
         match self._kind:
-            case Endpoint.Kind.NEG_INF:
-                # Return '-∞'.
-                return '-\u221E'
-            
             case Endpoint.Kind.FINITE:
                 return str(self._timestamp)
             
-            case Endpoint.Kind.POS_INF:
-                # Return '+∞'.
-                return '+\u221E'
+            case Endpoint.Kind.INFINITE:
+                # Return '-∞' or '+∞'.
+                sign = '+' if self.side is Endpoint.Side.RIGHT else '-'
+                return  sign + '\u221E'
         
         raise AssertionError(f'The unknown endpoint kind: \'{self._kind}\'.')
 
@@ -628,7 +603,7 @@ class Endpoint:
             `bool`: `True` if infinite, otherwise `False`.
         '''
 
-        return self._kind in Endpoint._INFINITE_KINDS
+        return self._kind is Endpoint.Kind.INFINITE
     
 
     @property
@@ -694,7 +669,7 @@ class Endpoint:
                 (e.g., it lies at infinity).
         '''
 
-        if self.kind in Endpoint._INFINITE_KINDS:
+        if self.kind is Endpoint.Kind.INFINITE:
             raise ValueError('The endpoint at infinity cannot be reversed.')
 
         return Endpoint(
@@ -715,7 +690,7 @@ class Endpoint:
             `ValueError`: An endpoint at infinity cannot be included.
         '''
 
-        if self.kind in Endpoint._INFINITE_KINDS:
+        if self.kind is Endpoint.Kind.INFINITE:
             raise ValueError('The endpoint at infinity cannot be included.')
 
         return Endpoint(
@@ -736,7 +711,7 @@ class Endpoint:
             `ValueError`: An endpoint at infinity cannot be included or excluded.
         '''
 
-        if self.kind in Endpoint._INFINITE_KINDS:
+        if self.kind is Endpoint.Kind.INFINITE:
             raise ValueError('The endpoint at infinity cannot be included or excluded.')
 
         return Endpoint(
@@ -791,7 +766,7 @@ class Endpoint:
         '''Create a left-sided endpoint on infinity.'''
 
         return cls(
-            _kind=Endpoint.Kind.NEG_INF,
+            _kind=Endpoint.Kind.INFINITE,
             _timestamp=None,
             _side=Endpoint.Side.LEFT,
             _included=None
@@ -803,7 +778,7 @@ class Endpoint:
         '''Create a right-sided endpoint on infinity.'''
 
         return cls(
-            _kind=Endpoint.Kind.POS_INF,
+            _kind=Endpoint.Kind.INFINITE,
             _timestamp=None,
             _side=Endpoint.Side.RIGHT,
             _included=None
@@ -1030,7 +1005,7 @@ class TimeInterval:
 
                     object.__setattr__(self, '_kind', TimeInterval.Kind.OPEN)
                     
-            elif start.kind is Endpoint.Kind.FINITE and end.kind is Endpoint.Kind.POS_INF:
+            elif start.kind is Endpoint.Kind.FINITE and end.kind is Endpoint.Kind.INFINITE:
                 # The start of the interval is of the finite kind, but
                 # not the end. This is the right-ray.
                 
@@ -1045,7 +1020,7 @@ class TimeInterval:
                     
                     object.__setattr__(self, '_kind', TimeInterval.Kind.RIGHT_OPEN)
                 
-            elif start.kind is Endpoint.Kind.NEG_INF and end.kind is Endpoint.Kind.FINITE:
+            elif start.kind is Endpoint.Kind.INFINITE and end.kind is Endpoint.Kind.FINITE:
                 # The start of the interval lies at infinity, but its end
                 # is of the finite kind. This is the left ray.
                 
@@ -1304,7 +1279,7 @@ class TimeInterval:
             return TimeInterval.timeline()
         
         # This interval is non-empty.
-        if self.end.kind is Endpoint.Kind.POS_INF:
+        if self.end.kind is Endpoint.Kind.INFINITE:
             # The interval is unbounded on the right.
             return TimeInterval.empty()
         else:
@@ -1332,7 +1307,7 @@ class TimeInterval:
             return TimeInterval.timeline()
         
         # This interval is non-empty.
-        if self.start.kind is Endpoint.Kind.NEG_INF:
+        if self.start.kind is Endpoint.Kind.INFINITE:
             # The interval is unbounded on the left.
             return TimeInterval.empty()
         else:

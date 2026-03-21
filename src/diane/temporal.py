@@ -836,6 +836,9 @@ class Duration:
 
         if isinstance(other, Duration):
             return self._key() == other._key()
+
+        if isinstance(other, datetime.timedelta):
+            return self._key() == (Duration.Kind.FINITE.value, other)
         
         return NotImplemented
     

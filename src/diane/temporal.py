@@ -961,6 +961,14 @@ class Duration:
         return self._value
     
 
+    def __abs__(self) -> Duration:
+        return Duration(
+            _kind=Duration.Kind(abs(self._kind.value)),
+            _value=(abs(self._value) if self._value is not None else None)
+        )
+
+    
+
     def __add__(self, other: object) -> Duration:
 
         if isinstance(other, Duration):

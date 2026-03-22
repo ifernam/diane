@@ -514,59 +514,6 @@ class Endpoint:
             raise ValueError(f'The endpoint has been set incorrectly. {e}') from e
         
     
-    def __str__(self) -> str:
-        match self._kind:
-            case Endpoint.Kind.FINITE:
-                return str(self._timestamp)
-            
-            case Endpoint.Kind.INFINITE:
-                # Return '-∞' or '+∞'.
-                sign = '+' if self.side is Endpoint.Side.RIGHT else '-'
-                return  sign + '\u221E'
-        
-        raise AssertionError(f'The unknown endpoint kind: \'{self._kind}\'.')
-
-
-    def __eq__(self, other: object) -> bool:
-        '''Return `True` if this endpoint represents the same moment
-        in time (based on UTC) as another one and the same border kind
-        (finite/infinite, left/right, included/excluded).
-        
-        If another object is a timestamp representing the same moment
-        in time as this endpoint, return `True` only if this timestamp
-        is included in the interval.
-
-        Args:
-            `object` (`Endpoint | Timestamp`): Another `Endpoint`
-                or a timestamp.
-
-        Returns:
-            `bool`: `True` is the objects represent the same moment
-                of time (and border king).
-        '''
-
-        if isinstance(other, Endpoint):
-            return self._key() == other._key()
-        
-        if isinstance(other, Timestamp):
-            return Endpoint._key_for_timestamps(self) == Endpoint._key_for_timestamps(other)
-    
-        return NotImplemented
-    
-
-    def __lt__(self, other: object) -> bool:
-        '''Return `True` if this endpoint is less than another one
-        or another timestamp according to the ordering key.'''
-
-        if isinstance(other, Endpoint):
-            return self._key() < other._key()
-        
-        if isinstance(other, Timestamp):
-            return Endpoint._key_for_timestamps(self) < Endpoint._key_for_timestamps(other)
-    
-        return NotImplemented
-    
-
     @property
     def kind(self) -> Endpoint.Kind:
         '''Return the kind of this endpoint.
@@ -636,6 +583,30 @@ class Endpoint:
     
 
     @property
+    def is_right(self) -> bool:
+        '''Return `True` if this endpoint is on the right side of a time
+        interval or a time set.
+        
+        Returns:
+            `bool`: `True` if on the right, otherwise `False`.
+        '''
+
+        return self.side is Endpoint.Side.RIGHT
+    
+
+    @property
+    def is_left(self) -> bool:
+        '''Return `True` if this endpoint is on the left side of a time
+        interval or a time set.
+        
+        Returns:
+            `bool`: `True` if on the left, otherwise `False`.
+        '''
+
+        return self.side is Endpoint.Side.LEFT
+    
+
+    @property
     def is_included(self) -> bool:
         '''Return `True` if this endpoint is included in a time interval
         or time set.
@@ -654,6 +625,19 @@ class Endpoint:
             )
         
         return self._included
+        
+    
+    def __str__(self) -> str:
+        match self._kind:
+            case Endpoint.Kind.FINITE:
+                return str(self._timestamp)
+            
+            case Endpoint.Kind.INFINITE:
+                # Return '-∞' or '+∞'.
+                sign = '+' if self.side is Endpoint.Side.RIGHT else '-'
+                return  sign + '\u221E'
+        
+        raise AssertionError(f'The unknown endpoint kind: \'{self._kind}\'.')
     
 
     def opposite(self) -> Endpoint:
@@ -720,6 +704,110 @@ class Endpoint:
             _side=self.side,
             _included=False
         )
+
+
+    def __eq__(self, other: object) -> bool:
+        '''Return `True` if this endpoint represents the same moment
+        in time (based on UTC) as another one and the same border kind
+        (finite/infinite, left/right, included/excluded).
+        
+        If another object is a timestamp representing the same moment
+        in time as this endpoint, return `True` only if this timestamp
+        is included in the interval.
+
+        Args:
+            `object` (`Endpoint | Timestamp`): Another `Endpoint`
+                or a timestamp.
+
+        Returns:
+            `bool`: `True` is the objects represent the same moment
+                of time (and border king).
+        '''
+
+        if isinstance(other, Endpoint):
+            return self._key() == other._key()
+        
+        if isinstance(other, Timestamp):
+            return Endpoint._key_for_timestamps(self) == Endpoint._key_for_timestamps(other)
+    
+        return NotImplemented
+    
+
+    def __lt__(self, other: object) -> bool:
+        '''Return `True` if this endpoint is less than another one
+        or another timestamp according to the ordering key.'''
+
+        if isinstance(other, Endpoint):
+            return self._key() < other._key()
+        
+        if isinstance(other, Timestamp):
+            return Endpoint._key_for_timestamps(self) < Endpoint._key_for_timestamps(other)
+    
+        return NotImplemented
+    
+
+    def __sub__(self, other: Endpoint | Timestamp) -> Duration:
+        '''Calcutate the time difference between this endpoint
+        and another one or the timestamp.
+        
+        Args:
+            `other` (`Endpoint | Timestamp`): The endpoint
+                or the timestamp.
+
+        Returns:
+            `Duration`: The calculated time difference. May be infinite.
+        '''
+
+        if isinstance(other, Endpoint):
+            infinity_key = self.side.value*self.kind.value - other.side.value*other.kind.value
+
+            if infinity_key > 0:
+                return Duration.pos_inf()
+            elif infinity_key < 0:
+                return Duration.neg_inf()
+            else:
+                if self.is_infinite:
+                    raise ValueError(
+                        'The difference between infinities is not defined.'
+                    )
+                delta = self.timestamp - other.timestamp
+                return Duration(_kind=Duration.Kind.FINITE, _value=delta)
+        
+        if isinstance(other, Timestamp):
+            if self.is_infinite:
+                if self.is_right:
+                    return Duration.pos_inf()
+                else:
+                    return Duration.neg_inf()
+            else:
+                delta = self.timestamp - other
+                return Duration(_kind=Duration.Kind.FINITE, _value=delta)
+        
+        return NotImplemented
+    
+
+    def __rsub__(self, other: Timestamp) -> Duration:
+        '''Calcutate the time difference between this endpoint
+        and the timestamp.
+        
+        Args:
+            `other` (`Timestamp`): The timestamp.
+
+        Returns:
+            `Duration`: The calculated time difference. May be infinite.
+        '''
+        
+        if isinstance(other, Timestamp):
+            if self.is_infinite:
+                if self.is_right:
+                    return Duration.neg_inf()
+                else:
+                    return Duration.pos_inf()
+            else:
+                delta = other - self.timestamp
+                return Duration(_kind=Duration.Kind.FINITE, _value=delta)
+        
+        return NotImplemented
     
     
     @classmethod

@@ -124,7 +124,7 @@ class Repository(MutableSet[Session]):
         if isinstance(timeset, TimeInterval):
             timeset = TimeSet(timeset)
 
-        return {s for s in self._sessions if s.timeset.is_contained_in(timeset)}
+        return {s for s in self._sessions if s.timeset in timeset}
     
 
     def find_closest_in_time_to(self, session: Session) -> Session:

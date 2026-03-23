@@ -1,6 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from collections.abc import MutableSet
+import warnings
 
 from diane.temporal import Timestamp, TimeInterval, TimeSet
 from diane.activities import Activity, Activities
@@ -72,6 +73,69 @@ class Repository(MutableSet[Session]):
                     f'The session {value} cannot be added to the repository because it contains '
                     f'activities that are not in the registry.'
                 )
+            
+
+    def add_from_dict(self, session_data: dict, date_iso: str = '') -> None:
+        '''Create a session from the dictionary and add it to this
+        repository.'''
+
+        if not isinstance(session_data, dict):
+            raise TypeError('\'session_data\' must be a dictionary.')
+        
+        # Check for extra keys in the dictionary.
+        allowed_keys = {'intervals', 'activities', 'comment'}
+        extra_keys = set(session_data) - allowed_keys
+        if extra_keys:
+            extra_keys_str = ', '.join(f'\'{k}\'' for k in sorted(extra_keys))
+            warnings.warn(
+                f'The session dictionary contains unknown fields: {extra_keys_str}.',
+                stacklevel=2
+            )
+
+        # Get time set.
+        try:
+            intervals_data = session_data['intervals']
+        except KeyError:
+            raise ValueError(
+                f'The session dictionary is missing the required \'intervals\' key.'
+            )
+        if not isinstance(intervals_data, list):
+            raise TypeError(
+                f'The value of the \'intervals\' key must be a list, got '
+                f'\'{type(intervals_data).__name__}\'.')
+        intervals = [TimeInterval.from_dict(i, date_iso) for i in intervals_data]
+        timeset =  TimeSet(*intervals)
+
+        # Get activities.
+        try:
+            activities_data = session_data['activities']
+        except KeyError:
+            raise ValueError(
+                f'The session dictionary is missing the required \'activities\' key.'
+            )
+        if not isinstance(activities_data, list):
+            raise TypeError(
+                f'The value of the \'activities\' key must be a list, got '
+                f'\'{type(activities_data).__name__}\'.')
+        activities = set()
+        for a in activities_data:
+            if not isinstance(a, str):
+                raise TypeError(
+                    f'The activity slug must be a string, got '
+                    f'\'{type(activities_data).__name__}\'.')
+            Activity._validate_slug(a)
+            activities.add(self._activities.activity_by_slug(a))
+        
+        # Get comment.
+        comment = session_data.get('comment', '')
+        if not isinstance(comment, str):
+            raise TypeError(
+                f'The value of the \'comment\' key must be a string, got '
+                f'\'{type(comment).__name__}\'.')
+
+        session = Session(timeset, activities, comment)
+
+        self.add(session)
 
 
     def discard(self, value: Session) -> None:

@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 import yaml
 import warnings
+import re
 
 from diane.temporal import Timestamp, TimeInterval, TimeSet
 from diane.activities import Activity, Activities
@@ -19,14 +20,69 @@ class RepositoryManager(AssistedRepository):
 
 
     def __init__(self, datadir: str) -> None:
+
+        # Set repository directory.
         self._datadir = Path(datadir)
-        self._tracking_state = {}
-        activities = Activities.from_yaml(self._datadir / '.diane/activities.yaml')
+
+        # Load and set activities registry.
+        activities_path = self._datadir / '.diane/data/activities.yaml'
+        activities = Activities.from_yaml(activities_path)
         super().__init__(activities)
+
+        # Update tracking activities.
         self._load_state()
+
+        # Load sessions.
+        sessions_path = self._datadir / 'daily_notes'
+        filename_pattern = re.compile(r'^\d{4}-\d{2}-\d{2}\.md$')
+        block_pattern = re.compile(
+            r'(?m)^\s*---\s*$\n(.*?)\n^\s*---\s*$',
+            re.DOTALL
+        )
+
+        for file_path in sessions_path.glob('*.md'):
+            if not filename_pattern.match(file_path.name):
+                continue
+
+            date_str = file_path.stem  # YYYY-MM-DD.
+
+            try:
+                with file_path.open('r', encoding='utf-8') as f:
+                    content = f.read()
+            except Exception as e:
+                print(f'Error reading \'{file_path.name}\'. {e}')
+                continue
+
+            # Find all YAML blocks.
+            for match in block_pattern.finditer(content):
+                yaml_block = match.group(1).strip()
+                if not yaml_block:
+                    continue
+
+                try:
+                    data = yaml.safe_load(yaml_block)
+                except yaml.YAMLError:
+                    continue
+
+                if not isinstance(data, dict):
+                    continue
+
+                sessions_data = data.get('diane')
+                if not isinstance(sessions_data, list):
+                    continue
+                
+                for session_dict in sessions_data:
+                    if not isinstance(session_dict, dict):
+                        continue
+                    try:
+                        self.add_from_dict(session_dict, date_iso=date_str)
+                    except Exception as e:
+                        print(f'Error adding session from \'{file_path.name}\'. {e}')
+                        continue
 
 
     def _load_state(self) -> None:
+        '''Load the tracking state from the YAML file.'''
 
         path = self._datadir / '.diane/tracking.yaml'
         if not path.exists():
@@ -80,6 +136,7 @@ class RepositoryManager(AssistedRepository):
 
 
     def _save_state(self) -> None:
+        '''Save the tracking state to the YAML file.'''
 
         path = self._datadir / '.diane/tracking.yaml'
         data = {}

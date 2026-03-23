@@ -1,15 +1,17 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from collections.abc import Iterable
+import itertools
+import warnings
 
-from diane.temporal import TimeSet
+from diane.temporal import TimeInterval, TimeSet
 from diane.activities import Activity
 
 
 
 @dataclass(frozen=True, init=False, slots=True)
 class Session:
-    '''Represents a session -- a time interval(s) during which
+    '''Represents a session --- a time interval(s) during which
     activities occur.
 
     A session is defined by a non-empty time set, a non-empty set
@@ -25,8 +27,8 @@ class Session:
 
     _timeset: TimeSet
     _activities: frozenset[Activity]
-    comment: str = ''
-    _hash: int = field(init=False, hash=False)
+    comment: str
+    _hash: int
 
 
     def _validate(self) -> None:
@@ -72,7 +74,7 @@ class Session:
         object.__setattr__(self, 'comment', comment)
 
         self._validate()
-
+        
         object.__setattr__(self, '_hash', hash((timeset, self._activities)))
 
 

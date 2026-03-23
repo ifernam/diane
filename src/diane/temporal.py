@@ -881,6 +881,7 @@ class Duration:
     class Kind(Enum):
         '''Represents a duration kind (finite/infinite).'''
 
+        UNDEFINED = -2
         NEG_INF = -1
         FINITE = 0 
         POS_INF = 1
@@ -894,7 +895,7 @@ class Duration:
 
     _kind: Kind = Kind.FINITE
 
-    # `None` for infinite kinds.
+    # `None` for andefined and infinite kinds.
     _value: datetime.timedelta | None = datetime.timedelta()
 
 
@@ -904,9 +905,12 @@ class Duration:
             raise ValueError(
                 'The duration of the finite kind must have an explicitly specified value.'
             )
-        if self._kind in Duration._INFINITE_KINDS and self._value is not None:
+        if (
+            (self._kind is Duration.Kind.UNDEFINED or self._kind in Duration._INFINITE_KINDS)
+            and self._value is not None
+        ):
             raise ValueError(
-                'The duration of the infinite kind must not have an explicitly specified '
+                'The duration of the undefined or infinite kind must not have an explicitly specified '
                 'value. It must be \'None\'.'
             )
 
@@ -917,6 +921,10 @@ class Duration:
 
 
     def _key(self) -> tuple[int, datetime.timedelta | None]:
+        '''Return the key for sorting endpoints.
+
+        Undefined values are considered to be less than all others.'''
+
         return (self._kind.value, self._value)
 
     
@@ -940,6 +948,16 @@ class Duration:
             return self._key() < (Duration.Kind.FINITE.value, other)
         
         return NotImplemented
+
+
+    @property
+    def is_defined(self) -> bool:
+        return self._kind is not Duration.Kind.UNDEFINED
+    
+
+    @property
+    def is_undefined(self) -> bool:
+        return self._kind is Duration.Kind.UNDEFINED
     
 
     @property
@@ -956,22 +974,40 @@ class Duration:
     def value(self) -> datetime.timedelta:
 
         if self._value is None:
-            raise ValueError('The infinite duration has no specified value.')
+            raise ValueError('The duration has no specified finite value.')
 
         return self._value
     
 
+    def __neg__(self) -> Duration:
+
+        if self._kind is Duration.Kind.UNDEFINED:
+            return self
+
+        return Duration(
+            _kind=Duration.Kind(-self._kind.value),
+            _value=(-self._value if self._value is not None else None)
+        )
+    
+
     def __abs__(self) -> Duration:
+
+        if self._kind is Duration.Kind.UNDEFINED:
+            return self
+        
         return Duration(
             _kind=Duration.Kind(abs(self._kind.value)),
             _value=(abs(self._value) if self._value is not None else None)
         )
-
     
 
     def __add__(self, other: object) -> Duration:
 
         if isinstance(other, Duration):
+
+            if self.is_undefined or other.is_undefined:
+                return Duration.undefined()
+            
 
             if self.is_finite and other.is_finite:
                 return Duration(
@@ -998,6 +1034,9 @@ class Duration:
                 )
 
         if isinstance(other, datetime.timedelta):
+            if self.is_undefined:
+                return Duration.undefined()
+
             if self.is_infinite:
                 return self
             
@@ -1006,20 +1045,15 @@ class Duration:
         return NotImplemented
     
 
-    def __neg__(self) -> Duration:
-
-        return Duration(
-            _kind=Duration.Kind(-self._kind.value),
-            _value=(-self._value if self._value is not None else None)
-        )
-    
-
     __radd__ = __add__
 
 
     def __sub__(self, other: object) -> Duration:
         
         if isinstance(other, Duration | datetime.timedelta):
+            if self.is_undefined:
+                return Duration.undefined()
+
             return self + -other
         
         return NotImplemented
@@ -1028,12 +1062,20 @@ class Duration:
     def __rsub__(self, other: object) -> Duration:
 
         if isinstance(other, datetime.timedelta):
+            if self.is_undefined:
+                return Duration.undefined()
+
             if self.is_finite:
                 return Duration(_kind=Duration.Kind.FINITE, _value=(other - self.value))
             else:
                 return -self
             
         return NotImplemented
+    
+
+    @classmethod
+    def undefined(cls) -> Duration:
+        return cls(_kind=Duration.Kind.UNDEFINED, _value=None) 
     
 
     @classmethod
@@ -2161,7 +2203,7 @@ class TimeInterval:
     
 
     @staticmethod
-    def dist(first: TimeInterval, second: TimeInterval) -> Duration | None:
+    def dist(first: TimeInterval, second: TimeInterval) -> Duration:
         '''Calculate the shortest temporal distance between two
         intervals.
 
@@ -2181,7 +2223,7 @@ class TimeInterval:
         '''
 
         if first.is_empty or second.is_empty:
-            return None
+            return Duration.undefined()
 
         if first.is_left_of(second):
             return second.start - first.end
@@ -2469,27 +2511,23 @@ class TimeSet:
     
     
     @property
-    def min_component_duration(self) -> Duration | None:
+    def min_component_duration(self) -> Duration:
         '''Return the minimal duration among the components.
 
         Compute the minimal duration of all components in the time set.
-
-        Return `None` if the time set has no components.
         '''
 
-        return min((c.duration for c in self._components), default=None)
+        return min((c.duration for c in self._components), default=Duration.undefined())
     
 
     @property
-    def man_component_duration(self) -> Duration | None:
+    def man_component_duration(self) -> Duration:
         '''Return the maximal duration among the components.
 
         Compute the maximal duration of all components in the time set.
-
-        Return `None` if the time set has no components.
         '''
 
-        return max((c.duration for c in self._components), default=None)
+        return max((c.duration for c in self._components), default=Duration.undefined())
     
 
     def _gaps(self) -> Iterator[Duration]:
@@ -2906,16 +2944,15 @@ class TimeSet:
     
 
     @staticmethod
-    def dist( first: TimeInterval | TimeSet, second: TimeInterval | TimeSet) -> Duration | None:
+    def dist(first: TimeInterval | TimeSet, second: TimeInterval | TimeSet) -> Duration:
         '''Calculate the distance between two time sets or time
         intervals.
         
-        If the sets overlap, return zero. If the distance is undefined
-        (e.g., one of them is empty), return `None`.
+        If the sets overlap, return zero.
         '''
 
         if first.is_empty or second.is_empty:
-            return None
+            return Duration.undefined()
         
         if isinstance(first, TimeInterval):
             first = TimeSet(first)

@@ -1445,23 +1445,13 @@ class TimeInterval:
     
 
     @property
-    def duration(self) -> datetime.timedelta | None:
-        '''Return the duration of the time interval.
+    def duration(self) -> Duration:
+        '''Return the duration of this time interval.'''
 
-        If the duration is not defined (in the case of an unbounded
-        interval), return `None`. The duration of the empty interval
-        is zero.'''
-
-        if self.is_bounded:
-            # The interval is bounded.
-            if self.is_empty:
-                # The interval is empty.
-                return datetime.timedelta()
-            else:
-                # The interval is bounded and non-empty.
-                return self.end.timestamp - self.start.timestamp
-        else:
-            return None
+        if self.is_empty:
+            return Duration()
+        
+        return self.end - self.start
 
 
     def closure(self) -> TimeInterval:
@@ -2171,7 +2161,7 @@ class TimeInterval:
     
 
     @staticmethod
-    def dist(first: TimeInterval, second: TimeInterval) -> datetime.timedelta | None:
+    def dist(first: TimeInterval, second: TimeInterval) -> Duration | None:
         '''Calculate the shortest temporal distance between two
         intervals.
 
@@ -2186,7 +2176,7 @@ class TimeInterval:
             `second` (`TimeInterval`): The second time interval.
 
         Returns:
-            A `datetime.timedelta` representing the gap between
+            The `Duration` representing the gap between
             the intervals, or `None` if either interval is empty.
         '''
 
@@ -2194,13 +2184,13 @@ class TimeInterval:
             return None
 
         if first.is_left_of(second):
-            return second.start.timestamp - first.end.timestamp
+            return second.start - first.end
         
         if first.is_right_of(second):
-            return first.start.timestamp - second.end.timestamp
+            return first.start - second.end
         
         # Intervals overlap.
-        return datetime.timedelta()
+        return Duration()
 
 
 
@@ -2455,117 +2445,82 @@ class TimeSet:
             raise IndexError('Time set has no connected components.') from e
         
     @property
-    def duration(self) -> datetime.timedelta | None:
-        '''Return the total duration of the time set, or `None`
-        if the time set is unbounded.
+    def duration(self) -> Duration:
+        '''Return the total duration of the time set.
 
         For an empty time set, return zero.
         '''
 
-        if not self.is_bounded:
-            return None
-
-        total = datetime.timedelta()
-
-        for c in self.components:
-            d = c.duration
-            assert d is not None
-            total += d
-
-        return total
+        return sum((c.duration for c in self._components), start=Duration())
     
 
-    def span_duration(self) -> datetime.timedelta | None:
+    def span_duration(self) -> Duration:
         '''Return the duration of the minimal interval covering
         the whole time set.
 
         This is the time span from the earliest start to the latest end.
-        Return zero for an empty time set, `None` if the time set
-        is unbounded.
+        Return zero for the empty time set.
         '''
 
         if self.is_empty:
-            return datetime.timedelta()
+            return Duration()
         
-        if self.start.is_infinite or self.end.is_infinite:
-            return None
-        
-        return self.end.timestamp - self.start.timestamp
-    
-
-    def _component_duration_extreme(self, func):
-        return func(
-            (c.duration for c in self.components),
-            key=lambda d: (d is None, d),
-            default=None
-        )
+        return self.end - self.start
     
     
     @property
-    def min_component_duration(self) -> datetime.timedelta | None:
+    def min_component_duration(self) -> Duration | None:
         '''Return the minimal duration among the components.
 
         Compute the minimal duration of all components in the time set.
-        Unbounded components have duration `None` and are ignored when
-        a finite duration exists.
 
-        Return `None` if the time set has no components or if all
-        components are unbounded.
+        Return `None` if the time set has no components.
         '''
 
-        return self._component_duration_extreme(min)
+        return min((c.duration for c in self._components), default=None)
     
 
     @property
-    def max_component_duration(self) -> datetime.timedelta | None:
+    def man_component_duration(self) -> Duration | None:
         '''Return the maximal duration among the components.
 
         Compute the maximal duration of all components in the time set.
-        Unbounded components have duration `None` and dominate any
-        finite duration.
 
-        Return `None` if the time set has no components or if at least
-        one component is unbounded.
+        Return `None` if the time set has no components.
         '''
 
-        return self._component_duration_extreme(max)
+        return max((c.duration for c in self._components), default=None)
     
 
-    def _gaps(self) -> Iterator[datetime.timedelta]:
+    def _gaps(self) -> Iterator[Duration]:
         '''Generate durations of gaps between consecutive components.'''
 
         for f, s in zip(self.components, self.components[1:]):
             start, end = f.end, s.start
             
-            if start is None or end is None:
-                raise AssertionError(
-                    'The time set state is incorrect: any non-last component should be bounded '
-                    'on the right and any non-first component on the left.'
-                )
-            
-            yield end.timestamp - start.timestamp
+            yield end - start
     
 
     @property
-    def max_gap_duration(self) -> datetime.timedelta:
+    def max_gap_duration(self) -> Duration:
         '''Return the maximum gap duration between components.
     
         If there are no gaps (less than two components), return zero
         duration.
         '''
 
-        return max(self._gaps(), default=datetime.timedelta())
+        return max(self._gaps(), default=Duration())
     
 
     @property
-    def min_gap_duration(self) -> datetime.timedelta:
+    def min_gap_duration(self) -> Duration:
         '''Return the minimum gap duration between components.
 
         If there are no gaps (less than two components), return zero
         duration.
         '''
 
-        return min(self._gaps(), default=datetime.timedelta())
+        return min(self._gaps(), default=Duration())
     
 
     def complement(self) -> TimeSet:
@@ -2951,16 +2906,12 @@ class TimeSet:
     
 
     @staticmethod
-    def dist(
-        first: TimeInterval | TimeSet, 
-        second: TimeInterval | TimeSet
-    ) -> datetime.timedelta | None:
+    def dist( first: TimeInterval | TimeSet, second: TimeInterval | TimeSet) -> Duration | None:
         '''Calculate the distance between two time sets or time
         intervals.
         
-        If the sets overlap, return zero.
-        If the distance is undefined (e.g., one of them is empty),
-        return `None`.
+        If the sets overlap, return zero. If the distance is undefined
+        (e.g., one of them is empty), return `None`.
         '''
 
         if first.is_empty or second.is_empty:
@@ -2973,17 +2924,14 @@ class TimeSet:
             second = TimeSet(second)
 
         if first.is_left_of(second):
-            return second.start.timestamp - first.end.timestamp
+            return second.start - first.end
         elif first.is_right_of(second):
-            return first.start.timestamp - second.end.timestamp
+            return first.start - second.end
         else:
             # Find the minimum distance between the components.
             i, j = 0, 0
             first_is_left_of_second = None
-            dist = None
-
-            def dist_key(dist: datetime.timedelta | None):
-                return (dist is None, dist)
+            distance = Duration.pos_inf()
 
             while i < first.components_number and j < second.components_number:
                 if first.components[i].is_left_of(second.components[j]):
@@ -2993,7 +2941,13 @@ class TimeSet:
                             first.components[i],
                             second.components[j - 1]
                         )
-                        dist = min(dist, components_dist, key=dist_key)
+
+                        if components_dist is None:
+                            raise AssertionError(
+                                'The distance between two non-empty intervals cannot be \'None\'.'
+                                )
+
+                        distance = min(distance, components_dist)
 
                     first_is_left_of_second = True
                     i += 1
@@ -3004,13 +2958,19 @@ class TimeSet:
                             first.components[i - 1],
                             second.components[j]
                         )
-                        dist = min(dist, components_dist, key=dist_key)
+
+                        if components_dist is None:
+                            raise AssertionError(
+                                'The distance between two non-empty intervals cannot be \'None\'.'
+                                )
+
+                        distance = min(distance, components_dist)
                     
                     first_is_left_of_second = False
                     j += 1
                 else:
                     # Components overlap.
-                    return datetime.timedelta()
+                    return Duration()
             else:
                 if first_is_left_of_second is True:
                     components_dist = TimeInterval.dist(
@@ -3022,6 +2982,12 @@ class TimeSet:
                             first.components[i],
                             second.components[j - 1]
                         )
-                dist = min(dist, components_dist, key=dist_key)
+                    
+                if components_dist is None:
+                            raise AssertionError(
+                                'The distance between two non-empty intervals cannot be \'None\'.'
+                                )
 
-            return dist
+                distance = min(distance, components_dist)
+
+            return distance

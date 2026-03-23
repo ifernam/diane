@@ -156,14 +156,8 @@ class Repository(MutableSet[Session]):
 
         if not up_to_present:
             raise KeyError('There are no sessions completed up to present in the repository.')
-
-        def last_key(s: Session):
-            return (
-                s.timeset.end is None,
-                s.timeset.end,
-                s.timeset.is_end_included)
         
-        return max(up_to_present, key=last_key)
+        return max(up_to_present, key=(lambda s: s.timeset.end))
 
 
     def merge(self, *sessions: Session) -> Session:

@@ -9,6 +9,18 @@ from diane.sessions import Session
 
 
 
+class RepositoryError(Exception):
+    '''The base exception for all repository errors.'''
+    pass
+
+
+class ActivitiesNotInRegistryError(RepositoryError):
+    '''The session contains activities that are not contained
+    in the registry.'''
+    pass
+
+
+
 @dataclass
 class Repository(MutableSet[Session]):
     '''Represents repository of sessions.
@@ -25,7 +37,7 @@ class Repository(MutableSet[Session]):
 
         for s in self._sessions:
             if not s.activities <= activities:
-                raise ValueError(
+                raise ActivitiesNotInRegistryError(
                     f'The session {s} contains activities that are not in the registry.'
                 )
 
@@ -60,19 +72,19 @@ class Repository(MutableSet[Session]):
     
 
     def add(self, value: Session) -> None:
-        '''Adds session to the repository.
+        '''Add the given session to the repository.
         
-        Adds a session if it is not contained in the repository
-        and if it only contains activities that are in the registry.'''
+        Add the session if it is not contained in the repository
+        and if it only contains activities that are in the registry.
+        '''
 
         if value not in self:
-            if value.activities <= self._activities:
-                self._sessions.add(value)
-            else:
-                raise ValueError(
+            if not value.activities <= self._activities:
+                raise ActivitiesNotInRegistryError(
                     f'The session {value} cannot be added to the repository because it contains '
                     f'activities that are not in the registry.'
                 )
+            self._sessions.add(value)
             
 
     def add_from_dict(self, session_data: dict, date_iso: str = '') -> None:

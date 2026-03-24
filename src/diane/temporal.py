@@ -410,7 +410,7 @@ class Endpoint:
     
 
     class Kind(Enum):
-        '''Represents an endpoint type.'''
+        '''Represents an endpoint kind (finite/infinite).'''
 
         FINITE = 0    # A finite endpoint.
         INFINITE = 1  # An endpoint lies at infinity.
@@ -432,12 +432,12 @@ class Endpoint:
                 `Endpoint.Side`: The opposite endpoint side.
 
             Raises:
-                `AssertionError`: If the given side is unknown.
+                `AssertionError`: If the side is unknown.
             '''
 
             match self:
                 case Endpoint.Side.LEFT:
-                    return  Endpoint.Side.RIGHT
+                    return Endpoint.Side.RIGHT
                 case Endpoint.Side.RIGHT:
                     return Endpoint.Side.LEFT
                 case _:
@@ -479,6 +479,9 @@ class Endpoint:
     
 
     def _key(self):
+        '''Return the sorting key for this endpoint for comparison with
+        another endpoint.'''
+
         kind_key = self.side.value*self._kind.value
         timestamp_key = self._timestamp
         included_key = 0 if self._included else -self._side.value
@@ -488,6 +491,13 @@ class Endpoint:
 
     @staticmethod
     def _key_for_timestamps(point: Endpoint | Timestamp):
+        '''Return the sorting key for the endpoint or timestamp
+        for comparison with a timestamp.
+        
+        Args:
+            `point` (`Endpoint | Timestamp`): The endpoint or timestamp
+                for comparison.
+        '''
 
         if isinstance(point, Endpoint):
             kind_key = point.side.value*point._kind.value
@@ -519,11 +529,10 @@ class Endpoint:
         '''Return the kind of this endpoint.
 
         It can either be finite and associated with a timestamp, or lie
-        on infinity.
+        at infinity.
         
         Returns:
-            `Endpoint.Kind`: Kind of the endpoint:
-                `NEG_INF`/`FINITE`/`POS_INF`.
+            `Endpoint.Kind`: Kind of the endpoint: `FINITE`/`INFINITE`.
         '''
 
         return self._kind
@@ -531,8 +540,7 @@ class Endpoint:
 
     @property
     def is_finite(self) -> bool:
-        '''Return `True` is this endpoint is of the finite kind,
-        i.e. lies at infinity.
+        '''Return `True` if this endpoint is of the finite kind.
         
         Returns:
             `bool`: `True` if finite, otherwise `False`.
@@ -543,7 +551,7 @@ class Endpoint:
     
     @property
     def is_infinite(self) -> bool:
-        '''Return `True` is this endpoint is of the infinite kind,
+        '''Return `True` if this endpoint is of the infinite kind,
         i.e. lies at infinity (negative or positive).
         
         Returns:
@@ -557,15 +565,15 @@ class Endpoint:
     def timestamp(self) -> Timestamp:
         '''Return the timestamp if it is specified.
         
-            Returns:
-                `Timestamp`: The timestamp.
+        Returns:
+            `Timestamp`: The timestamp.
 
-            Raises:
-                `KeyError`: If the endpoint lies on infinity.
+        Raises:
+            `ValueError`: If the endpoint lies at infinity.
         '''
 
         if self._timestamp is None:
-            raise KeyError('This endpoint lies on infinity and has no specified timestamp.')
+            raise ValueError('This endpoint lies at infinity and has no specified timestamp.')
         
         return self._timestamp
     
@@ -583,21 +591,9 @@ class Endpoint:
     
 
     @property
-    def is_right(self) -> bool:
-        '''Return `True` if this endpoint is on the right side of a time
-        interval or a time set.
-        
-        Returns:
-            `bool`: `True` if on the right, otherwise `False`.
-        '''
-
-        return self.side is Endpoint.Side.RIGHT
-    
-
-    @property
     def is_left(self) -> bool:
         '''Return `True` if this endpoint is on the left side of a time
-        interval or a time set.
+        interval or time set.
         
         Returns:
             `bool`: `True` if on the left, otherwise `False`.
@@ -607,20 +603,32 @@ class Endpoint:
     
 
     @property
+    def is_right(self) -> bool:
+        '''Return `True` if this endpoint is on the right side of a time
+        interval or time set.
+        
+        Returns:
+            `bool`: `True` if on the right, otherwise `False`.
+        '''
+
+        return self.side is Endpoint.Side.RIGHT
+    
+
+    @property
     def is_included(self) -> bool:
         '''Return `True` if this endpoint is included in a time interval
         or time set.
         
-        Return:
+        Returns:
             `bool`: `True` if this endpoint is included, otherwise
                 `False`.
 
         Raises:
-            `KeyError`: If this endpoint lies on infinity.
+            `ValueError`: If this endpoint lies at infinity.
         '''
 
         if self._included is None:
-            raise KeyError(
+            raise ValueError(
                 'A time interval or a time set cannot include or exclude the endpoint at infinity.'
             )
         
@@ -628,6 +636,13 @@ class Endpoint:
         
     
     def __str__(self) -> str:
+        '''Return the string representation of this endpoint.
+        
+        Returns:
+            `str`: The string representation of the endpoint. '-∞'/'+∞'
+                for infinite kinds.
+        '''
+     
         match self._kind:
             case Endpoint.Kind.FINITE:
                 return str(self._timestamp)
@@ -665,7 +680,8 @@ class Endpoint:
     
 
     def include(self) -> Endpoint:
-        '''Return the included endpoint with the same timestamp and side.
+        '''Return the included endpoint with the same timestamp
+        and side.
         
         Returns:
             `Endpoint`: The included endpoint.
@@ -686,13 +702,15 @@ class Endpoint:
     
 
     def exclude(self) -> Endpoint:
-        '''Return the excluded endpoint with the same timestamp and side.
+        '''Return the excluded endpoint with the same timestamp
+        and side.
         
         Returns:
             `Endpoint`: The excluded endpoint.
 
         Raises:
-            `ValueError`: An endpoint at infinity cannot be included or excluded.
+            `ValueError`: An endpoint at infinity cannot be included
+                or excluded.
         '''
 
         if self.kind is Endpoint.Kind.INFINITE:
@@ -713,15 +731,15 @@ class Endpoint:
         
         If another object is a timestamp representing the same moment
         in time as this endpoint, return `True` only if this timestamp
-        is included in the interval.
+        belongs to an interval or time set.
 
         Args:
-            `object` (`Endpoint | Timestamp`): Another `Endpoint`
+            `other` (`Endpoint | Timestamp`): Another `Endpoint`
                 or a timestamp.
 
         Returns:
-            `bool`: `True` is the objects represent the same moment
-                of time (and border king).
+            `bool`: `True` if the objects represent the same moment
+                in time (and border kind).
         '''
 
         if isinstance(other, Endpoint):
@@ -734,8 +752,17 @@ class Endpoint:
     
 
     def __lt__(self, other: object) -> bool:
-        '''Return `True` if this endpoint is less than another one
-        or another timestamp according to the ordering key.'''
+        '''Return `True` if this endpoint is earlier than another one
+        or another timestamp according to the ordering key.
+        
+        Args:
+            `other` (`Endpoint | Timestamp`): Another `Endpoint`
+                or a timestamp.
+
+        Returns:
+            `bool`: `True` if this object represents a moment in time
+                earlier than another one.
+        '''
 
         if isinstance(other, Endpoint):
             return self._key() < other._key()
@@ -747,15 +774,16 @@ class Endpoint:
     
 
     def __sub__(self, other: Endpoint | Timestamp) -> Duration:
-        '''Calcutate the time difference between this endpoint
-        and another one or the timestamp.
+        '''Calculate the time difference between this endpoint
+        and another endpoint or timestamp.
         
         Args:
             `other` (`Endpoint | Timestamp`): The endpoint
                 or the timestamp.
 
         Returns:
-            `Duration`: The calculated time difference. May be infinite.
+            `Duration`: The calculated time difference. May be finite,
+            infinite, or undefined.
         '''
 
         if isinstance(other, Endpoint):
@@ -767,9 +795,9 @@ class Endpoint:
                 return Duration.neg_inf()
             else:
                 if self.is_infinite:
-                    raise ValueError(
-                        'The difference between infinities is not defined.'
-                    )
+                    # The difference between infinities is not defined.
+                    return Duration.undefined()
+                
                 delta = self.timestamp - other.timestamp
                 return Duration(_kind=Duration.Kind.FINITE, _value=delta)
         
@@ -787,7 +815,7 @@ class Endpoint:
     
 
     def __rsub__(self, other: Timestamp) -> Duration:
-        '''Calcutate the time difference between this endpoint
+        '''Calculate the time difference between this endpoint
         and the timestamp.
         
         Args:
@@ -817,9 +845,12 @@ class Endpoint:
         Args:
             `timestamp` (`Timestamp`): The timestamp.
             `included` (`bool`): The `True`/`False` option specifies
-                whether the endpoint is included/excluded
-                in the interval or in the time set. Defaults to `True`
+                whether the endpoint is included in or excluded from
+                the interval or the time set. Defaults to `True`
                 (included).
+
+        Returns:
+            `Endpoint`: New endpoint.
         '''
 
         return cls(
@@ -836,9 +867,12 @@ class Endpoint:
         Args:
             `timestamp` (`Timestamp`): The timestamp.
             `included` (`bool`): The `True`/`False` option specifies
-                whether the endpoint is included/excluded
-                in the interval or in the time set. Defaults to `False`
+                whether the endpoint is included in or excluded from
+                the interval or the time set. Defaults to `False`
                 (excluded).
+
+        Returns:
+            `Endpoint`: New endpoint.
         '''
 
         return cls(
@@ -851,7 +885,11 @@ class Endpoint:
     
     @classmethod
     def left_infinite(cls) -> Endpoint:
-        '''Create a left-sided endpoint on infinity.'''
+        '''Create a left-sided endpoint at infinity.
+        
+        Returns:
+            `Endpoint`: New endpoint.
+        '''
 
         return cls(
             _kind=Endpoint.Kind.INFINITE,
@@ -863,7 +901,11 @@ class Endpoint:
 
     @classmethod
     def right_infinite(cls) -> Endpoint:
-        '''Create a right-sided endpoint on infinity.'''
+        '''Create a right-sided endpoint at infinity.
+        
+        Returns:
+            `Endpoint`: New endpoint.
+        '''
 
         return cls(
             _kind=Endpoint.Kind.INFINITE,
@@ -2028,15 +2070,15 @@ class TimeInterval:
         '''
 
         if not isinstance(time_data, dict):
-            raise TypeError('\'time_data\' must be a dict.')
+            raise TypeError('\'time_data\' must be a dictionaty.')
         
-        # Checking for extra keys in the dictionary.
+        # Check for extra keys in the dictionary.
         allowed_keys = {'start_time', 'start_timezone', 'end_time', 'end_timezone'}
         extra_keys = set(time_data) - allowed_keys
         if extra_keys:
             extra_keys_str = ', '.join(f'\'{k}\'' for k in sorted(extra_keys))
             warnings.warn(
-                f'Time interval dictionary contains unknown fields: {extra_keys_str}.',
+                f'The time interval dictionary contains unknown fields: {extra_keys_str}.',
                 stacklevel=2
             )
         
@@ -2045,7 +2087,7 @@ class TimeInterval:
             try:
                 value = time_data[key]
             except KeyError:
-                raise ValueError(f'Time interval dictionary missing required key \'{key}\'.')
+                raise ValueError(f'The time interval dictionary missing required key \'{key}\'.')
             if not isinstance(value, str):
                 raise TypeError(f'Value \'{key}\' must be a string, got \'{type(value).__name__}\'.')
             return value
@@ -2210,8 +2252,6 @@ class TimeInterval:
         The distance is defined as the length of the smallest gap
         between any point of the first interval and any point
         of the second. If the intervals overlap, the distance is zero.
-        If the distance cannot be determined (e.g., because at least one
-        interval is empty), the result is `None`.
 
         Args:
             `first` (`TimeInterval`): The first time interval.

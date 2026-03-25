@@ -282,6 +282,14 @@ class Repository(MutableSet[Session]):
         self._rebuild_activities_index()
     
 
+    def find_by_activities(self, activities: set[Activity]) -> set[Session]:
+        '''Find sessions that have exactly the given set
+        of activities.'''
+        
+        key = frozenset(activities)
+        return self._activities_index.get(key, set()).copy()
+    
+
     def find_overlapping(self, timeset: TimeSet | TimeInterval) -> set[Session]:
         '''Find sessions in the repository that overlap with the given
         time set or time interval.

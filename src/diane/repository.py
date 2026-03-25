@@ -1,9 +1,11 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from collections.abc import MutableSet
+from sortedcontainers import SortedList
 import warnings
 
-from diane.temporal import Timestamp, TimeInterval, TimeSet
+
+from diane.temporal import Timestamp, Endpoint, TimeInterval, TimeSet
 from diane.activities import Activity, Activities
 from diane.sessions import Session
 
@@ -29,6 +31,11 @@ class Repository(MutableSet[Session]):
 
     _activities: Activities = field(default_factory=Activities)
     _sessions: set[Session] = field(default_factory=set)
+
+    _starts: SortedList = field(default_factory=SortedList)
+    _ends: SortedList = field(default_factory=SortedList)
+    _start_to_sessions: dict[Endpoint, set[Session]] = field(default_factory=dict)
+    _end_to_sessions: dict[Endpoint, set[Session]] = field(default_factory=dict)
 
 
     def _validate_activities(self, activities: Activities) -> None:
@@ -71,6 +78,46 @@ class Repository(MutableSet[Session]):
         return len(self._sessions)
     
 
+    def _add_to_index(self, value: Session) -> None:
+        start = value.timeset.start
+        if start not in self._start_to_sessions:
+            self._start_to_sessions[start] = set()
+            self._starts.add(start)
+        self._start_to_sessions[start].add(value)
+
+        end = value.timeset.end
+        if end not in self._end_to_sessions:
+            self._end_to_sessions[end] = set()
+            self._ends.add(end)
+        self._end_to_sessions[end].add(value)
+
+
+    def _remove_from_index(self, value: Session) -> None:
+        start = value.timeset.start
+        sessions_set = self._start_to_sessions.get(start)
+        if sessions_set:
+            sessions_set.discard(value)
+            if not sessions_set:
+                del self._start_to_sessions[start]
+                try:
+                    self._starts.remove(start)
+                except ValueError:
+                    # Inconsistency.
+                    pass
+
+        end = value.timeset.end
+        sessions_set = self._end_to_sessions.get(end)
+        if sessions_set:
+            sessions_set.discard(value)
+            if not sessions_set:
+                del self._end_to_sessions[end]
+                try:
+                    self._ends.remove(end)
+                except ValueError:
+                    # Inconsistency.
+                    pass
+
+
     def add(self, value: Session) -> None:
         '''Add the given session to the repository.
         
@@ -84,7 +131,9 @@ class Repository(MutableSet[Session]):
                     f'The session {value} cannot be added to the repository because it contains '
                     f'activities that are not in the registry.'
                 )
+            
             self._sessions.add(value)
+            self._add_to_index(value)
             
 
     def add_from_dict(self, session_data: dict, date_iso: str = '') -> None:
@@ -151,21 +200,25 @@ class Repository(MutableSet[Session]):
 
 
     def discard(self, value: Session) -> None:
-        '''Removes session from the registry.'''
+        '''Discard the given session from the registry.'''
 
+        if value not in self._sessions:
+            return
+        self._remove_from_index(value)
         self._sessions.discard(value)
 
     
     def remove(self, value: Session) -> None:
-        '''Removes session from the registry.
+        '''Remove the given session from the registry.
         
         Raises:
-            KeyError: if the session is not in the repository.'''
+            KeyError: If the given session is not in the repository.
+        '''
 
-        try:
-            self._sessions.remove(value)
-        except KeyError as e:
-            raise KeyError(f'The session {value} is not in the repository.') from e
+        if value not in self._sessions:
+            raise KeyError(f'The session {value} is not in the repository.')
+        self._remove_from_index(value)
+        self._sessions.remove(value)
     
 
     @property

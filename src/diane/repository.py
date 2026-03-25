@@ -31,11 +31,13 @@ class Repository(MutableSet[Session]):
 
     _activities: Activities = field(default_factory=Activities)
     _sessions: set[Session] = field(default_factory=set)
-
+    
+    # Index.
     _starts: SortedList = field(default_factory=SortedList)
     _ends: SortedList = field(default_factory=SortedList)
     _start_to_sessions: dict[Endpoint, set[Session]] = field(default_factory=dict)
     _end_to_sessions: dict[Endpoint, set[Session]] = field(default_factory=dict)
+    _activities_index: dict[frozenset[Activity], set[Session]] = field(default_factory=dict)
 
 
     def _validate_activities(self, activities: Activities) -> None:
@@ -54,6 +56,8 @@ class Repository(MutableSet[Session]):
 
 
     def __post_init__(self) -> None:
+
+        self._rebuild_index()
         self._validate()
 
 
@@ -78,6 +82,13 @@ class Repository(MutableSet[Session]):
         return len(self._sessions)
     
 
+    def _add_to_index_by_activities(self, session: Session) -> None:
+        key = frozenset(session.activities)
+        if key not in self._activities_index:
+            self._activities_index[key] = set()
+        self._activities_index[key].add(session)
+    
+
     def _add_to_index(self, value: Session) -> None:
         start = value.timeset.start
         if start not in self._start_to_sessions:
@@ -90,6 +101,17 @@ class Repository(MutableSet[Session]):
             self._end_to_sessions[end] = set()
             self._ends.add(end)
         self._end_to_sessions[end].add(value)
+
+        self._add_to_index_by_activities(value)
+    
+
+    def _remove_from_index_by_activities(self, session: Session) -> None:
+        key = frozenset(session.activities)
+        sessions_set = self._activities_index.get(key)
+        if sessions_set:
+            sessions_set.discard(session)
+            if not sessions_set:
+                del self._activities_index[key]
 
 
     def _remove_from_index(self, value: Session) -> None:
@@ -116,6 +138,29 @@ class Repository(MutableSet[Session]):
                 except ValueError:
                     # Inconsistency.
                     pass
+
+        self._remove_from_index_by_activities(value)
+
+    
+    def _rebuild_activities_index(self) -> None:
+        '''Rebuild the entire activities index from current sessions.'''
+
+        self._activities_index.clear()
+        for session in self._sessions:
+            self._add_to_index_by_activities(session)
+
+    
+    def _rebuild_index(self) -> None:
+        '''Rebuild the entire index from current sessions.'''
+
+        self._starts.clear()
+        self._ends.clear()
+        self._start_to_sessions.clear()
+        self._end_to_sessions.clear()
+        self._activities_index.clear()
+
+        for session in self._sessions:
+            self._add_to_index(session)
 
 
     def add(self, value: Session) -> None:
@@ -234,6 +279,7 @@ class Repository(MutableSet[Session]):
         
         self._validate_activities(activities)
         self._activities = activities.copy()
+        self._rebuild_activities_index()
     
 
     def find_overlapping(self, timeset: TimeSet | TimeInterval) -> set[Session]:

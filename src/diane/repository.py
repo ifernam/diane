@@ -290,8 +290,8 @@ class Repository(MutableSet[Session]):
 
 
     def merge(self, *sessions: Session) -> Session:
-        '''Merges sessions contained in the repository with the same set
-        of activities and returns the result.
+        '''Merge sessions contained in the repository with the same set
+        of activities and return the result.
 
         If sessions have the same set of activities, a new session
         will be created that unites the time sets and comments
@@ -299,16 +299,13 @@ class Repository(MutableSet[Session]):
         in the repository, and the old ones are removed.
 
         Raises:
-            KeyError: if at least one of the given sessions
+            `KeyError`: if at least one of the given sessions
                 is not contained in the repository.
-            ValueError: if sessions cannot be merged.'''
+            `ValueError`: If sessions cannot be merged.
+        '''
         
         if not sessions:
             raise ValueError('At least one session required for merge.')
-        
-        # Remove duplicates, leaving only the first occurrence
-        # of each session.
-        unique_sessions = list(dict.fromkeys(sessions))
         
         missing = {s for s in sessions if s not in self}
         if len(missing) == 1:
@@ -318,9 +315,9 @@ class Repository(MutableSet[Session]):
             raise KeyError(f'The sessions {sessions_string} are not in the repository.')
 
         try:
-            merged = Session.merge(*unique_sessions)
+            merged = Session.merge(*sessions)
         except ValueError as e:
-            raise ValueError(f'Sessions cannot be merged: {e}.') from e
+            raise ValueError(f'Sessions cannot be merged. {e}.') from e
         
         self.add(merged)
         for s in sessions:

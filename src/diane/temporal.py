@@ -2881,6 +2881,18 @@ class TimeSet:
         return False
     
 
+    def touches(self, other: TimeInterval | TimeSet) -> bool:
+        '''Return `True` if this time set touches the given time set
+        or time interval'''
+
+        if isinstance(other, TimeInterval):
+            return self.touches_interval(other)
+        elif isinstance(other, TimeSet):
+            return self.touches_timeset(other)
+        else:
+            return NotImplemented
+    
+
     def __or__(self, other: TimeInterval | TimeSet) -> TimeSet:
         '''Return the union of this time set with another time set
         or a time interval.'''

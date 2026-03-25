@@ -2833,6 +2833,28 @@ class TimeSet:
             return NotImplemented
     
 
+    def touches_timeset(self, other: TimeSet) -> bool:
+        '''Return `True` if this time set touches another one.'''
+
+        i, j = 0, 0
+        n, m = self.components_number, other.components_number
+        while i < n and j < m:
+            self_interval = self.components[i]
+            other_interval = other.components[j]
+
+            if self_interval.is_left_of_disconnectedly(other_interval):
+                i += 1
+                continue
+
+            if self_interval.is_right_of_disconnectedly(other_interval):
+                j += 1
+                continue
+            
+            # Intervals touch.
+            return True
+        return False
+    
+
     def __or__(self, other: TimeInterval | TimeSet) -> TimeSet:
         '''Return the union of this time set with another time set
         or a time interval.'''

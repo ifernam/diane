@@ -2601,6 +2601,17 @@ class TimeSet:
         return min(self._gaps(), default=Duration())
     
 
+    def span(self) -> TimeInterval:
+        '''Return the minimal interval covering the whole time set.
+
+        Returns:
+            `TimeInterval`: The time span from the earliest start
+                to the latest end.
+        '''
+
+        return TimeInterval.minimal_cover(*self._components)
+    
+
     def complement(self) -> TimeSet:
         '''Create the complement of this time set (all points
         not in the set).'''

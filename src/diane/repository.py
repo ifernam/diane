@@ -237,13 +237,54 @@ class Repository(MutableSet[Session]):
     
 
     def find_overlapping(self, timeset: TimeSet | TimeInterval) -> set[Session]:
-        '''Finds sessions in the repository that overlap with a given
-        time set.'''
+        '''Find sessions in the repository that overlap with the given
+        time set or time interval.
+
+        Find all sessions whose time set has a non-empty intersection
+        with the provided time set or time interval.
+
+        Args:
+            `timeset` (`TimeSet | TimeInterval`): The time set or time
+                interval to check for overlap.
+
+        Returns:
+            `set[Session]`: The set of sessions that overlap with
+                the given time set. If the input set is empty, returns
+                the empty set.
+        '''
 
         if isinstance(timeset, TimeInterval):
             timeset = TimeSet(timeset)
+        
+        if timeset.is_empty:
+            return set()
+        
+        target_start = timeset.start
+        target_end = timeset.end
 
-        return {s for s in self._sessions if s.timeset.overlaps(timeset)}
+        # Candidates by ends: `end >= target_start`.
+        if target_start.is_finite:
+            candidates_end = set()
+            idx = self._ends.bisect_left(target_start)
+            for i in range(idx, len(self._ends)):
+                end = self._ends[i]
+                candidates_end.update(self._end_to_sessions.get(end, set()))
+        else:
+            candidates_end = self._sessions
+
+        # Candidates by starts: `start <= target_end`.
+        if target_end.is_finite:
+            candidates_start = set()
+            idx = self._starts.bisect_right(target_end)
+            for i in range(idx):
+                start = self._starts[i]
+                candidates_start.update(self._start_to_sessions.get(start, set()))
+        else:
+            candidates_start = self._sessions
+
+        candidates = candidates_end & candidates_start
+
+        return {s for s in candidates if s.timeset.overlaps(timeset)}
     
 
     def find_contained_in(self, timeset: TimeSet | TimeInterval) -> set[Session]:

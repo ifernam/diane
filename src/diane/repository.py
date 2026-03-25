@@ -333,21 +333,49 @@ class Repository(MutableSet[Session]):
     
 
     def find_closest_in_time_to(self, session: Session) -> Session:
-        '''Returns the session in the repository closest in time
+        '''Return the session in the repository closest in time
         to the given one.
         
+        Returns:
+            `Session`: The closest session.
+
         Raises:
-            KeyError: if no other sessions in the repository.'''
+            `KeyError`: If no other sessions in the repository.
+        '''
 
-        def closest_key(s: Session):
-            dist = TimeSet.dist(session.timeset, s.timeset)
-            return dist is None, dist
+        others  = self._sessions - {session}
 
-        others  = {s for s in self._sessions if s != session}
         if not others:
-            raise KeyError('No other sessions in the repository.')
+            raise ValueError('No other sessions in the repository.')
         
-        return min(others, key=closest_key)
+        span = session.timeset.span()
+        
+        # Candidates to the left.
+        idx = self._ends.bisect_left(span.start)
+        if idx > 0:
+            idx -= 1
+            end = self._ends[idx]
+            candidate_to_the_left = {next(iter(self._end_to_sessions[end]))}
+        else:
+            candidate_to_the_left = set()
+        
+        # Candidates to the right.
+        idx = self._starts.bisect_right(span.end)
+        if idx < len(self._starts):
+            start = self._starts[idx]
+            candidate_to_the_right = {next(iter(self._start_to_sessions[start]))}
+        else:
+            candidate_to_the_right = set()
+
+        # Candidates in span.
+        candidates_in_span = self.find_overlapping(span)
+
+        candidates = candidate_to_the_left | candidates_in_span | candidate_to_the_right
+
+        if not candidates:
+            return next(iter(others))
+
+        return min(candidates, key=lambda s: TimeSet.dist(session.timeset, s.timeset))
     
 
     def last(self) -> Session:

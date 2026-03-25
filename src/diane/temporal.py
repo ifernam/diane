@@ -2833,6 +2833,32 @@ class TimeSet:
             return NotImplemented
     
 
+    def touches_interval(self, other: TimeInterval) -> bool:
+        '''Return `True` if this time set touches the given time
+        interval.'''
+
+        if self.is_empty or other.is_empty:
+            return False
+        
+        if other.start.is_infinite:
+            # The interval is the left ray.
+            return self.first_component.touches(other)
+        
+        if other.end.is_infinite:
+            # The interval is the right ray.
+            return self.last_component.touches(other)
+        
+        pos = bisect.bisect_left(self._starts, other.start)
+
+        if pos > 0 and self._components[pos-1].touches(other):
+            return True
+        
+        if pos < len(self._components) and self._components[pos].touches(other):
+            return True
+        
+        return False
+    
+
     def touches_timeset(self, other: TimeSet) -> bool:
         '''Return `True` if this time set touches another one.'''
 

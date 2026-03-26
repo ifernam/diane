@@ -60,6 +60,8 @@ class Repository(MutableSet[Session]):
         self._rebuild_index()
         self._validate()
 
+        self._merge_touching()
+
 
     def __contains__(self, item: object) -> bool:
         '''Checks whether the session is contained in the repository.
@@ -482,3 +484,41 @@ class Repository(MutableSet[Session]):
             self.discard(s)
 
         return merged
+    
+
+    def _merge_touching(self) -> None:
+        '''Merge touching sessions with the same activities.
+
+        Sessions that touch (overlap or meet at a boundary) and have
+        identical activity sets are merged into a single session.
+        '''
+
+        for sessions in tuple(self._activities_index.values()):
+            if len(sessions) <= 1:
+                continue
+
+            # Sort sessions by start time for sequential scanning.
+            sorted_sessions = sorted(sessions, key=lambda s: s.timeset.start)
+
+            # Split into connected components using the 'touches' relation.
+            components = []
+            current = [sorted_sessions[0]]
+            current_union = sorted_sessions[0].timeset
+
+            for s in sorted_sessions[1:]:
+                if current_union.touches(s.timeset):
+                    current.append(s)
+                    current_union = TimeSet.union(current_union, s.timeset)
+                else:
+                    components.append(current)
+                    current = [s]
+                    current_union = s.timeset
+            components.append(current)
+
+            # Merge each component that contains more than one session.
+            for comp in components:
+                if len(comp) > 1:
+                    merged = Session.merge(*comp)
+                    for s in comp:
+                        self.discard(s)
+                    self.add(merged)

@@ -80,6 +80,8 @@ class RepositoryManager(AssistedRepository):
                         print(f'Error adding session from \'{file_path.name}\'. {e}')
                         continue
 
+        self._merge_touching()
+
 
     def _load_state(self) -> None:
         '''Load the tracking state from the YAML file.'''

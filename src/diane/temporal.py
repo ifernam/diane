@@ -2496,6 +2496,7 @@ class TimeSet:
         return len(self._components) == 1 and self._components[0].is_point
     
 
+    @property
     def is_timeline(self) -> bool:
         '''Return `True` if this time set is the entire timeline.'''
 

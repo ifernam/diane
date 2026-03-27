@@ -81,10 +81,30 @@ class Timestamp:
         
     
     def __str__(self) -> str:
-        '''Return the ISO 8601 string representation of the timestamp
-        in its original time zone.'''
+        '''Return the user-readable string representation of this
+        timestamp.
+        
+        Returns:
+            `str`: String representation of the timestamp.
+        '''
 
-        return f'{self.datetime_iso}'
+        dt_local = self._dt.replace(microsecond=0)
+        date_part = dt_local.strftime(r'%Y.%m.%d %H:%M:%S')
+        offset = dt_local.utcoffset()
+        if offset is None:
+            tz_str = ''
+        elif offset == datetime.timedelta():
+            tz_str = 'UTC'
+        else:
+            sign = '+' if offset.total_seconds() >= 0 else '-'
+            total_seconds = abs(offset.total_seconds())
+            hours = int(total_seconds // 3600)
+            minutes = int((total_seconds % 3600) // 60)
+            if minutes == 0:
+                tz_str = f'UTC{sign}{hours}'
+            else:
+                tz_str = f'UTC{sign}{hours}:{minutes:02d}'
+        return f'{date_part} {tz_str}'.strip()
     
 
     def __eq__(self, other: object) -> bool:

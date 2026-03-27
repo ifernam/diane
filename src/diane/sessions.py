@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from collections.abc import Iterable
 import itertools
 import warnings
+from xml.etree.ElementTree import indent
 
 from diane.temporal import TimeInterval, TimeSet
 from diane.activities import Activity
@@ -99,10 +100,18 @@ class Session:
 
     def __str__(self) -> str:
         '''Return the human-readable string representation
-        of the session.'''
+        of this session.'''
 
-        main_str = f'{self.timeset.start.timestamp} \u2192 {self.timeset.end.timestamp} (activity duration: {self.timeset.duration.value})'
-        activities_str = '    Activities:\n' + '\n'.join(f'    \u2022 {a.title}' for a in self._activities)
+        indent = '    '
+        arrow = '\u2192'   # Arrow '→'.
+        bullet = '\u2022'  # Bullet '•'.
+
+        main_str = (
+            f'{self.timeset.start.timestamp} {arrow} {self.timeset.end.timestamp} '
+            f'(activity duration: {self.timeset.duration.value})'
+        )
+        activities_titles = '\n'.join(f'{indent}{bullet} {a.title}' for a in self._activities)
+        activities_str = f'{indent}Activities:\n{activities_titles}'
         return f'{main_str}\n{activities_str}'
 
 

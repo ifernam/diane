@@ -59,7 +59,8 @@ class Session:
         '''Initialize a `Session`.
 
         Args:
-            `timeset`: `TimeSet` representing the session's time.
+            `timeset` (`TimeSet`): The time set representing
+                the session's time. The time zones must be normalized.
             `activities`: Iterable of `Activity` objects. Must
                 not be empty.
             `comment`: Optional comment string. Defaults to empty
@@ -70,13 +71,13 @@ class Session:
                 is empty.
         '''
 
-        object.__setattr__(self, '_timeset', timeset)
+        object.__setattr__(self, '_timeset', timeset.normalize_time_zones())
         object.__setattr__(self, '_activities', frozenset(activities))
         object.__setattr__(self, 'comment', comment)
 
         self._validate()
         
-        object.__setattr__(self, '_hash', hash((timeset, self._activities)))
+        object.__setattr__(self, '_hash', hash((self._timeset, self._activities)))
 
 
     def __eq__(self, other: object) -> bool:

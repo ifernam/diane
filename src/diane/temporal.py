@@ -1582,6 +1582,57 @@ class TimeInterval:
             return Duration()
         
         return self.end - self.start
+    
+
+    def to_timezone(self, timezone_iana: str) -> TimeInterval:
+        '''Convert both endpoints of this time interval to the specified
+        IANA time zone.
+
+        Leave empty intervals unchanged. For intervals with infinite
+        endpoints, only apply the conversion to the finite endpoints.
+        Leave the infinite endpoints unchanged.
+
+        Args:
+            `timezone_iana`: IANA time zone name
+                (e.g., 'America/New_York').
+
+        Returns:
+            `TimeInterval`: A new time interval with endpoints converted
+                to the target zone.
+
+        Raises:
+            `ValueError`: If the IANA zone name is invalid.
+        '''
+        
+        if self.is_empty:
+            return self
+        
+        start = self.start.to_timezone(timezone_iana)
+        end = self.end.to_timezone(timezone_iana)
+        return TimeInterval(start, end)
+    
+
+    def normalize_time_zones(self) -> TimeInterval:
+        '''Convert the interval to a single time zone using the time
+        zone of the left finite endpoint.
+
+        Leave the interval unchanged if it is empty or contains at least
+        one infinite endpoint. Otherwise, convert both endpoints
+        to the time zone of the left endpoint.
+
+        Returns:
+            `TimeInterval`: A new time interval with both endpoints
+                in the same time zone.
+        '''
+
+        if self.is_empty:
+            return self
+
+        if self.start.is_infinite or self.end.is_infinite:
+            return self
+        
+        start_tz_iana = self.start.timestamp.timezone_iana
+        return self.to_timezone(start_tz_iana)
 
 
     def closure(self) -> TimeInterval:

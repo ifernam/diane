@@ -25,9 +25,9 @@ class ActivitiesNotInRegistryError(RepositoryError):
 
 @dataclass
 class Repository(MutableSet[Session]):
-    '''Represents repository of sessions.
-    
-    Stores sessions and activities registry.'''
+    '''Represents a repository of sessions.
+
+    Stores sessions and an activities registry.'''
 
     _activities: Activities = field(default_factory=Activities)
     _sessions: set[Session] = field(default_factory=set)
@@ -41,8 +41,16 @@ class Repository(MutableSet[Session]):
 
 
     def _validate_activities(self, activities: Activities) -> None:
-        ''' Checks that all session activities are in the given activity
-        registry.'''
+        '''Check that all session activities are in the given activity
+        registry.
+        
+        Args:
+            `activities` (`Activities`): The activities registry.
+
+        Raises:
+            `ActivitiesNotInRegistryError`: If there are activities
+                in the repository that are not listed in the registry.
+        '''
 
         for s in self._sessions:
             if not s.activities <= activities:
@@ -52,6 +60,8 @@ class Repository(MutableSet[Session]):
 
 
     def _validate(self) -> None:
+        '''Check that the repository is in the correct state.'''
+
         self._validate_activities(self._activities)
 
 
@@ -64,9 +74,13 @@ class Repository(MutableSet[Session]):
 
 
     def __contains__(self, item: object) -> bool:
-        '''Checks whether the session is contained in the repository.
+        '''Check that the given session is contained in the repository.
         
-        Only takes the time set and activities set into account.'''
+        Only the time set and activities set are taken into account.
+
+        Returns:
+            `bool`: `True` if the session is present.
+        '''
 
         if not isinstance(item, Session):
             return False
@@ -79,7 +93,11 @@ class Repository(MutableSet[Session]):
     
 
     def __len__(self) -> int:
-        '''Size of sessions repository.'''
+        '''Return the number of sessions in this repository.
+
+        Returns:
+            `int`: The number of sessions.
+        '''
 
         return len(self._sessions)
     
@@ -168,8 +186,15 @@ class Repository(MutableSet[Session]):
     def add(self, value: Session) -> None:
         '''Add the given session to the repository.
         
-        Add the session if it is not contained in the repository
-        and if it only contains activities that are in the registry.
+        The session is added only if it is not already present and all
+        its activities are in the registry.
+
+        Args:
+            `value` (`Session`): The session to add.
+
+        Raises:
+            `ActivitiesNotInRegistryError`: If the given session
+                contains activities not listed in the registry.
         '''
 
         if value not in self:
@@ -247,7 +272,11 @@ class Repository(MutableSet[Session]):
 
 
     def discard(self, value: Session) -> None:
-        '''Discard the given session from the registry.'''
+        '''Discard the given session from the repository.
+        
+        Args:
+            `value` (`Session`): The session to discard.
+        '''
 
         if value not in self._sessions:
             return
@@ -256,10 +285,13 @@ class Repository(MutableSet[Session]):
 
     
     def remove(self, value: Session) -> None:
-        '''Remove the given session from the registry.
+        '''Remove the given session from the repository.
+
+        Args:
+            `value` (`Session`): The session to remove.
         
         Raises:
-            KeyError: If the given session is not in the repository.
+            `KeyError`: If the given session is not in the repository.
         '''
 
         if value not in self._sessions:
@@ -270,14 +302,14 @@ class Repository(MutableSet[Session]):
 
     @property
     def activities(self) -> Activities:
-        '''Returns copy of the activities registry.'''
+        '''Return the copy of the activities registry.'''
 
         return self._activities.copy()
         
 
     @activities.setter
     def activities(self, activities: Activities) -> None:
-        '''Sets the activities registry.'''
+        '''Set the activities registry.'''
         
         self._validate_activities(activities)
         self._activities = activities.copy()
@@ -297,13 +329,13 @@ class Repository(MutableSet[Session]):
         time set or time interval.
 
         Args:
-            `timeset` (`TimeSet | TimeInterval`): The time set or time
-                interval to check for overlap.
+            `timeset` (`TimeSet | TimeInterval`): The time set
+                or interval to check for overlap.
 
         Returns:
             `set[Session]`: The set of sessions that overlap with
-                the given time set. If the input set is empty, returns
-                the empty set.
+                the given time set or interval. If the input is empty,
+                returns the empty set.
         '''
 
         if isinstance(timeset, TimeInterval):
@@ -341,16 +373,16 @@ class Repository(MutableSet[Session]):
     
 
     def find_contained_in(self, timeset: TimeSet | TimeInterval) -> set[Session]:
-        '''Finds sessions in the repository that are contained
-        in the given time set or time interval
+        '''Find sessions in the repository that are contained
+        in the given time set or interval.
         
         Args:
-            `timeset` (`TimeSet | TimeInterval`): The time set or time
-                interval that should contain the sessions.
+            `timeset` (`TimeSet | TimeInterval`): The time set
+                or interval that should contain the sessions.
 
         Returns:
-            set[Session]: The set of sessions that are completely inside
-                the given time set ot time interval. If the input set
+            `set[Session]`: The set of sessions that are completely
+                inside the given time set or interval. If the input
                 is empty, returns the empty set.
         '''
 
@@ -396,7 +428,8 @@ class Repository(MutableSet[Session]):
             `Session`: The closest session.
 
         Raises:
-            `KeyError`: If no other sessions in the repository.
+            `ValueError`: If there are no other sessions
+                in the repository.
         '''
 
         others  = self._sessions - {session}
@@ -435,11 +468,12 @@ class Repository(MutableSet[Session]):
     
 
     def last(self) -> Session:
-        '''Returns the last completed session.
+        '''Return the last completed session.
         
         Raises:
-            KeyError: if there are no sessions completed up to present
-                in the repository.'''
+            `KeyError`: If there are no sessions completed up to present
+                in the repository.
+        '''
 
         up_to_present = self.find_contained_in(TimeInterval.leftclosed(Timestamp.now()))
 
@@ -450,18 +484,19 @@ class Repository(MutableSet[Session]):
 
 
     def merge(self, *sessions: Session) -> Session:
-        '''Merge sessions contained in the repository with the same set
-        of activities and return the result.
+        '''Merge the given sessions (which must already be
+        in the repository) and return the merged session.
 
-        If sessions have the same set of activities, a new session
-        will be created that unites the time sets and comments
-        of the original ones. As a result, a new session appears
-        in the repository, and the old ones are removed.
+        The sessions are merged only if they have identical activity
+        sets. A new session is created that unites the time sets
+        and comments of the original ones. The original sessions
+        are removed from the repository and the merged session is added.
 
         Raises:
-            `KeyError`: if at least one of the given sessions
-                is not contained in the repository.
-            `ValueError`: If sessions cannot be merged.
+            `KeyError`: If at least one of the given sessions is not in
+                the repository.
+            `ValueError`: If the sessions cannot be merged
+                (e.g., different activity sets).
         '''
         
         if not sessions:

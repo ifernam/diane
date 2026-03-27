@@ -675,6 +675,32 @@ class Endpoint:
         raise AssertionError(f'The unknown endpoint kind: \'{self._kind}\'.')
     
 
+    def to_timezone(self, timezone_iana: str) -> Endpoint:
+        '''Convert this endpoint to the specified IANA time zone.
+
+        Args:
+            `timezone_iana`: IANA time zone name
+            (e.g., 'America/New_York').
+
+        Returns:
+            `Endpoint`: A new `Endpoint` representing the same moment
+                in the specified zone.
+
+        Raises:
+            `ValueError`: If the IANA zone name is invalid.
+        '''
+
+        if self.is_infinite:
+            return self
+        
+        return Endpoint(
+            _kind=Endpoint.Kind.FINITE,
+            _timestamp=self.timestamp.to_timezone(timezone_iana),
+            _side=self.side,
+            _included=self.is_included
+        )
+        
+
     def opposite(self) -> Endpoint:
         '''Return the endpoint opposite to this.
         

@@ -2496,6 +2496,12 @@ class TimeSet:
         return len(self._components) == 1 and self._components[0].is_point
     
 
+    def is_timeline(self) -> bool:
+        '''Return `True` if this time set is the entire timeline.'''
+
+        return len(self._components) == 1 and self._components[0].is_timeline
+    
+
     @property
     def is_bounded(self) -> bool:
         '''Return `True` if this time set is bounded.
@@ -2696,6 +2702,52 @@ class TimeSet:
         '''
 
         return min(self._gaps(), default=Duration())
+    
+
+    def to_timezone(self, timezone_iana: str) -> TimeSet:
+        '''Convert all endpoints of this time set to the specified
+        IANA time zone.
+
+        Leave empty time sets unchanged. For components with infinite
+        endpoints, only apply the conversion to the finite endpoints.
+        Leave the infinite endpoints unchanged.
+
+        Args:
+            `timezone_iana`: IANA time zone name
+                (e.g., 'America/New_York').
+
+        Returns:
+            `TimeSet`: A new time set with endpoints converted
+                to the target zone.
+
+        Raises:
+            `ValueError`: If the IANA zone name is invalid.
+        '''
+
+        if self.is_empty:
+            return self
+        
+        return TimeSet(*(i.to_timezone(timezone_iana) for i in self.components))
+    
+
+    def normalize_time_zones(self) -> TimeSet:
+        '''Convert this time set to a single time zone using the time
+        zone of the leftmost finite endpoint.
+
+        Returns:
+            `TimeSet`: A new time set with all components in the same
+                time zone.
+        '''
+
+        if self.is_empty or self.is_timeline:
+            return self
+        
+        start_tz_iana = (
+            self.start.timestamp.timezone_iana
+            if self.start.is_finite
+            else self.first_component.end.timestamp.timezone_iana
+        )
+        return self.to_timezone(start_tz_iana)
     
 
     def span(self) -> TimeInterval:

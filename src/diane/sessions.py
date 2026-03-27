@@ -98,11 +98,12 @@ class Session:
     
 
     def __str__(self) -> str:
-        '''Return a human-readable string representation
+        '''Return the human-readable string representation
         of the session.'''
 
-        activities_string = ', '.join(f'\'{a.slug}\'' for a in self._activities)
-        return f'{self._timeset} -> {activities_string}'
+        main_str = f'{self.timeset.start.timestamp} \u2192 {self.timeset.end.timestamp} (activity duration: {self.timeset.duration.value})'
+        activities_str = '    Activities:\n' + '\n'.join(f'    \u2022 {a.title}' for a in self._activities)
+        return f'{main_str}\n{activities_str}'
 
 
     @property

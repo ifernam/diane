@@ -23,27 +23,23 @@ class AssistedRepository(Repository):
     
 
     def merge_if_good(self, *sessions: Session) -> Session:
-        '''Merges sessions contained in the repository with the same set
-        of activities and returns the result if it's 'good'.
+        '''Merge the given sessions (which must already be
+        in the repository) and return the merged session if it's 'good'.
 
-        If sessions have same activities and the 'goodness' criterion
-        is met for a possible new session, a new session will be created
-        that unites the time sets and comments of the original ones.
-        As a result, a new session appears in the repository,
-        and the old ones are removed.
+        The sessions are merged only if they have identical activity
+        sets and the result is 'good'. A new session unites the time
+        sets and comments of the original ones. The original sessions
+        are removed from the repository and the merged session is added.
 
         Raises:
-            KeyError: if at least one of the given sessions
+            `KeyError`: If at least one of the given sessions
                 is not contained in the repository.
-            ValueError: if sessions cannot be merged or the resulting
-                session is not 'good'''
+            `ValueError`: If sessions cannot be merged or the resulting
+                session is not 'good'.
+        '''
         
         if not sessions:
             raise ValueError('At least one session required for merge.')
-        
-        # Remove duplicates, leaving only the first occurrence
-        # of each session.
-        unique_sessions = list(dict.fromkeys(sessions))
         
         missing = {s for s in sessions if s not in self}
         if len(missing) == 1:
@@ -53,26 +49,31 @@ class AssistedRepository(Repository):
             raise KeyError(f'The sessions {sessions_string} are not in the repository.')
 
         try:
-            merged = Session.merge(*unique_sessions)
+            merged = Session.merge(*sessions)
         except ValueError as e:
             raise ValueError(f'Sessions cannot be merged: {e}.') from e
         
         if not AssistedRepository.is_good(merged):
             raise ValueError(f'The sessions were not merged because the result was not good.')
         
-        self.add(merged)
         for s in sessions:
             self.discard(s)
+        self.add(merged)
 
         return merged
     
 
     def add_and_merge(self, session: Session) -> Session:
-        '''Adds a session to the repository and repeatedly merges it
-        with the closest session in time until no further merge
+        '''Add the given session to the repository and repeatedly
+        merge it with the closest session in time until no further merge
         is possible.
 
-        Returns the final merged session.'''
+        Args:
+            `session` (`Session`): The session to add.
+
+        Return:
+            `Session`: The final merged session.
+        '''
 
         self.add(session)
         while True:

@@ -428,14 +428,14 @@ class Repository(MutableSet[Session]):
             `Session`: The closest session.
 
         Raises:
-            `ValueError`: If there are no other sessions
+            `KeyError`: If there are no other sessions
                 in the repository.
         '''
 
         others  = self._sessions - {session}
 
         if not others:
-            raise ValueError('No other sessions in the repository.')
+            raise KeyError('No other sessions in the repository.')
         
         span = session.timeset.span()
         
@@ -460,6 +460,7 @@ class Repository(MutableSet[Session]):
         candidates_in_span = self.find_overlapping(span)
 
         candidates = candidate_to_the_left | candidates_in_span | candidate_to_the_right
+        candidates -= {session}
 
         if not candidates:
             return next(iter(others))
@@ -514,9 +515,9 @@ class Repository(MutableSet[Session]):
         except ValueError as e:
             raise ValueError(f'Sessions cannot be merged. {e}.') from e
         
-        self.add(merged)
         for s in sessions:
             self.discard(s)
+        self.add(merged)
 
         return merged
     

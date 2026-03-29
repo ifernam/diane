@@ -7,19 +7,17 @@ from diane.repository import Repository
 
 
 class AssistedRepository(Repository):
-    '''Smart add-on to sessions repository.'''
+    '''Smart wrapper to the 'Repository'.'''
 
 
     @staticmethod
     def is_good(session: Session) -> bool:
-        '''Assesses how 'good' a session is according to certain
-        criteria.
-
+        '''Return `True` if the given session is 'good'.
+        
+        Assess how 'good' the session is according to certain criteria.
         'Goodness' usually means that the pauses between activity
-        intervals are not too long.'''
-
-        if session.timeset.min_component_duration is None:
-            return False
+        intervals are not too long.
+        '''
 
         return session.timeset.max_gap_duration <= session.timeset.min_component_duration
     

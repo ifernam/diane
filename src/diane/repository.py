@@ -216,7 +216,7 @@ class Repository(MutableSet[Session]):
             raise TypeError('\'session_data\' must be a dictionary.')
         
         # Check for extra keys in the dictionary.
-        allowed_keys = {'intervals', 'activities', 'comment'}
+        allowed_keys = {'time_zone', 'intervals', 'activities', 'comment'}
         extra_keys = set(session_data) - allowed_keys
         if extra_keys:
             extra_keys_str = ', '.join(f'\'{k}\'' for k in sorted(extra_keys))
@@ -227,6 +227,16 @@ class Repository(MutableSet[Session]):
 
         # Get time set.
         try:
+            time_zone_iana = session_data['time_zone']
+        except KeyError:
+            raise ValueError(
+                f'The session dictionary is missing the required \'time_zone\' key.'
+            )
+        if not isinstance(time_zone_iana, str):
+            raise TypeError(
+                f'Value \'time_zone\' must be a string, got \'{type(time_zone_iana).__name__}\'.'
+            )
+        try:
             intervals_data = session_data['intervals']
         except KeyError:
             raise ValueError(
@@ -236,7 +246,7 @@ class Repository(MutableSet[Session]):
             raise TypeError(
                 f'The value of the \'intervals\' key must be a list, got '
                 f'\'{type(intervals_data).__name__}\'.')
-        intervals = [TimeInterval.from_dict(i, date_iso) for i in intervals_data]
+        intervals = [TimeInterval.from_dict(i, time_zone_iana, date_iso) for i in intervals_data]
         timeset =  TimeSet(*intervals)
 
         # Get activities.

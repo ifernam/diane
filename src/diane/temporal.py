@@ -2106,14 +2106,12 @@ class TimeInterval:
     
 
     @classmethod
-    def from_dict(cls, time_data: dict, date_iso: str = '') -> TimeInterval:
+    def from_dict(cls, time_data: dict, time_zone_iana: str, date_iso: str = '') -> TimeInterval:
         '''Create a closed-open interval or a point from a dictionary.
 
         The dictionary must contain:
             - `start_time` / `end_time`: ISO time strings including
-                offset, e.g. '10:30+03:00');
-            - `start_timezone` / `end_timezone` : IANA zone names
-                (e.g. 'Europe/Moscow').
+                offset, e.g. '10:30+03:00').
 
         If `date_iso` is provided (YYYY-MM-DD), it is combined with
         the time strings to form full ISO datetimes. In this mode,
@@ -2124,6 +2122,8 @@ class TimeInterval:
 
         Args:
             `time_data`: Dictionary with the four required keys.
+            `time_zone_iana`: The time zone common for both endpoints.
+                It must be in IANA format (e.g. 'Europe/Moscow').
             `date_iso`: Optional common date in YYYY-MM-DD format.
                 If provided, the time strings are interpreted as times
                 of that day, and '24:' in end_time is handled specially.
@@ -2140,21 +2140,17 @@ class TimeInterval:
 
         Example:
             >>> TimeInterval.from_dict({
-            ...     'start_time': '09:00+03:00',
-            ...     'start_timezone': 'Europe/Moscow',
-            ...     'end_time': '18:00+03:00',
-            ...     'end_timezone': 'Europe/Moscow'
-            ... }, '2026-03-09')
-            [2026-03-09T09:00:00+03:00; 2026-03-09T18:00:00+03:00)
+            ...     'start_time': '08:00:00-04:00',
+            ...     'end_time': '09:00:00-04:00'
+            ... }, 'America/New_York', '2026-03-30')
+            [2026.03.30 08:00:00 UTC-4; 2026.03.30 09:00:00 UTC-4)
 
             Using '24:00' to denote the end of the day:
             >>> TimeInterval.from_dict({
-            ...     'start_time': '09:00Z',
-            ...     'start_timezone': 'UTC',
-            ...     'end_time': '24:00Z',
-            ...     'end_timezone': 'UTC'
-            ... }, 2026-03-09')
-            [2026-03-09T09:00:00+00:00; 2026-03-10T00:00:00+00:00)
+            ...     'start_time': '09:00:00Z',
+            ...     'end_time': '24:00:00Z'
+            ... }, 'Etc/UTC', 2026-03-09')
+            [2026.03.09 09:00:00 UTC; 2026.03.10 00:00:00 UTC)
 
             Without a common date (full ISO strings expected):
             >>> TimeInterval.from_dict({
@@ -2170,7 +2166,7 @@ class TimeInterval:
             raise TypeError('\'time_data\' must be a dictionaty.')
         
         # Check for extra keys in the dictionary.
-        allowed_keys = {'start_time', 'start_timezone', 'end_time', 'end_timezone'}
+        allowed_keys = {'start_time', 'end_time'}
         extra_keys = set(time_data) - allowed_keys
         if extra_keys:
             extra_keys_str = ', '.join(f'\'{k}\'' for k in sorted(extra_keys))
@@ -2190,9 +2186,7 @@ class TimeInterval:
             return value
 
         start_time_iso = get_str('start_time')
-        start_timezone_iana = get_str('start_timezone')
         end_time_iso = get_str('end_time')
-        end_timezone_iana = get_str('end_timezone')
 
         if date_iso:
             # Parse the base date.
@@ -2248,12 +2242,12 @@ class TimeInterval:
 
         # Create timestamps using the existing factory that checks offset vs IANA zone.
         try:
-            start_ts = Timestamp.from_iso_iana(start_datetime_iso, start_timezone_iana)
+            start_ts = Timestamp.from_iso_iana(start_datetime_iso, time_zone_iana)
         except ValueError as e:
             raise ValueError(f'Incorrect start time format. {e}') from e
         
         try:
-            end_ts = Timestamp.from_iso_iana(end_datetime_iso, end_timezone_iana)
+            end_ts = Timestamp.from_iso_iana(end_datetime_iso, time_zone_iana)
         except ValueError as e:
             raise ValueError(f'Incorrect end time format. {e}') from e
 

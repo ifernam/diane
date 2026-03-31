@@ -3,6 +3,9 @@ from dataclasses import dataclass, field
 from collections.abc import MutableSet
 from sortedcontainers import SortedList
 import warnings
+import heapq
+from typing import Iterator
+from itertools import count
 
 
 from diane.temporal import Timestamp, Endpoint, TimeInterval, TimeSet
@@ -476,6 +479,67 @@ class Repository(MutableSet[Session]):
             return next(iter(others))
 
         return min(candidates, key=lambda s: TimeSet.dist(session.timeset, s.timeset))
+    
+
+    def iter_closest_in_time_to(self, session: Session) -> Iterator[Session]:
+        '''Iterate the sessions in the repository closest in time
+        to the given one.
+        
+        Returns:
+            `Iterator[Session]`: The closest sessions.
+        '''
+
+        span = session.timeset.span()
+        visited = {session}
+
+        queue = []         # Initialise heap.
+        counter = count()  # Initialise counter.
+
+        # Sessions overlapping span.
+        for s in self.find_overlapping(span):
+            if s not in visited:
+                dist = TimeSet.dist(session.timeset, s.timeset)
+                heapq.heappush(queue, (dist, next(counter), s, 'C', None))
+                visited.add(s)
+
+        # Initialise indices for left and right sessions.
+        l_idx = self._ends.bisect_left(span.start) - 1
+        r_idx = self._starts.bisect_right(span.end)
+
+        def push_from_left(idx):
+            if idx >= 0:
+                end_val = self._ends[idx]
+                for s in self._end_to_sessions[end_val]:
+                    if s not in visited:
+                        dist = TimeSet.dist(session.timeset, s.timeset)
+                        heapq.heappush(queue, (dist, next(counter), s, 'L', idx))
+                        visited.add(s)
+
+        def push_from_right(idx):
+            if idx < len(self._starts):
+                start_val = self._starts[idx]
+                for s in self._start_to_sessions[start_val]:
+                    if s not in visited:
+                        dist = TimeSet.dist(session.timeset, s.timeset)
+                        heapq.heappush(queue, (dist, next(counter), s, 'R', idx))
+                        visited.add(s)
+
+        push_from_left(l_idx)
+        push_from_right(r_idx)
+
+        # Main extraction cycle.
+        while queue:
+            _, _, s, direction, _ = heapq.heappop(queue)
+            yield s
+
+            # Expand the search to the left (for 'L') or right (for 'R').
+            if direction == 'L':
+                l_idx -= 1
+                push_from_left(l_idx)
+            elif direction == 'R':
+                r_idx += 1
+                push_from_right(r_idx)
+            # Do nothing for 'C'.
     
 
     def last(self) -> Session:

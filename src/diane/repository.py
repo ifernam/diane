@@ -24,6 +24,19 @@ class ActivitiesNotInRegistryError(RepositoryError):
     in the registry.'''
     pass
 
+class EmptyActivitiesError(RepositoryError):
+    '''The repository contains a session with the empty activities
+    set.'''
+    pass
+
+class EmptyTimeSetError(RepositoryError):
+    '''The repository contains a session with the empty time set.'''
+    pass
+
+class UnboundedTimeSetError(RepositoryError):
+    '''The repository contains a session with an unbounded time set.'''
+    pass
+
 
 
 @dataclass
@@ -66,6 +79,20 @@ class Repository(MutableSet[Session]):
         '''Check that the repository is in the correct state.'''
 
         self._validate_activities(self._activities)
+
+        for s in self._sessions:
+            if not s.activities:
+                raise EmptyActivitiesError(
+                    'The repository contains a session with the empty activities set.'
+                )
+            if s.timeset.is_empty:
+                raise EmptyTimeSetError(
+                    'The repository contains a session with the empty time set.'
+                )
+            if s.timeset.is_unbounded:
+                raise UnboundedTimeSetError(
+                    'The repository contains a session with an unbounded time set.'
+                )
 
 
     def __post_init__(self) -> None:
@@ -203,8 +230,16 @@ class Repository(MutableSet[Session]):
         if value not in self:
             if not value.activities <= self._activities:
                 raise ActivitiesNotInRegistryError(
-                    f'The session {value} cannot be added to the repository because it contains '
+                    f'The session cannot be added to the repository because it contains '
                     f'activities that are not in the registry.'
+                )
+            if not value.activities:
+                raise EmptyActivitiesError('A session must contain at least one activity.')
+            if value.timeset.is_empty:
+                raise EmptyTimeSetError('A session must be associated with a non-empty time set.')
+            if value.timeset.is_unbounded:
+                raise UnboundedTimeSetError(
+                    'Only sessions with a bounded time set are permitted in the repository.'
                 )
             
             self._sessions.add(value)

@@ -1237,6 +1237,14 @@ class TimeInterval:
         Kind.OPEN_CLOSED,
     }
 
+    _UNBOUNDED_KINDS = {
+        Kind.RIGHT_OPEN,
+        Kind.RIGHT_CLOSED,
+        Kind.LEFT_OPEN,
+        Kind.LEFT_CLOSED,
+        Kind.TIMELINE
+    }
+
     _LEFT_BOUNDED_KINDS = {
         Kind.EMPTY,
         Kind.POINT,
@@ -1477,9 +1485,21 @@ class TimeInterval:
         '''Return `True` if this interval is bounded.
         
         Here, boundedness is understood in a mathematical sense.
-        Therefore the empty interval is considered to be bounded.'''
+        Therefore the empty interval is considered to be bounded.
+        '''
 
         return self._kind in TimeInterval._BOUNDED_KINDS
+    
+
+    @property
+    def is_unbounded(self) -> bool:
+        '''Return `True` if this interval is unbounded.
+        
+        Here, (un)boundedness is understood in a mathematical sense.
+        Therefore the empty interval is considered to be bounded.
+        '''
+
+        return self._kind in TimeInterval._UNBOUNDED_KINDS
     
 
     @property
@@ -2507,11 +2527,26 @@ class TimeSet:
 
         if self.is_empty:
             return True
-        # From this point onwards, the set is considered
-        # to be non-empty.
+        # Time set is non-empty.
 
-        # Check the first and last intervals for boundedness.
+        # Check the first and last components for boundedness.
         return self._components[0].is_bounded and self._components[-1].is_bounded
+    
+
+    @property
+    def is_unbounded(self) -> bool:
+        '''Return `True` if this time set is unbounded.
+        
+        Here, (un)boundedness is understood in a mathematical sense.
+        Therefore the empty time set is considered to be bounded.
+        '''
+
+        if self.is_empty:
+            return False
+        # Time set is non-empty.
+
+        # Check the first and last components for unboundedness.
+        return self._components[0].is_unbounded or self._components[-1].is_unbounded
     
 
     @property

@@ -2659,7 +2659,7 @@ class TimeSet:
     
 
     @property
-    def man_component_duration(self) -> Duration:
+    def max_component_duration(self) -> Duration:
         '''Return the maximal duration among the components.
 
         Compute the maximal duration of all components in the time set.

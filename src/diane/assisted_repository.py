@@ -1,6 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 
+from diane.temporal import TimeSet
 from diane.sessions import Session
 from diane.repository import Repository
 
@@ -76,15 +77,16 @@ class AssistedRepository(Repository):
         '''
 
         self.add(session)
-        while True:
+        for s in self.iter_closest_in_time_to(session):
+            if TimeSet.dist(session.timeset, s.timeset) > session.timeset.min_component_duration:
+                # Closest session is too far for merging.
+                break
+
+            # Try merge.
             try:
-                closest = self.find_closest_in_time_to(session)
-            except KeyError:
-                # No other sessions left to merge with.
-                return session
-            
-            try:
-                session = self.merge_if_good(session, closest)
+                session = self.merge_if_good(session, s)
             except ValueError:
-                # Cannot merge with this closest session; stop.
-                return session
+                # Cannot merge with this session `s`. Try next.
+                continue
+
+        return session

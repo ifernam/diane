@@ -43,17 +43,20 @@ class UnboundedTimeSetError(RepositoryError):
 class Repository(MutableSet[Session]):
     '''Represents a repository of sessions.
 
-    Stores sessions and an activities registry.'''
+    Stores sessions and an activities registry.
+    '''
 
     _activities: Activities = field(default_factory=Activities)
     _sessions: set[Session] = field(default_factory=set)
     
     # Index.
-    _starts: SortedList = field(default_factory=SortedList)
-    _ends: SortedList = field(default_factory=SortedList)
-    _start_to_sessions: dict[Endpoint, set[Session]] = field(default_factory=dict)
-    _end_to_sessions: dict[Endpoint, set[Session]] = field(default_factory=dict)
-    _activities_index: dict[frozenset[Activity], set[Session]] = field(default_factory=dict)
+    _starts: SortedList = field(default_factory=SortedList, init=False)
+    _ends: SortedList = field(default_factory=SortedList, init=False)
+    _start_to_sessions: dict[Endpoint, set[Session]] = field(default_factory=dict, init=False)
+    _end_to_sessions: dict[Endpoint, set[Session]] = field(default_factory=dict, init=False)
+    _activities_index: dict[frozenset[Activity], set[Session]] = field(
+        default_factory=dict, init=False
+    )
 
 
     def _validate_activities(self, activities: Activities) -> None:
@@ -471,6 +474,9 @@ class Repository(MutableSet[Session]):
     def find_closest_in_time_to(self, session: Session) -> Session:
         '''Return the session in the repository closest in time
         to the given one.
+
+        Args:
+            `session` (`Session`): The session to find the closest one.
         
         Returns:
             `Session`: The closest session.
@@ -519,6 +525,9 @@ class Repository(MutableSet[Session]):
     def iter_closest_in_time_to(self, session: Session) -> Iterator[Session]:
         '''Iterate the sessions in the repository closest in time
         to the given one.
+
+        Args:
+            `session` (`Session`): The session to find the closest ones.
         
         Returns:
             `Iterator[Session]`: The closest sessions.
@@ -601,6 +610,9 @@ class Repository(MutableSet[Session]):
         sets. A new session is created that unites the time sets
         and comments of the original ones. The original sessions
         are removed from the repository and the merged session is added.
+
+        Args:
+            `*sessions` (`Session`): The sessions for merging.
 
         Raises:
             `KeyError`: If at least one of the given sessions is not in

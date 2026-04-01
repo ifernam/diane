@@ -343,6 +343,17 @@ class Timestamp:
             return cls(datetime.datetime.now(Timestamp._UTC))
         except Exception as e:
             raise RuntimeError('Failed to determine UTC time.') from e
+        
+
+    @property
+    def datetime(self) -> datetime.datetime:
+        '''Return the `datetime` object of this timestamp.
+
+        Returns:
+            `datetime.datetime`: The `datetime` object.
+        '''
+
+        return self._dt
     
 
     @property
@@ -1595,6 +1606,96 @@ class TimeInterval:
     
 
     @property
+    def days(self) -> set[datetime.date]:
+        '''Return the set of calendar days that intersect this time
+        interval.
+
+        The interval is first normalized to a single time zone using
+        `normalize_time_zones()`, which converts both endpoints
+        to the time zone of the left endpoint. The result is a set
+        of dates (in that zone) that have at least one point in common
+        with the interval.
+
+        For a bounded interval:
+            - The day containing the left endpoint is always included,
+            regardless of whether the endpoint itself is included.
+            - The day containing the right endpoint is included
+            if the right endpoint is included or if its time
+            is not exactly midnight; if the right endpoint is excluded
+            and its time is midnight, that day is excluded (the last
+            point belongs to the previous day).
+        For the empty interval, the empty set is returned.
+        For an unbounded interval, a `ValueError` is raised because
+        the set would be infinite.
+
+        Returns:
+            A set of `datetime.date` objects representing all days that
+            intersect the interval.
+
+        Raises:
+            `ValueError`: If the interval is unbounded.
+
+        Examples:
+            >>> t1 = Timestamp.from_iso_iana(
+            ...     '2024-01-01T12:00+03:00',
+            ...     'Europe/Moscow'
+            ... )
+            >>> t2 = Timestamp.from_iso_iana(
+            ...     '2024-01-02T12:00+03:00',
+            ...     'Europe/Moscow'
+            ... )
+            >>> interval_1 = TimeInterval.closedopen(t1, t2)
+            >>> interval_1.days()
+            {datetime.date(2024, 1, 1), datetime.date(2024, 1, 2)}
+
+            >>> t3 = Timestamp.from_iso_iana(
+            ...     '2024-01-01T23:59+03:00',
+            ...     'Europe/Moscow'
+            ... )
+            >>> t4 = Timestamp.from_iso_iana(
+            ...     '2024-01-02T00:00+03:00',
+            ...     'Europe/Moscow'
+            ... )
+            >>> interval_2 = TimeInterval.closedopen(t3, t4)
+            >>> interval_2.days()
+            {datetime.date(2024, 1, 1)}
+        '''
+
+        if self.is_unbounded:
+            raise ValueError('\'days()\' is only supported for bounded intervals.')
+        if self.is_empty:
+            return set()
+        
+        interval = self.normalize_time_zones()
+        start = interval.start
+        end = interval.end
+        start_dt = start.timestamp.datetime
+        end_dt = end.timestamp.datetime
+        
+        first_day = start_dt.date()
+        
+        if end.is_included:
+            last_day = end_dt.date()
+        else:
+            # Endpoint excluded: day is included only if end is not exactly at midnight.
+            if end_dt.time() > datetime.time.min:
+                last_day = end_dt.date()
+            else:
+                last_day = end_dt.date() - datetime.timedelta(days=1)
+        
+        if first_day > last_day:
+            return set()
+        
+        result = set()
+        current = first_day
+        while current <= last_day:
+            result.add(current)
+            current += datetime.timedelta(days=1)
+
+        return result
+    
+
+    @property
     def duration(self) -> Duration:
         '''Return the duration of this time interval.'''
 
@@ -2614,6 +2715,72 @@ class TimeSet:
             raise KeyError('The empty time set has no specified end.')
         
         return self.last_component.end
+    
+
+    @property
+    def days(self) -> set[datetime.date]:
+        '''Return the set of calendar days that intersect this time set.
+
+        The time set is first normalized to a single time zone using
+        `normalize_time_zones()`, which converts all components
+        to the time zone of the leftmost finite endpoint. The result
+        is a set of dates (in that zone) that have at least one point
+        in common with any component of the time set.
+
+        For a bounded time set:
+            - The days are collected from each connected component.
+            - The day containing the leftmost point is always included.
+            - The day containing the rightmost point is included
+            according to the rules of `TimeInterval.days`
+            (i.e., included if the endpoint is included or its time
+            is not exactly midnight).
+        For the empty time set, the empty set is returned.
+        For an unbounded time set, a `ValueError` is raised because
+        the set of days would be infinite.
+
+        Returns:
+            The set of `datetime.date` objects representing all days that
+            intersect the time set.
+
+        Raises:
+            `ValueError`: If the time set is unbounded.
+
+        Examples:
+            >>> t1 = Timestamp.from_iso_iana(
+            ...     '2024-01-01T12:00+03:00',
+            ...     'Europe/Moscow'
+            ... )
+            >>> t2 = Timestamp.from_iso_iana(
+            ...     '2024-01-02T12:00+03:00',
+            ...     'Europe/Moscow'
+            ... )
+            >>> interval_1 = TimeInterval.closedopen(t1, t2)
+            >>> t3 = Timestamp.from_iso_iana(
+            ...     '2024-01-05T12:00+03:00',
+            ...     'Europe/Moscow'
+            ... )
+            >>> t4 = Timestamp.from_iso_iana(
+            ...     '2024-01-06T12:00+03:00',
+            ...     'Europe/Moscow'
+            ... )
+            >>> interval_2 = TimeInterval.closedopen(t3, t4)
+            >>> timeset = TimeSet(interval_1, interval_2)
+            >>> timeset.days()
+            {datetime.date(2024, 1, 1), datetime.date(2024, 1, 2),
+            datetime.date(2024, 1, 5), datetime.date(2024, 1, 6)}
+        '''
+
+        if self.is_unbounded:
+            raise ValueError('\'days()\' is only supported for bounded time sets.')
+        if self.is_empty:
+            return set()
+        
+        timeset = self.normalize_time_zones()
+        result = set()
+        for i in timeset.components:
+            result.update(i.days)
+
+        return result
     
 
     @property

@@ -4,6 +4,7 @@ from pathlib import Path
 import yaml
 import warnings
 import re
+import datetime
 
 from diane.temporal import Timestamp, TimeInterval, TimeSet
 from diane.activities import Activity, Activities
@@ -18,8 +19,14 @@ class RepositoryManager(AssistedRepository):
     _datadir: Path
     _tracking_state: dict[Activity, Timestamp]
 
+    _dirty_days: set[datetime.date]  # Days to update.
+    _loading: bool
+
 
     def __init__(self, datadir: str) -> None:
+
+        # Set loading state to `True`.
+        self._loading = True
 
         # Set repository directory.
         self._datadir = Path(datadir)
@@ -27,10 +34,13 @@ class RepositoryManager(AssistedRepository):
         # Load and set activities registry.
         activities_path = self._datadir / '.diane/data/activities.yaml'
         activities = Activities.from_yaml(activities_path)
-        super().__init__(activities)
+        super().__init__(_activities=activities)
 
         # Update tracking activities.
         self._load_state()
+
+        # No days to update.
+        self._dirty_days = set()
 
         # Load sessions.
         sessions_path = self._datadir / 'daily_notes'
@@ -75,12 +85,16 @@ class RepositoryManager(AssistedRepository):
                     if not isinstance(session_dict, dict):
                         continue
                     try:
-                        self.add_from_dict(session_dict, date_iso=date_str)
+                        session = self.session_from_dict(session_dict, date_str)
+                        super().add(session)
                     except Exception as e:
                         print(f'Error adding session from \'{file_path.name}\'. {e}')
                         continue
 
         self._merge_touching()
+
+        # Set loading state to `False`.
+        self._loading = False
 
 
     def _load_state(self) -> None:
@@ -150,6 +164,105 @@ class RepositoryManager(AssistedRepository):
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open('w', encoding='utf-8') as f:
             yaml.safe_dump({'tracking': data}, f, allow_unicode=True, sort_keys=False)
+
+
+    def add(self, value: Session) -> None:
+        '''Add the given session to the repository and mark its days
+        as dirty.
+        
+        The session is added only if it is not already present and all
+        its activities are in the registry.
+
+        Args:
+            `value` (`Session`): The session to add.
+        '''
+
+        if value not in self._sessions:
+            super().add(value)
+            if not self._loading:
+                self._dirty_days.update(value.timeset.days)
+    
+
+    def discard(self, value: Session) -> None:
+        '''Discard the given session from the repository and mark
+        its days as dirty.
+        
+        Args:
+            `value` (`Session`): The session to discard.
+        '''
+
+        if value in self._sessions:
+            super().discard(value)
+            if not self._loading:
+                self._dirty_days.update(value.timeset.days)
+
+
+    def remove(self, value: Session) -> None:
+        '''Remove the given session from the repository and mark
+        its days as dirty.
+
+        Args:
+            `value` (`Session`): The session to remove.
+        '''
+
+        super().remove(value)
+        if not self._loading:
+                self._dirty_days.update(value.timeset.days)
+
+    
+    def merge(self, *sessions: Session) -> Session:
+        '''Merge the given sessions (which must already be
+        in the repository) and return the merged session. Mark changed
+        days as dirty.
+
+        The sessions are merged only if they have identical activity
+        sets. A new session is created that unites the time sets
+        and comments of the original ones. The original sessions
+        are removed from the repository and the merged session is added.
+
+        Args:
+            `*sessions` (`Session`): The sessions for merging.
+        '''
+
+        result = super().merge(*sessions)
+        if not self._loading:
+            self._dirty_days.update(result.timeset.days)
+        return result
+    
+
+    def merge_if_good(self, *sessions: Session) -> Session:
+        '''Merge the given sessions (which must already be
+        in the repository) and return the merged session if it's 'good'.
+        Mark changed days as dirty.
+
+        The sessions are merged only if they have identical activity
+        sets and the result is 'good'. A new session unites the time
+        sets and comments of the original ones. The original sessions
+        are removed from the repository and the merged session is added.
+        '''
+
+        result = super().merge_if_good(*sessions)
+        if not self._loading:
+            self._dirty_days.update(result.timeset.days)
+        return result
+    
+
+    def add_and_merge(self, session: Session) -> Session:
+        '''Add the given session to the repository and repeatedly
+        merge it with the closest session in time until no further merge
+        is possible. Mark changed days as dirty.
+
+        Args:
+            `session` (`Session`): The session to add.
+
+        Return:
+            `Session`: The final merged session.
+        '''
+
+        result = super().add_and_merge(session)
+        if not self._loading:
+            self._dirty_days.update(result.timeset.days)
+        return result
 
     
     def start(self, *activities: str) -> None:

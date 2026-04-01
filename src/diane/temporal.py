@@ -2261,25 +2261,23 @@ class TimeInterval:
 
         Example:
             >>> TimeInterval.from_dict({
-            ...     'start_time': '08:00:00-04:00',
-            ...     'end_time': '09:00:00-04:00'
+            ...     'start': '08:00:00-04:00',
+            ...     'end': '09:00:00-04:00'
             ... }, 'America/New_York', '2026-03-30')
             [2026.03.30 08:00:00 UTC-4; 2026.03.30 09:00:00 UTC-4)
 
             Using '24:00' to denote the end of the day:
             >>> TimeInterval.from_dict({
-            ...     'start_time': '09:00:00Z',
-            ...     'end_time': '24:00:00Z'
+            ...     'start': '09:00:00Z',
+            ...     'end': '24:00:00Z'
             ... }, 'Etc/UTC', 2026-03-09')
             [2026.03.09 09:00:00 UTC; 2026.03.10 00:00:00 UTC)
 
             Without a common date (full ISO strings expected):
             >>> TimeInterval.from_dict({
-            ...     'start_time': '2026-03-09T09:00+03:00',
-            ...     'start_timezone': 'Europe/Moscow',
-            ...     'end_time': '2026-03-10T18:00+03:00',
-            ...     'end_timezone': 'Europe/Moscow'
-            ... })
+            ...     'start': '2026-03-09T09:00+03:00',
+            ...     'end': '2026-03-10T18:00+03:00'
+            ... }, 'Europe/Moscow')
             [2026-03-09T09:00:00+03:00; 2026-03-10T18:00:00+03:00)
         '''
 
@@ -2287,7 +2285,7 @@ class TimeInterval:
             raise TypeError('\'time_data\' must be a dictionaty.')
         
         # Check for extra keys in the dictionary.
-        allowed_keys = {'start_time', 'end_time'}
+        allowed_keys = {'start', 'end'}
         extra_keys = set(time_data) - allowed_keys
         if extra_keys:
             extra_keys_str = ', '.join(f'\'{k}\'' for k in sorted(extra_keys))
@@ -2306,8 +2304,8 @@ class TimeInterval:
                 raise TypeError(f'Value \'{key}\' must be a string, got \'{type(value).__name__}\'.')
             return value
 
-        start_time_iso = get_str('start_time')
-        end_time_iso = get_str('end_time')
+        start_time_iso = get_str('start')
+        end_time_iso = get_str('end')
 
         if date_iso:
             # Parse the base date.

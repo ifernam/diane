@@ -77,7 +77,7 @@ class RepositoryManager(AssistedRepository):
                 if not isinstance(data, dict):
                     continue
 
-                sessions_data = data.get('diane')
+                sessions_data = data.get('diane_sessions')
                 if not isinstance(sessions_data, list):
                     continue
                 

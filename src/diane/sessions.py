@@ -138,6 +138,33 @@ class Session:
         '''
 
         return self._activities
+    
+
+    def to_dict(self) -> dict:
+        '''Convert this session to the dictionary.
+        
+        Raises:
+            `ValueError`: If the session is unbounded by time.
+        '''
+
+        if self.timeset.is_unbounded:
+            raise ValueError('A dictionary can only be created for a time-bounded session.')
+
+        timeset = self.timeset.normalize_time_zones()
+        time_zone_iana = timeset.start.timestamp.timezone_iana
+        intervals_data = []
+        for i in timeset.components:
+            start_iso = i.start.timestamp.datetime_iso
+            end_iso = i.end.timestamp.datetime_iso
+            intervals_data.append({'start': start_iso, 'end': end_iso})
+        session_data = {
+            'time_zone': time_zone_iana,
+            'intervals': intervals_data,
+            'activities': [a.slug for a in self.activities],
+        }
+        if self.comment:
+            session_data['comment'] = self.comment
+        return session_data
 
 
     @classmethod

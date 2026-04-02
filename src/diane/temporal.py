@@ -1359,9 +1359,11 @@ class TimeInterval:
     }
 
 
-    _kind: Kind = Kind.EMPTY
-    _start: Endpoint | None = None
-    _end: Endpoint | None = None
+    _start: Endpoint | None
+    _end: Endpoint | None
+
+    _kind: Kind        # Cached interval kind.
+    _normalized: bool  # Cached normalized flag.
 
 
     def __init__(self, start: Endpoint | None = None, end: Endpoint | None = None) -> None:
@@ -1476,6 +1478,7 @@ class TimeInterval:
 
         object.__setattr__(self, '_start', start)
         object.__setattr__(self, '_end', end)
+        self._set_normalized()
         
 
     def __str__(self) -> str:
@@ -1731,6 +1734,54 @@ class TimeInterval:
             return Duration()
         
         return self.end - self.start
+    
+
+    def _set_normalized(self) -> None:
+        '''Set normalized flag.'''
+
+        if self.is_empty:
+            object.__setattr__(self, '_normalized', True)
+            return
+
+        time_zones = set()
+        if self.start.is_finite:
+            time_zones.add(self.start.timestamp.timezone_iana)
+        if self.end.is_finite:
+            time_zones.add(self.end.timestamp.timezone_iana)
+        object.__setattr__(self, '_normalized', len(time_zones) <= 1)
+    
+
+    @property
+    def is_normalized(self) -> bool:
+        '''Check whether the interval's endpoints are already
+        in a single time zone.
+
+        An interval is considered normalized if:
+            - it is empty, or
+            - at least one endpoint is infinite (unbounded), or
+            - both endpoints are finite and use the same IANA time zone.
+
+        Returns:
+            `bool`: `True` if the interval is normalized, `False` otherwise.
+
+        Examples:
+            >>> ts1 = Timestamp.from_iso_iana('2024-01-01T12:00+02:00', 'Europe/Vilnius')
+            >>> ts2 = Timestamp.from_iso_iana('2024-01-02T12:00+02:00', 'Europe/Vilnius')
+            >>> interval = TimeInterval.closedopen(ts1, ts2)
+            >>> interval.is_normalized
+            True
+
+            >>> ts3 = Timestamp.from_iso_iana('2024-01-01T12:00-05:00', 'America/New_York')
+            >>> interval_mixed = TimeInterval.closedopen(ts1, ts3)  # Moscow vs New York.
+            >>> interval_mixed.is_normalized
+            False
+
+            >>> interval_inf = TimeInterval.rightopen(ts1)  # Left finite, right infinite.
+            >>> interval_inf.is_normalized
+            True
+        '''
+
+        return self._normalized
     
 
     def to_timezone(self, timezone_iana: str) -> TimeInterval:
@@ -2526,8 +2577,10 @@ class TimeSet:
     '''
 
     _components: tuple[TimeInterval, ...]
+
     _starts: tuple[Endpoint, ...]  # Cached starts of components.
     _ends: tuple[Endpoint, ...]    # Cached end of components.
+    _normalized: bool  # Cached normalized flag.
 
 
     @staticmethod
@@ -2583,6 +2636,7 @@ class TimeSet:
         object.__setattr__(self, '_components', tuple(intervals))
         object.__setattr__(self, '_starts', tuple(i.start for i in intervals))
         object.__setattr__(self, '_ends', tuple(i.end for i in intervals))
+        self._set_normalized()
 
         self._validate()
     
@@ -2860,6 +2914,67 @@ class TimeSet:
         '''
 
         return sum((c.duration for c in self._components), start=Duration())
+    
+
+    def _set_normalized(self) -> None:
+        '''Set normalized flag.'''
+
+        if self.is_empty:
+            object.__setattr__(self, '_normalized', True)
+            return
+
+        time_zones = set()
+        for c in self.components:
+            if c.start.is_finite:
+                time_zones.add(c.start.timestamp.timezone_iana)
+            if c.end.is_finite:
+                time_zones.add(c.end.timestamp.timezone_iana)
+        object.__setattr__(self, '_normalized', len(time_zones) <= 1)
+    
+
+    @property
+    def is_normalized(self) -> bool:
+        '''Check whether the time set's endpoints are already
+        in a single time zone.
+
+        A time set is considered normalized if:
+            - it is empty, or
+            - all finite endpoints (left and right boundaries
+            of all components) share the same IANA time zone, or
+            - there are no finite endpoints at all (e.g., the whole
+            timeline).
+
+        Returns:
+            `bool`: `True` if the time set is normalized, `False`
+            otherwise.
+
+        Examples:
+            >>> ts1 = Timestamp.from_iso_iana('2024-01-01T12:00+02:00', 'Europe/Vilnius')
+            >>> ts2 = Timestamp.from_iso_iana('2024-01-02T12:00+02:00', 'Europe/Vilnius')
+            >>> interval_1 = TimeInterval.closedopen(ts1, ts2)
+            >>> ts3 = Timestamp.from_iso_iana('2024-01-05T12:00+02:00', 'Europe/Vilnius')
+            >>> ts4 = Timestamp.from_iso_iana('2024-01-06T12:00+02:00', 'Europe/Vilnius')
+            >>> interval_2 = TimeInterval.closedopen(ts3, ts4)
+            >>> timeset = TimeSet(interval_1, interval_2)
+            >>> timeset.is_normalized
+            True
+
+            >>> ts_ny = Timestamp.from_iso_iana('2024-01-01T12:00-05:00', 'America/New_York')
+            >>> interval_mixed = TimeInterval.closedopen(ts1, ts_ny)
+            >>> timeset_mixed = TimeSet(interval_mixed)
+            >>> timeset_mixed.is_normalized
+            False
+
+            >>> timeset_empty = TimeSet.empty()
+            >>> timeset_empty.is_normalized
+            True
+
+            >>> timeset_timeline = TimeSet.timeline()
+            >>> timeset_timeline.is_normalized
+            True
+        '''
+
+        return self._normalized
     
 
     def span_duration(self) -> Duration:

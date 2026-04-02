@@ -1,11 +1,8 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from collections.abc import Iterable
-import itertools
-import warnings
-from xml.etree.ElementTree import indent
 
-from diane.temporal import TimeInterval, TimeSet
+from diane.temporal import TimeSet
 from diane.activities import Activity
 
 
@@ -138,6 +135,41 @@ class Session:
         '''
 
         return self._activities
+    
+
+    def split_into_days(self) -> list[Session]:
+        '''Split this session into separate sessions per calendar day.
+
+        - The time set is divided into daily closed-open intervals.
+        - Each resulting session inherits the same activities
+        as the original session.
+        - The comment is **only attached to the first daily session**.
+        This design avoids duplication when the sessions are later read
+        and merged back (the merge operation concatenates comments).
+
+        Returns:
+            `list[Session]`: The list of sessions, each contained
+            in a single calendar day, ordered chronologically. The first
+            session retains the original comment; all others have
+            an empty comment.
+
+        Raises:
+            `ValueError`: If the session is time-unbounded because
+            splitting into days would produce an infinite list.
+        '''
+
+        if self.timeset.is_unbounded:
+            raise ValueError('\'split_into_days\' is only supported for time-bounded sessions.')
+
+        timesets_by_day = self.timeset.split_into_days()
+        if not timesets_by_day:
+            return []
+        
+        session_by_day = [Session(timesets_by_day[0], self.activities, self.comment)]
+        for ts in timesets_by_day[1:]:
+            session_by_day.append(Session(ts, self.activities))
+
+        return session_by_day
     
 
     def to_dict(self) -> dict:

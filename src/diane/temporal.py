@@ -78,6 +78,16 @@ class Timestamp:
             raise ValueError(f'The timestamp \'{self}\' has been set incorrectly. {e}') from e
         
         object.__setattr__(self, '_hash', hash(self._dt_utc))
+    
+
+    def __hash__(self) -> int:
+        '''Return the hash value based on the UTC moment
+        of the timestamp.
+        
+        Don't take time zones into account.
+        '''
+
+        return self._hash
         
     
     def __str__(self) -> str:
@@ -107,6 +117,94 @@ class Timestamp:
         return f'{date_part} {tz_str}'.strip()
     
 
+    @property
+    def datetime(self) -> datetime.datetime:
+        '''Return the `datetime` object of this timestamp.
+
+        Returns:
+            `datetime.datetime`: The `datetime` object.
+        '''
+
+        return self._dt
+    
+
+    @property
+    def datetime_iso(self) -> str:
+        '''Return the timestamp in ISO 8601 format in the time zone
+        in which it was recorded.
+        
+        Returns:
+            ISO 8601 formatted string
+            (e.g., '2026-03-13T15:30:00+02:00').
+        '''
+        
+        return self._dt.isoformat()
+    
+
+    @property
+    def utc_iso(self) -> str:
+        '''Return the ISO 8601 string representation of this timestamp
+        in UTC.
+
+        Returns:
+            A string like '2026-03-13T12:00:00Z'.
+        '''
+    
+        return self._dt_utc.replace(tzinfo=None).isoformat() + 'Z'
+    
+
+    @property
+    def timezone_iana(self) -> str:
+        '''Return the IANA time zone name of this timestamp.
+
+        Returns:
+            The IANA zone key (e.g., 'America/New_York').
+
+        Raises:
+            `ValueError`: If the stored time zone is not a `ZoneInfo`
+                instance (should never happen).
+        '''
+
+        if not isinstance(self._dt.tzinfo, zoneinfo.ZoneInfo):
+            raise ValueError('The time zone has been set incorrectly.')
+
+        return self._dt.tzinfo.key
+    
+
+    def to_timezone(self, timezone_iana: str) -> Timestamp:
+        '''Convert this timestamp to the specified IANA time zone.
+
+        Args:
+            `timezone_iana`: IANA time zone name
+            (e.g., 'America/New_York').
+
+        Returns:
+            A new `Timestamp` representing the same moment
+            in the specified zone.
+
+        Raises:
+            `ValueError`: If the IANA zone name is invalid.
+        '''
+
+        try:
+            tz = zoneinfo.ZoneInfo(timezone_iana)
+        except zoneinfo.ZoneInfoNotFoundError as e:
+            raise ValueError(f'Invalid IANA time zone: \'{timezone_iana}\'.') from e
+
+        dt = self._dt.astimezone(tz)
+        return Timestamp(dt)
+
+
+    def to_utc(self) -> Timestamp:
+        '''Convert this timestamp to UTC.
+
+        Returns:
+            A new `Timestamp` representing the same moment in UTC.
+        '''
+        
+        return Timestamp(self._dt_utc)
+    
+
     def __eq__(self, other: object) -> bool:
         '''Return `True` if this timestamp represents the same moment
         in time as another one (based on UTC).
@@ -118,16 +216,6 @@ class Timestamp:
             return NotImplemented
         
         return self._dt_utc == other._dt_utc
-    
-
-    def __hash__(self) -> int:
-        '''Return the hash value based on the UTC moment
-        of the timestamp.
-        
-        Don't take time zones into account.
-        '''
-
-        return self._hash
     
 
     def __lt__(self, other: object) -> bool:
@@ -307,6 +395,34 @@ class Timestamp:
     
 
     @classmethod
+    def midnight(cls, date: datetime.date, time_zone_iana: str) -> Timestamp:
+        '''Create a timestamp representing midnight (start of the day)
+        in the specified IANA time zone.
+
+        Args:
+            `date` (`datetime.date`): The calendar date.
+            `time_zone_iana` (`str`): IANA time zone name
+                (e.g., 'America/New_York').
+
+        Returns:
+            `Timestamp`: The timestamp set to '00:00:00' on the given
+            date in the target zone.
+
+        Raises:
+            `ValueError`: If the IANA time zone name is invalid.
+        '''
+        
+        try:
+            tz = zoneinfo.ZoneInfo(time_zone_iana)
+        except zoneinfo.ZoneInfoNotFoundError as e:
+            raise ValueError(f'Invalid IANA time zone: \'{time_zone_iana}\'.') from e
+        
+        dt = datetime.datetime.combine(date, datetime.time.min, tz)
+        ts = Timestamp(dt)
+        return ts
+    
+
+    @classmethod
     def now(cls) -> Timestamp:
         '''Create a new `Timestamp` representing the current local time.
 
@@ -343,94 +459,6 @@ class Timestamp:
             return cls(datetime.datetime.now(Timestamp._UTC))
         except Exception as e:
             raise RuntimeError('Failed to determine UTC time.') from e
-        
-
-    @property
-    def datetime(self) -> datetime.datetime:
-        '''Return the `datetime` object of this timestamp.
-
-        Returns:
-            `datetime.datetime`: The `datetime` object.
-        '''
-
-        return self._dt
-    
-
-    @property
-    def datetime_iso(self) -> str:
-        '''Return the timestamp in ISO 8601 format in the time zone
-        in which it was recorded.
-        
-        Returns:
-            ISO 8601 formatted string,
-            e.g., '2026-03-13T15:30:00+03:00'.
-        '''
-        
-        return self._dt.isoformat()
-    
-
-    @property
-    def timezone_iana(self) -> str:
-        '''Return the IANA time zone name of this timestamp.
-
-        Returns:
-            The IANA zone key (e.g., 'America/New_York').
-
-        Raises:
-            `ValueError`: If the stored time zone is not a `ZoneInfo`
-                instance (should never happen).
-        '''
-
-        if not isinstance(self._dt.tzinfo, zoneinfo.ZoneInfo):
-            raise ValueError('The time zone has been set incorrectly.')
-
-        return self._dt.tzinfo.key
-    
-
-    def to_timezone(self, timezone_iana: str) -> Timestamp:
-        '''Convert this timestamp to the specified IANA time zone.
-
-        Args:
-            `timezone_iana`: IANA time zone name
-            (e.g., 'America/New_York').
-
-        Returns:
-            A new `Timestamp` representing the same moment
-            in the specified zone.
-
-        Raises:
-            `ValueError`: If the IANA zone name is invalid.
-        '''
-
-        try:
-            tz = zoneinfo.ZoneInfo(timezone_iana)
-        except zoneinfo.ZoneInfoNotFoundError as e:
-            raise ValueError(f'Invalid IANA time zone: \'{timezone_iana}\'.') from e
-
-        dt = self._dt.astimezone(tz)
-        return Timestamp(dt)
-
-
-    def to_utc(self) -> Timestamp:
-        '''Convert this timestamp to UTC.
-
-        Returns:
-            A new `Timestamp` representing the same moment in UTC.
-        '''
-        
-        return Timestamp(self._dt_utc)
-    
-
-    @property
-    def utc_iso(self) -> str:
-        '''Return the ISO 8601 string representation of this timestamp
-        in UTC.
-
-        Returns:
-            A string like '2026-03-13T12:00:00Z'.
-        '''
-    
-        return self._dt_utc.replace(tzinfo=None).isoformat() + 'Z'
 
 
 
@@ -2954,6 +2982,36 @@ class TimeSet:
         '''
 
         return TimeInterval.minimal_cover(*self._components)
+    
+
+    def split_into_days(self) -> list[TimeSet]:
+        '''Split this time set into calendar days.
+
+        Returns:
+            `list[TimeSet]`: List of time sets, each contained
+            in a single day. Days are considered as closed-open
+            intervals.
+        '''
+
+        if self.is_unbounded:
+            raise ValueError('\'split_into_days\' is only supported for bounded time sets.')
+
+        timeset = self.normalize_time_zones()
+        days_set = timeset.days
+        if not days_set:
+            return []
+        
+        tz_iana = timeset.first_component.start.timestamp.timezone_iana
+        result = []
+        for day in sorted(days_set):
+            start_ts = Timestamp.midnight(day, tz_iana)
+            end_ts = start_ts + datetime.timedelta(days=1)
+            day_interval = TimeInterval.closedopen(start_ts, end_ts)
+            day_set = timeset & day_interval
+            if day_set.is_nonempty:
+                result.append(day_set)
+        
+        return result
     
 
     def complement(self) -> TimeSet:

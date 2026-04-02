@@ -1634,7 +1634,7 @@ class TimeInterval:
     
 
     @property
-    def days(self) -> set[datetime.date]:
+    def days(self) -> tuple[datetime.date, ...]:
         '''Return the set of calendar days that intersect this time
         interval.
 
@@ -1692,7 +1692,7 @@ class TimeInterval:
         if self.is_unbounded:
             raise ValueError('\'days()\' is only supported for bounded intervals.')
         if self.is_empty:
-            return set()
+            return ()
         
         interval = self.normalize_time_zones()
         start = interval.start
@@ -1712,15 +1712,15 @@ class TimeInterval:
                 last_day = end_dt.date() - datetime.timedelta(days=1)
         
         if first_day > last_day:
-            return set()
+            return ()
         
-        result = set()
+        result = []
         current = first_day
         while current <= last_day:
-            result.add(current)
+            result.append(current)
             current += datetime.timedelta(days=1)
 
-        return result
+        return tuple(result)
     
 
     @property
@@ -2744,7 +2744,7 @@ class TimeSet:
     
 
     @property
-    def days(self) -> set[datetime.date]:
+    def days(self) -> tuple[datetime.date, ...]:
         '''Return the set of calendar days that intersect this time set.
 
         The time set is first normalized to a single time zone using
@@ -2799,14 +2799,14 @@ class TimeSet:
         if self.is_unbounded:
             raise ValueError('\'days()\' is only supported for bounded time sets.')
         if self.is_empty:
-            return set()
+            return ()
         
         timeset = self.normalize_time_zones()
         result = set()
         for i in timeset.components:
             result.update(i.days)
 
-        return result
+        return tuple(sorted(result))
     
 
     @property

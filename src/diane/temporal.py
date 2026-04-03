@@ -1276,6 +1276,16 @@ class TimeInterval:
         Kind.OPEN_CLOSED,
     }
 
+    _RIGHT_RAY_KINDS = {
+        Kind.RIGHT_OPEN,
+        Kind.RIGHT_CLOSED
+    }
+
+    _LEFT_RAY_KINDS = {
+        Kind.LEFT_OPEN,
+        Kind.LEFT_CLOSED
+    }
+
     _UNBOUNDED_KINDS = {
         Kind.RIGHT_OPEN,
         Kind.RIGHT_CLOSED,
@@ -1568,6 +1578,20 @@ class TimeInterval:
     
 
     @property
+    def is_right_ray(self) -> bool:
+        '''Return `True` if this interval is a right ray.'''
+
+        return self._kind in TimeInterval._RIGHT_RAY_KINDS
+    
+
+    @property
+    def is_left_ray(self) -> bool:
+        '''Return `True` if this interval is a left ray.'''
+
+        return self._kind in TimeInterval._LEFT_RAY_KINDS
+    
+
+    @property
     def is_timeline(self) -> bool:
         '''Return `True` if this time interval is the entire
         timeline.'''
@@ -1637,15 +1661,67 @@ class TimeInterval:
     
 
     @property
+    def first_day(self) -> datetime.date:
+        '''Return the calendar date of the left boundary of this time
+        interval.
+
+        Returns:
+            `datetime.date`: The date (year-month-day) of the left
+            boundary.
+
+        Raises:
+            `ValueError`: If the interval is not normalized, empty,
+                or not left-bounded (i.e., left endpoint is -∞).
+        '''
+                
+        if not self.is_normalized:
+            raise ValueError('\'first_day\' is only supported for normalized intervals.')
+        if self.is_empty or not self.is_left_bounded:
+            raise ValueError(
+                '\'first_day\' is only supported for non-empty left-bounded intervals.'
+            )
+        
+        return self.start.timestamp.datetime.date()
+    
+
+    @property
+    def last_day(self) -> datetime.date:
+        '''Return the calendar date of the right boundary of this time
+        interval.
+
+        If the right endpoint is excluded and its time is exactly
+        midnight, the previous day is returned. Otherwise, returns
+        the date of the right endpoint.
+
+        Returns:
+            `datetime.date`: The date (year-month-day) of the right
+            boundary (or the previous day for excluded midnight
+            boundaries).
+
+        Raises:
+            `ValueError`: If the interval is not normalized, empty,
+                or not right-bounded (i.e., right endpoint is +∞).
+        '''
+            
+        if not self.is_normalized:
+            raise ValueError('\'last_day\' is only supported for normalized intervals.')
+        if self.is_empty or not self.is_right_bounded:
+            raise ValueError(
+                '\'last_day\' is only supported for non-empty right-bounded intervals.'
+            )
+        
+        end_dt = self.end.timestamp.datetime
+        last_day = end_dt.date()
+        if end_dt.time() == datetime.time.min and not self.end.is_included:
+            last_day -= datetime.timedelta(days=1)
+
+        return last_day
+    
+
+    @property
     def days(self) -> tuple[datetime.date, ...]:
         '''Return the set of calendar days that intersect this time
         interval.
-
-        The interval is first normalized to a single time zone using
-        `normalize_time_zones()`, which converts both endpoints
-        to the time zone of the left endpoint. The result is a set
-        of dates (in that zone) that have at least one point in common
-        with the interval.
 
         For a bounded interval:
             - The day containing the left endpoint is always included,
@@ -1664,7 +1740,7 @@ class TimeInterval:
             intersect the interval.
 
         Raises:
-            `ValueError`: If the interval is unbounded.
+            `ValueError`: If the interval is unnormalized or unbounded.
 
         Examples:
             >>> t1 = Timestamp.from_iso_iana(
@@ -1676,7 +1752,7 @@ class TimeInterval:
             ...     'Europe/Moscow'
             ... )
             >>> interval_1 = TimeInterval.closedopen(t1, t2)
-            >>> interval_1.days()
+            >>> interval_1.days
             {datetime.date(2024, 1, 1), datetime.date(2024, 1, 2)}
 
             >>> t3 = Timestamp.from_iso_iana(
@@ -1688,38 +1764,21 @@ class TimeInterval:
             ...     'Europe/Moscow'
             ... )
             >>> interval_2 = TimeInterval.closedopen(t3, t4)
-            >>> interval_2.days()
+            >>> interval_2.days
             {datetime.date(2024, 1, 1)}
         '''
 
+        if not self.is_normalized:
+            raise ValueError('\'days\' is only supported for normalized intervals.')
         if self.is_unbounded:
-            raise ValueError('\'days()\' is only supported for bounded intervals.')
+            raise ValueError('\'days\' is only supported for bounded intervals.')
+        
         if self.is_empty:
             return ()
         
-        interval = self.normalize_time_zones()
-        start = interval.start
-        end = interval.end
-        start_dt = start.timestamp.datetime
-        end_dt = end.timestamp.datetime
-        
-        first_day = start_dt.date()
-        
-        if end.is_included:
-            last_day = end_dt.date()
-        else:
-            # Endpoint excluded: day is included only if end is not exactly at midnight.
-            if end_dt.time() > datetime.time.min:
-                last_day = end_dt.date()
-            else:
-                last_day = end_dt.date() - datetime.timedelta(days=1)
-        
-        if first_day > last_day:
-            return ()
-        
         result = []
-        current = first_day
-        while current <= last_day:
+        current = self.first_day
+        while current <= self.last_day:
             result.append(current)
             current += datetime.timedelta(days=1)
 
@@ -2112,6 +2171,42 @@ class TimeInterval:
         if self.is_right_of(other):
             return False
 
+        return True
+    
+
+    def overlaps_with_days(self, days: set[datetime.date]) -> bool:
+        '''Return `True` if this time interval overlaps with the given
+        set of calendar days.
+        
+        Args:
+            `days` (`set[datetime.date]`). The set of calendar days
+                to test for overlap.
+        
+        Returns:
+            `True` if overlaps, otherwise `False`.
+        
+        Raises:
+            `ValueError`: If the time interval is unnormalized.
+        '''
+
+        if not self.is_normalized:
+            raise ValueError(
+                '\'overlaps_with_days\' is only supported for normalized time interval.'
+            )
+
+        if self.is_empty or not days:
+            return False
+        # Sets of days are non-empty.
+        
+        min_day = min(days)
+        max_day = max(days)
+
+        if self.is_left_bounded and max_day < self.first_day:
+            return False
+        
+        if self.is_right_bounded and min_day > self.last_day:
+            return False
+        
         return True
     
 
@@ -2689,7 +2784,7 @@ class TimeSet:
         '''Return `True` if the time set consists of a single point.'''
 
         return len(self._components) == 1 and self._components[0].is_point
-    
+        
 
     @property
     def is_timeline(self) -> bool:
@@ -2712,6 +2807,30 @@ class TimeSet:
 
         # Check the first and last components for boundedness.
         return self._components[0].is_bounded and self._components[-1].is_bounded
+    
+
+    @property
+    def is_left_bounded(self) -> bool:
+        '''Return `True` if this time set is left-bounded.'''
+
+        if self.is_empty:
+            return True
+        # Time set is non-empty.
+
+        # Check the first component for left-boundedness.
+        return self._components[0].is_left_bounded
+    
+
+    @property
+    def is_right_bounded(self) -> bool:
+        '''Return `True` if this time set is right-bounded.'''
+
+        if self.is_empty:
+            return True
+        # Time set is non-empty.
+
+        # Check the last component for right-boundedness.
+        return self._components[-1].is_right_bounded
     
 
     @property
@@ -2798,14 +2917,61 @@ class TimeSet:
     
 
     @property
+    def first_day(self) -> datetime.date:
+        '''Return the calendar date of the left boundary of this time
+        set.
+
+        Returns:
+            `datetime.date`: The date (year-month-day) of the left
+            boundary.
+
+        Raises:
+            `ValueError`: If the time set is not normalized, empty,
+                or not left-bounded (i.e., left endpoint is -∞).
+        '''
+                
+        if not self.is_normalized:
+            raise ValueError('\'first_day\' is only supported for normalized time sets.')
+        if self.is_empty or not self.is_left_bounded:
+            raise ValueError(
+                '\'first_day\' is only supported for non-empty left-bounded time sets.'
+            )
+        
+        return self.first_component.first_day
+    
+
+    @property
+    def last_day(self) -> datetime.date:
+        '''Return the calendar date of the right boundary of this time
+        set.
+
+        If the right endpoint is excluded and its time is exactly
+        midnight, the previous day is returned. Otherwise, returns
+        the date of the right endpoint.
+
+        Returns:
+            `datetime.date`: The date (year-month-day) of the right
+            boundary (or the previous day for excluded midnight
+            boundaries).
+
+        Raises:
+            `ValueError`: If the time set is not normalized, empty,
+                or not right-bounded (i.e., right endpoint is +∞).
+        '''
+
+        if not self.is_normalized:
+            raise ValueError('\'last_day\' is only supported for normalized time sets.')
+        if self.is_empty or not self.is_right_bounded:
+            raise ValueError(
+                '\'last_day\' is only supported for non-empty right-bounded time sets.'
+            )
+        
+        return self.last_component.last_day
+
+
+    @property
     def days(self) -> tuple[datetime.date, ...]:
         '''Return the set of calendar days that intersect this time set.
-
-        The time set is first normalized to a single time zone using
-        `normalize_time_zones()`, which converts all components
-        to the time zone of the leftmost finite endpoint. The result
-        is a set of dates (in that zone) that have at least one point
-        in common with any component of the time set.
 
         For a bounded time set:
             - The days are collected from each connected component.
@@ -2819,11 +2985,11 @@ class TimeSet:
         the set of days would be infinite.
 
         Returns:
-            The set of `datetime.date` objects representing all days that
-            intersect the time set.
+            The set of `datetime.date` objects representing all days
+            that intersect the time set.
 
         Raises:
-            `ValueError`: If the time set is unbounded.
+            `ValueError`: If the time set is unnormalized or unbounded.
 
         Examples:
             >>> t1 = Timestamp.from_iso_iana(
@@ -2845,19 +3011,21 @@ class TimeSet:
             ... )
             >>> interval_2 = TimeInterval.closedopen(t3, t4)
             >>> timeset = TimeSet(interval_1, interval_2)
-            >>> timeset.days()
+            >>> timeset.days
             {datetime.date(2024, 1, 1), datetime.date(2024, 1, 2),
             datetime.date(2024, 1, 5), datetime.date(2024, 1, 6)}
         '''
 
+        if not self.is_normalized:
+            raise ValueError('\'days\' is only supported for normalized time sets.')
         if self.is_unbounded:
-            raise ValueError('\'days()\' is only supported for bounded time sets.')
+            raise ValueError('\'days\' is only supported for bounded time sets.')
+        
         if self.is_empty:
             return ()
         
-        timeset = self.normalize_time_zones()
         result = set()
-        for i in timeset.components:
+        for i in self.components:
             result.update(i.days)
 
         return tuple(sorted(result))
@@ -3336,6 +3504,49 @@ class TimeSet:
         set.'''
 
         return next(self._scan(other), None) is not None
+    
+
+    def overlaps_with_days(self, days: set[datetime.date]) -> bool:
+        '''Return `True` if this time set overlaps with the given set
+        of calendar days.
+
+        The method checks whether at least one of the connected
+        components of the time set has any intersection with
+        the specified days.
+
+        Args:
+            `days` (`set[datetime.date]`): The set of calendar dates
+                to test for overlap.
+
+        Returns:
+            `bool`: `True` if the time set and the set of days share
+            at least one common day, `False` otherwise.
+
+        Raises:
+            `ValueError`: If the time set is not normalized.
+        '''
+
+        if not self.is_normalized:
+            raise ValueError(
+                '\'overlaps_with_days\' is only supported for normalized time set.'
+            )
+
+        if self.is_empty or not days:
+            return False
+        # Sets of days are non-empty.
+
+        min_day = min(days)
+        max_day = max(days)
+
+        for c in self.components:
+            if c.is_right_bounded and c.last_day < min_day:
+                continue
+            if c.is_left_bounded and c.first_day > max_day:
+                break
+            if c.overlaps_with_days(days):
+                return True
+            
+        return False
     
 
     def overlaps(self, other: TimeInterval | TimeSet) -> bool:

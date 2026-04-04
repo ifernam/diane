@@ -176,18 +176,26 @@ class Session:
         '''Convert this session to the dictionary.
         
         Raises:
-            `ValueError`: If the session is unbounded by time.
+            `ValueError`: If the session is unnormalised, unbounded
+            in time, or spans more than one day.
         '''
 
+        if not self.timeset.is_normalized:
+            raise ValueError(
+                'A dictionary can only be created for a session with a normalized time set.'
+            )
         if self.timeset.is_unbounded:
             raise ValueError('A dictionary can only be created for a time-bounded session.')
+        if len(self.timeset.days) > 1:
+            raise ValueError(
+                'A dictionary can only be created for a session that spans no more than one day.'
+            )
 
-        timeset = self.timeset.normalize_time_zones()
-        time_zone_iana = timeset.start.timestamp.timezone_iana
+        time_zone_iana = self.timeset.start.timestamp.timezone_iana
         intervals_data = []
-        for i in timeset.components:
-            start_iso = i.start.timestamp.datetime_iso
-            end_iso = i.end.timestamp.datetime_iso
+        for i in self.timeset.components:
+            start_iso = i.start.timestamp.time_iso()
+            end_iso = i.end.timestamp.time_iso(not i.is_point)
             intervals_data.append({'start': start_iso, 'end': end_iso})
         session_data = {
             'time_zone': time_zone_iana,

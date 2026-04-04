@@ -141,6 +141,26 @@ class Timestamp:
         return self._dt.isoformat()
     
 
+    def time_iso(self, allow_24_midnight: bool = False) -> str:
+        '''Return the time in ISO 8601 format in the time zone
+        in which it was recorded.
+
+        Args:
+            `allow_24_midnight` (`bool`): If `True` and the time
+                is exactly  midnight ('00:00:00'), represent it
+                as '24:00:00'. Defaults to `True`.
+
+        Returns:
+            `str`: ISO 8601 formatted string (e.g., '15:30:00+02:00'
+            or '24:00:00+02:00').
+        '''
+
+        time_str = self._dt.isoformat().partition('T')[2]
+        if allow_24_midnight and self.is_midnight:
+                time_str = time_str.replace('00:00:00', '24:00:00', 1)
+        return time_str
+    
+
     @property
     def utc_iso(self) -> str:
         '''Return the ISO 8601 string representation of this timestamp
@@ -169,6 +189,12 @@ class Timestamp:
             raise ValueError('The time zone has been set incorrectly.')
 
         return self._dt.tzinfo.key
+    
+
+    def is_midnight(self) -> bool:
+        '''Return `True` if this timestamp represents midnight.'''
+
+        return self._dt.time() == datetime.time.min
     
 
     def to_timezone(self, timezone_iana: str) -> Timestamp:

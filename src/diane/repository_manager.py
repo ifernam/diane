@@ -95,9 +95,74 @@ class RepositoryManager(AssistedRepository):
 
         # Set loading state to `False`.
         self._loading = False
+
+
+    def _update_diane_block(self, block_content: str, new_block: str) -> str:
+        '''Update the 'diane_sessions' field inside a single YAML block.
+        
+        Args:
+            `block_content` (`str`): The YAML content (without 
+                the surrounding '---').
+            `new_block`: New YAML content for 'diane_sessions' (can
+                be empty). If empty, the field is removed.
+        
+        Returns:
+            Updated YAML content (without '---'), or empty string
+            if the block becomes empty after removal.
+        '''
+
+        # Parse the existing block.
+        try:
+            data = yaml.safe_load(block_content) or {}
+        except yaml.YAMLError:
+            # If parsing fails, return the original content unchanged
+            return block_content
+        
+        if not isinstance(data, dict):
+            # Not a dictionary, we cannot safely update; return as is.
+            return block_content
+        
+        if not new_block:
+            # Remove diane_sessions if present
+            if 'diane_sessions' in data:
+                del data['diane_sessions']
+            # If the dict becomes empty, return empty string (block
+            # will be removed)
+            if not data:
+                return ''
+            # Serialize preserving key order.
+            return yaml.safe_dump(
+                data,
+                allow_unicode=True,
+                sort_keys=False,
+                default_flow_style=False
+            )
+        
+        # Parse the new block to extract the value for 'diane_sessions'.
+        try:
+            new_data = yaml.safe_load(new_block)
+        except yaml.YAMLError:
+            new_data = None
+        
+        if isinstance(new_data, dict) and 'diane_sessions' in new_data:
+            new_value = new_data['diane_sessions']
+        else:
+            # Fallback: treat new_block as the raw value (unlikely).
+            new_value = new_block
+        
+        # Update or add the field.
+        data['diane_sessions'] = new_value
+        
+        # Serialize preserving key order.
+        return yaml.safe_dump(
+            data,
+            allow_unicode=True,
+            sort_keys=False,
+            default_flow_style=False
+        )
     
 
-    def _replace_diane_blocks(self, content: str, new_block: str) -> str:
+    def _update_diane_blocks(self, content: str, new_block: str) -> str:
         '''Replace all YAML blocks that contain a 'diane_sessions' key
         with the new block.
         
@@ -134,11 +199,13 @@ class RepositoryManager(AssistedRepository):
                 has_diane = False
             
             if has_diane:
-                # If this is the Diane block, replace it
+                # If this is the Diane block, update it
                 if not diane_block_handled:
                     # if you haven't already.
-                    if new_block:
-                        parts.append(f'---\n{new_block}---\n')
+                    updated = self._update_diane_block(yaml_block, new_block)
+                    if updated:
+                        parts.append(f'---\n{updated}---\n')
+                    # If updated is empty, the block is removed.
                     diane_block_handled = True
             else:
                 parts.append(match.group(0))
@@ -242,7 +309,7 @@ class RepositoryManager(AssistedRepository):
             if file_path.exists():
                 with file_path.open('r', encoding='utf-8') as f:
                     content = f.read()
-                new_content = self._replace_diane_blocks(content, yaml_str)
+                new_content = self._update_diane_blocks(content, yaml_str)
                 
                 with file_path.open('w', encoding='utf-8') as f:
                     f.write(new_content)
@@ -254,7 +321,6 @@ class RepositoryManager(AssistedRepository):
         
         # Clear dirty days.
         self._dirty_days.clear()
-        
 
 
     def _load_state(self) -> None:

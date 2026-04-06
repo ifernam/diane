@@ -694,7 +694,7 @@ class RepositoryManager(AssistedRepository):
         return result
 
     
-    def start(self, *activities: str) -> None:
+    def start(self, *activities: str) -> list[Activity]:
         '''Start tracking one or more activities.
 
         The activities are marked as being tracked from the current
@@ -735,7 +735,7 @@ class RepositoryManager(AssistedRepository):
                 raise ValueError(f'Unknown activities: {quoted}.')
         
         now = Timestamp.now()
-        changed = False
+        started_activities = []
 
         for a in activities_to_start:
             if a in self._tracking_state:
@@ -745,10 +745,12 @@ class RepositoryManager(AssistedRepository):
                 )
             else:
                 self._tracking_state[a] = now
-                changed = True
+                started_activities.append(a)
 
-        if changed:
+        if started_activities:
             self._save_state()
+
+        return sorted(started_activities, key=lambda a: a.slug)
 
 
     def stop(self, *activities: str, all: bool = False, comment: str = '') -> list[Session]:

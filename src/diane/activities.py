@@ -461,6 +461,36 @@ class Activities(MutableSet[Activity]):
             raise KeyError(f'Unknown activity: \'{slug}\'.') from e
         
 
+    def activity_to_dict(self, activity: Activity | str) -> dict:
+        '''Convert the given activity to the dictionary representation.
+        
+        The resulting dictionary always contains the following key:
+        - 'title' (`str`): the activity's title.
+        
+        The following keys are included only if non-empty:
+        - 'description' (`str`): the activity's description, included
+          only if it is not empty;
+        - 'parents' (`list` of `str`): the slugs of the activity's
+          parents, included only if there are any parents.
+
+        Args:
+            `activity` (`Activity | str`): The activity or its slug.
+
+        Returns:
+            `dict`: The dictionary representation of the activity.
+        '''
+
+        activity = self._resolve_activity(activity)
+        data = {}
+        data['title'] = activity.title
+        if activity.description:
+            data['description'] = activity.description
+        parents = sorted(self.parents(activity), key=lambda a: a.slug)
+        if parents:
+            data['parents'] = [p.slug for p in parents]
+        return data
+        
+
     def parents(self, *activities: Activity | str) -> set[Activity]:
         '''Return the parents of the specified activities.
 

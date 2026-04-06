@@ -1,11 +1,62 @@
 import typer
 from pathlib import Path
+import yaml
 
 from diane.repository_manager import RepositoryManager
 
 
 
 app = typer.Typer()
+
+
+def complete_activity_slugs(incomplete: str) -> list[str]:
+    '''Return a list of activity slugs for autocompletion in the CLI.
+    
+    Filters the slugs based on the current incomplete input.
+
+    Args:
+        `incomplete` (str): The current incomplete input from the user.
+    
+    Returns:
+        `list[str]`: The list of activity slugs defined
+        in the repository.
+    '''
+
+    # Search for the repository root by looking for the '.diane/'
+    # directory in the current directory and its parents.
+    current = Path.cwd()
+    repo_root = None
+    for parent in [current, *current.parents]:
+        if (parent / '.diane').exists():
+            repo_root = parent
+            break
+    if not repo_root:
+        return []  # Not in a repository, so no activities to complete.
+
+    activities_yaml = repo_root / '.diane' / 'data' / 'activities.yaml'
+    if not activities_yaml.exists():
+        return []
+
+    try:
+        with activities_yaml.open(encoding='utf-8') as f:
+            data = yaml.safe_load(f)
+    except (yaml.YAMLError, OSError):
+        return []
+
+    if not isinstance(data, dict):
+        return []
+    activities = data.get('activities', [])
+    if not isinstance(activities, dict):
+        return []
+
+    slugs = list(activities.keys())
+
+    # Filter slugs based on the incomplete input. If the input is empty,
+    # return all slugs.
+    if incomplete:
+        return [s for s in slugs if s.startswith(incomplete)]
+    
+    return slugs
 
 
 def get_repo() -> RepositoryManager:
@@ -87,7 +138,13 @@ def sessions():
 
 
 @app.command()
-def start(activities: list[str] = typer.Argument(..., help='Activities to start.')):
+def start(
+    activities: list[str] = typer.Argument(
+        ...,
+        help='Activities to start.',
+        autocompletion=complete_activity_slugs
+    )
+) -> None:
     '''Start tracking activities.
     
     Starts tracking the specified activities from the current time.
@@ -114,9 +171,12 @@ def start(activities: list[str] = typer.Argument(..., help='Activities to start.
 
 @app.command()
 def stop(
-    activities: list[str] | None = typer.Argument(None, help='Activities to stop.'),
+    activities: list[str] | None = typer.Argument(
+        None, help='Activities to stop.',
+        autocompletion=complete_activity_slugs
+    ),
     all: bool = typer.Option(False, '-a', '--all', help='Stop all tracked activities.')
-):
+) -> None:
     '''Stop tracking activities.
     
     Stops tracking the specified activities.

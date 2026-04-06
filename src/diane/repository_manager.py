@@ -734,7 +734,7 @@ class RepositoryManager(AssistedRepository):
                 quoted = ', '.join(f'\'{s}\'' for s in unknown_slugs)
                 raise ValueError(f'Unknown activities: {quoted}.')
         
-        now = Timestamp.now()
+        now = Timestamp.now().round_to_second()
         started_activities = []
 
         for a in activities_to_start:
@@ -830,7 +830,7 @@ class RepositoryManager(AssistedRepository):
         for a, start in tracked.items():
             groups.setdefault(start, []).append(a)
 
-        now = Timestamp.now()
+        now = Timestamp.now().round_to_second()
         created_sessions = []
 
         for start_time, acts in groups.items():

@@ -231,6 +231,22 @@ class Timestamp:
         return Timestamp(self._dt_utc)
     
 
+    def round_to_second(self) -> Timestamp:
+        '''Return a new `Timestamp` rounded to the nearest second.
+        
+        Returns:
+            `Timestamp`: A new `Timestamp` with the time rounded
+            to the nearest second.
+        '''
+
+        if self._dt.microsecond < 500_000:
+            return Timestamp(self._dt.replace(microsecond=0))
+        else:
+            dt_rounded = self._dt + datetime.timedelta(seconds=1)
+            return Timestamp(dt_rounded.replace(microsecond=0))
+            
+    
+
     def __eq__(self, other: object) -> bool:
         '''Return `True` if this timestamp represents the same moment
         in time as another one (based on UTC).

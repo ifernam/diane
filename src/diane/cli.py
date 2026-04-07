@@ -175,7 +175,10 @@ def stop(
         None, help='Activities to stop.',
         autocompletion=complete_activity_slugs
     ),
-    all: bool = typer.Option(False, '-a', '--all', help='Stop all tracked activities.')
+    all: bool = typer.Option(False, '-a', '--all', help='Stop all tracked activities.'),
+    message: str = typer.Option(
+        '', '-m', '--message', help='Optional message to attach to the session(s).'
+    )
 ) -> None:
     '''Stop tracking activities.
     
@@ -187,7 +190,7 @@ def stop(
 
     repo = get_repo()
     try:
-        sessions = repo.stop(*(activities or []), all=all)
+        sessions = repo.stop(*(activities or []), all=all, message=message)
         if sessions:
             typer.echo(f'Recorded {len(sessions)} sessions:')
             for s in sessions:
@@ -202,12 +205,16 @@ def do(activities: list[str] = typer.Argument(
         ...,
         help='Activities to start.',
         autocompletion=complete_activity_slugs
+    ),
+    message: str = typer.Option(
+        '', '-m', '--message', help='Optional message to attach to the session.'
     )
+
 ) -> None:
 
     repo = get_repo()
     try:
-        session = repo.do(*activities)
+        session = repo.do(*activities, message=message)
         indent = '    '
         bullet = '\u2022'  # Bullet '•'.
         typer.echo(f'Have done activities {len(session.activities)}:')

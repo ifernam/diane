@@ -1,6 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
+from turtle import position
 import yaml
 import warnings
 import re
@@ -245,13 +246,16 @@ class RepositoryManager(AssistedRepository):
         # is non-empty, a new block must be created.
         
         if not diane_block_handled and new_block:
-            last_block_match = None
+            last_match = None
+            last_span = None
             for match in block_pattern.finditer(content):
-                last_block_match = match
-            if last_block_match:
-                yaml_content = last_block_match.group(1)
+                last_match = match
+                last_span = match.span()  # Remember the last block's
+                                          # position to insert after it.
+            if last_match:
+                yaml_block = last_match.group(1).strip()
                 try:
-                    data = yaml.safe_load(yaml_content) or {}
+                    data = yaml.safe_load(yaml_block) or {}
                 except yaml.YAMLError:
                     data = {}
                 if not isinstance(data, dict):
@@ -261,7 +265,7 @@ class RepositoryManager(AssistedRepository):
                     if isinstance(new_data, dict):
                         data.update(new_data)
                     else:
-                        data['diane_sessions'] = new_block  # Fallback.
+                        data['diane_sessions'] = new_block
                 except yaml.YAMLError:
                     data['diane_sessions'] = new_block
                 
@@ -271,24 +275,18 @@ class RepositoryManager(AssistedRepository):
                     default_flow_style=False
                 )
 
-                # Replace last block.
+                # Replace the last block.
                 parts = []
                 last_end = 0
                 for match in block_pattern.finditer(content):
                     start, end = match.span()
                     parts.append(content[last_end:start])
-                    if match == last_block_match:
+                    if (start, end) == last_span:   # Compare position.
                         parts.append(f'---\n{new_yaml_str}---\n')
                     else:
                         parts.append(match.group(0))
                     last_end = end
                 parts.append(content[last_end:])
-                return ''.join(parts)
-            else:
-                # No YAML blocks.
-                if content:
-                    content = '\n' + content
-                return f'---\n{new_block}---\n' + content
         
         return ''.join(parts)
 

@@ -284,20 +284,23 @@ class Session:
         if not sessions:
             raise ValueError('At least one session required for merge.')
         
-        first_activities = sessions[0].activities
-        if any(s.activities != first_activities for s in sessions[1:]):
+        # Sort sessions by start time.
+        sorted_sessions = sorted(sessions, key=lambda s: s.timeset.start)
+        
+        first_activities = sorted_sessions[0].activities
+        if any(s.activities != first_activities for s in sorted_sessions[1:]):
                 raise ValueError(
                     'Sessions are not mergeable as they have different activities.'
                 )
 
         # Unite time sets.
-        timeset = TimeSet.union(*(s.timeset for s in sessions))
+        timeset = TimeSet.union(*(s.timeset for s in sorted_sessions))
 
         # As activities are same, take them from the first session.
-        activities = sessions[0].activities
+        activities = sorted_sessions[0].activities
 
-        # Concatenate the messages from the given sessions via line
-        # breaks.
-        message = '\n'.join(s.message for s in sessions if s.message)
+        # Concatenate the messages from the given sessions
+        # in chronological order via line breaks.
+        message = '\n'.join(s.message for s in sorted_sessions if s.message)
 
         return Session(timeset, activities, message)

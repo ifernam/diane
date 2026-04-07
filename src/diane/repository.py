@@ -312,8 +312,8 @@ class Repository(MutableSet[Session]):
 
         Returns:
             `set[Session]`: The set of sessions that overlap with
-                the given time set or interval. If the input is empty,
-                returns the empty set.
+            the given time set or interval. If the input is empty,
+            returns the empty set.
         '''
 
         if isinstance(timeset, TimeInterval):
@@ -360,8 +360,8 @@ class Repository(MutableSet[Session]):
 
         Returns:
             `set[Session]`: The set of sessions that are completely
-                inside the given time set or interval. If the input
-                is empty, returns the empty set.
+            inside the given time set or interval. If the input
+            is empty, returns the empty set.
         '''
 
         if isinstance(timeset, TimeInterval):
@@ -531,21 +531,26 @@ class Repository(MutableSet[Session]):
 
     def merge(self, *sessions: Session) -> Session:
         '''Merge the given sessions (which must already be
-        in the repository) and return the merged session.
+        in the repository) and add the merged session to the repository.
 
-        The sessions are merged only if they have identical activity
-        sets. A new session is created that unites the time sets
-        and comments of the original ones. The original sessions
-        are removed from the repository and the merged session is added.
+        The sessions are merged only if they have **identical activity
+        sets**. A new session is created with the same activities that
+        unites the time sets and messages of the original ones.
+        The original sessions are removed from the repository
+        and the merged session is added.
 
         Args:
             `*sessions` (`Session`): The sessions for merging.
 
+        Returns:
+            `Session`: The merged session.
+
         Raises:
-            `KeyError`: If at least one of the given sessions is not in
-                the repository.
-            `ValueError`: If the sessions cannot be merged
-                (e.g., different activity sets).
+            `KeyError`: If at least one of the given sessions
+                is not in the repository.
+            `ValueError`: If no sessions are provided,
+                or if the sessions cannot be merged (e.g., different
+                activity sets).
         '''
         
         if not sessions:
@@ -553,15 +558,14 @@ class Repository(MutableSet[Session]):
         
         missing = {s for s in sessions if s not in self}
         if len(missing) == 1:
-            raise KeyError(f'The session {missing.pop()} is not in the repository.')
+            raise KeyError('One session is missing from the repository.')
         elif len(missing) > 1:
-            sessions_string = '; '.join(map(str, missing))
-            raise KeyError(f'The sessions {sessions_string} are not in the repository.')
+            raise KeyError(f'There are {len(missing)} sessions missing from the repository')
 
         try:
             merged = Session.merge(*sessions)
         except ValueError as e:
-            raise ValueError(f'Sessions cannot be merged. {e}.') from e
+            raise ValueError(f'Unable to merge the sessions. {e}.') from e
         
         for s in sessions:
             self.discard(s)
@@ -571,10 +575,11 @@ class Repository(MutableSet[Session]):
     
 
     def _merge_touching(self) -> None:
-        '''Merge touching sessions with the same activities.
+        '''Merge all touching sessions with the same activities
+        in the repository.
 
-        Sessions that touch (overlap or meet at a boundary) and have
-        identical activity sets are merged into a single session.
+        Sessions that touch (overlap by time or meet at a boundary)
+        and have identical activity sets are merged.
         '''
 
         for sessions in tuple(self._activities_index.values()):
@@ -592,7 +597,7 @@ class Repository(MutableSet[Session]):
             for s in sorted_sessions[1:]:
                 if current_union.touches(s.timeset):
                     current.append(s)
-                    current_union = TimeSet.union(current_union, s.timeset)
+                    current_union = current_union | s.timeset
                 else:
                     components.append(current)
                     current = [s]
@@ -601,26 +606,51 @@ class Repository(MutableSet[Session]):
 
             # Merge each component that contains more than one session.
             for comp in components:
-                if len(comp) > 1:
-                    merged = Session.merge(*comp)
-                    for s in comp:
-                        self.discard(s)
-                    self.add(merged)
+                self.merge(*comp)
 
 
     def session_from_dict(self, session_data: dict, date_iso: str = '') -> Session:
-        '''Construct a session from the dictionary.'''
+        '''Construct a session from the dictionary.
+        
+        The dictionary must contain the following keys:
+        - `time_zone` (`str`): The IANA time zone name for the session.
+        - `intervals` (`list`): The list of time intervals, where each
+          interval is represented as a dictionary with keys `start`
+          and `end` (both ISO 8601 strings).
+        - `activities` (`list`): The list of activity slugs (strings)
+          corresponding to activities in the repository's registry.
+        - `message` (`str`): The optional message for the session.
+          If not provided, defaults to the empty string.
+
+        Args:
+            `session_data` (`dict`): The dictionary containing session
+                data.
+            `date_iso` (`str`): The ISO 8601 date string.
+
+        Returns:
+            `Session`: The constructed session.
+
+        Raises:
+            `TypeError`: If the input data is of incorrect type.
+            `ValueError`: If the input data is missing required keys
+                or contains invalid values.
+
+        Warns:
+            `UserWarning`: If the input dictionary contains extra keys
+                not used for session construction. The warning message
+                lists the extra keys.
+        '''
 
         if not isinstance(session_data, dict):
             raise TypeError('\'session_data\' must be a dictionary.')
         
         # Check for extra keys in the dictionary.
-        allowed_keys = {'time_zone', 'intervals', 'activities', 'comment'}
+        allowed_keys = {'time_zone', 'intervals', 'activities', 'message'}
         extra_keys = set(session_data) - allowed_keys
         if extra_keys:
             extra_keys_str = ', '.join(f'\'{k}\'' for k in sorted(extra_keys))
             warnings.warn(
-                f'The session dictionary contains unknown fields: {extra_keys_str}.',
+                f'The session dictionary contains unknown keys: {extra_keys_str}.',
                 stacklevel=2
             )
 
@@ -668,12 +698,13 @@ class Repository(MutableSet[Session]):
             Activity._validate_slug(a)
             activities.add(self._activities.activity_by_slug(a))
         
-        # Get comment.
-        comment = session_data.get('comment', '')
-        if not isinstance(comment, str):
+        # Get message.
+        message = session_data.get('message', '')
+        if not isinstance(message, str):
             raise TypeError(
-                f'The value of the \'comment\' key must be a string, got '
-                f'\'{type(comment).__name__}\'.')
+                f'The value of the \'message\' key must be a string, got '
+                f'\'{type(message).__name__}\'.')
 
-        session = Session(timeset, activities, comment)
+        session = Session(timeset, activities, message)
+
         return session

@@ -1,7 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
-from turtle import position
 import yaml
 import warnings
 import re
@@ -15,7 +14,13 @@ from diane.assisted_repository import AssistedRepository
 
 
 class RepositoryManager(AssistedRepository):
-    '''Represents the repository manager.'''
+    '''Represents the repository manager.
+    
+    This is a wrapper around the `AssistedRepository` that allows
+    to manage a repository, i.e., to perform operations such as:
+    - creating new sessions,
+    - loading and saving repository data from/to disk.
+    '''
 
     _datadir: Path
     _tracking_state: dict[Activity, Timestamp]
@@ -26,11 +31,33 @@ class RepositoryManager(AssistedRepository):
 
     @staticmethod
     def _link_activity(activity_slug: str) -> str:
+        '''Return the link format for the given activity slug for saving
+        in YAML.
+        
+        Args:
+            `activity_slug` (`str`): The slug of the activity.
+
+        Returns:
+            `str`: The link format for the activity.
+        '''
+
         return f'[[diane_activities/{activity_slug}]]'
 
 
     @staticmethod
     def _unlink_activity(link: str) -> str:
+        '''Return the activity slug from the given activity link format.
+        
+        Args:
+            `link` (`str`): The activity link.
+        
+        Returns:
+            `str`: The activity slug.
+
+        Raises:
+            `ValueError`: If the link format is invalid.
+        '''
+
         pattern = r'\[\[diane_activities/([^\]]+)\]\]'
         match = re.search(pattern, link)
         if match:
@@ -40,6 +67,18 @@ class RepositoryManager(AssistedRepository):
 
 
     def __init__(self, datadir: str) -> None:
+        '''Load the repository data from the given directory.
+
+        Args:
+            `datadir` (`str`): The directory of the repository.
+        
+        Raises:
+            `ValueError`: If the repository data is invalid or cannot
+                be loaded.
+
+        Warns:
+            `UserWarning`: If any session or activity cannot be loaded.
+        '''
 
         # Set loading state to `True`.
         self._loading = True
@@ -118,7 +157,8 @@ class RepositoryManager(AssistedRepository):
                             stacklevel=2
                         )
                         continue
-
+        
+        # Merge touching sessions.
         self._merge_touching()
 
         # Set loading state to `False`.
@@ -292,9 +332,9 @@ class RepositoryManager(AssistedRepository):
 
 
     def _save_dirty_days(self) -> None:
-        '''Write all dirty days to disk.
+        '''Write all dirty days to files.
         
-        Update only the YAML blocks that belong to Diane.
+        Updates only the YAML blocks that belong to Diane.
         '''
 
         # Find the sessions candidates to be written to disc.
@@ -525,7 +565,25 @@ class RepositoryManager(AssistedRepository):
         
 
     def _load_state(self) -> None:
-        '''Load the tracking state from the YAML file.'''
+        '''Load the tracking state.
+
+        The tracking state represents the currently tracked activities
+        and their start times. It is stored in a YAML file
+        '.diane/tracking.yaml' with the following format::
+
+            tracking:
+                activity_1_slug:
+                    start_time: '2026-04-07T22:09:45+02:00'
+                    start_timezone: Europe/Vilnius
+                activity_2_slug:
+                    start_time: '2026-04-07T22:09:45+02:00'
+                    start_timezone: Europe/Vilnius
+                ...
+
+        Raises:
+            `ValueError`: If the YAML file is invalid or contains
+                invalid data.
+        '''
 
         path = self._datadir / '.diane/tracking.yaml'
         if not path.exists():
@@ -644,7 +702,7 @@ class RepositoryManager(AssistedRepository):
 
         The sessions are merged only if they have identical activity
         sets. A new session is created that unites the time sets
-        and comments of the original ones. The original sessions
+        and messages of the original ones. The original sessions
         are removed from the repository and the merged session is added.
 
         Args:
@@ -664,8 +722,14 @@ class RepositoryManager(AssistedRepository):
 
         The sessions are merged only if they have identical activity
         sets and the result is 'good'. A new session unites the time
-        sets and comments of the original ones. The original sessions
+        sets and messages of the original ones. The original sessions
         are removed from the repository and the merged session is added.
+
+        Args:
+            `*sessions` (`Session`): The sessions for merging.
+
+        Returns:
+            `Session`: The merged session.
         '''
 
         result = super().merge_if_good(*sessions)
@@ -701,14 +765,14 @@ class RepositoryManager(AssistedRepository):
         cause a `ValueError` with a list of all unrecognised slugs.
 
         Args:
-            *activities: One or more activity slugs to start tracking.
-                Duplicates are ignored (only the first occurrence
-                is considered).
+            `*activities` (`str`): One or more activity slugs to start
+                tracking. Duplicates are ignored (only the first
+                occurrence is considered).
 
         Raises:
-            ValueError: If no activities are provided, or if any
-                of the slugs are not found in the activities
-                registry.'''
+            `ValueError`: If no activities are provided, or if any
+                of the slugs are not found in the activities registry.
+        '''
 
         if not activities:
             raise ValueError('Specify at least one activity for tracking.')
@@ -751,7 +815,7 @@ class RepositoryManager(AssistedRepository):
         return sorted(started_activities, key=lambda a: a.slug)
 
 
-    def stop(self, *activities: str, all: bool = False, comment: str = '') -> list[Session]:
+    def stop(self, *activities: str, all: bool = False, message: str = '') -> list[Session]:
         '''For each distinct start time among the stopped activities,
         a separate session is created covering the interval from that
         start time until now (`[start, now)`). The sessions are added
@@ -769,21 +833,22 @@ class RepositoryManager(AssistedRepository):
         is saved to disk.
 
         Args:
-            *activities: Activity slugs to stop tracking. Ignored
-                if `all=True`.
-            all: If `True`, stop all tracked activities instead
-                of a specific list.
-            comment: Optional comment to attach to every session
-                created.
+            `*activities` (`str`): Activity slugs to stop tracking.
+                Ignored if `all=True`.
+            `all` (`bool`): If `True`, stop all tracked activities
+                instead of a specific list.
+            `message` (`str`): Optional message to attach to every
+                session created.
 
         Returns:
-            A list of the final merged sessions (as returned
+            The list of the final merged sessions (as returned
             by `add_and_merge`), one per distinct start time group.
 
         Raises:
-            ValueError: If `all=False` and no activities are provided,
+            `ValueError`: If `all=False` and no activities are provided,
                 or if any of the given slugs are not found
-                in the activities registry.'''
+                in the activities registry.
+        '''
 
         if all:
             if not self._tracking_state:
@@ -834,7 +899,7 @@ class RepositoryManager(AssistedRepository):
         for start_time, acts in groups.items():
             interval = TimeInterval.closedopen(start_time, now)
             timeset = TimeSet(interval)
-            session = Session(timeset, acts, comment)
+            session = Session(timeset, acts, message)
             merged = self.add_and_merge(session)
             created_sessions.append(merged)
 
@@ -860,14 +925,14 @@ class RepositoryManager(AssistedRepository):
         return created_sessions
     
 
-    def do(self, *activities: str, comment: str = '') -> Session:
+    def do(self, *activities: str, message: str = '') -> Session:
         '''Create an instantaneous session for the given activities
         at the current time, add it to the repository, and merge
         if possible.
         
         Args:
             `*activities`: Activity slugs to include in the session.
-            `comment`: Optional comment to attach to the session.
+            `message`: Optional message to attach to the session.
 
         Returns:
             `Session`: The final merged session.
@@ -896,7 +961,7 @@ class RepositoryManager(AssistedRepository):
         event = TimeInterval.point(now)
         timeset = TimeSet(event)
 
-        session = Session(timeset, resolved_activities, comment)
+        session = Session(timeset, resolved_activities, message)
         merged = self.add_and_merge(session)
 
         # Save dirty days for all created sessions.

@@ -8,7 +8,11 @@ from diane.repository import Repository
 
 
 class AssistedRepository(Repository):
-    '''Smart wrapper to the 'Repository'.'''
+    '''Smart wrapper to the 'Repository'.
+    
+    This provides some 'assisted' features, such as merging
+    sessions that are close in time and have the same activities.
+    '''
 
 
     @staticmethod
@@ -18,6 +22,9 @@ class AssistedRepository(Repository):
         Assess how 'good' the session is according to certain criteria.
         'Goodness' usually means that the pauses between activity
         intervals are not too long.
+
+        Returns:
+            `bool`: `True` if the session is 'good', `False` otherwise.
         '''
 
         return session.timeset.max_gap_duration <= session.timeset.min_component_duration
@@ -25,18 +32,27 @@ class AssistedRepository(Repository):
 
     def merge_if_good(self, *sessions: Session) -> Session:
         '''Merge the given sessions (which must already be
-        in the repository) and return the merged session if it's 'good'.
+        in the repository) if the result will be 'good' and add
+        the merged session to the repository.
 
-        The sessions are merged only if they have identical activity
-        sets and the result is 'good'. A new session unites the time
-        sets and comments of the original ones. The original sessions
+        The sessions are merged only if they have **identical activity
+        sets** and **the result will be 'good'**. A new session
+        is created with the same activities that unites the time sets
+        and messages of the original ones. The original sessions
         are removed from the repository and the merged session is added.
+
+        Args:
+            `*sessions` (`Session`): The sessions for merging.
+
+        Returns:
+            `Session`: The merged session.
 
         Raises:
             `KeyError`: If at least one of the given sessions
-                is not contained in the repository.
-            `ValueError`: If sessions cannot be merged or the resulting
-                session is not 'good'.
+                is not in the repository.
+            `ValueError`: If no sessions are provided,
+                or if the sessions cannot be merged (e.g., different
+                activity sets or the result won't be 'good').
         '''
         
         if not sessions:
@@ -44,18 +60,17 @@ class AssistedRepository(Repository):
         
         missing = {s for s in sessions if s not in self}
         if len(missing) == 1:
-            raise KeyError(f'The session {missing.pop()} is not in the repository.')
+            raise KeyError('One session is missing from the repository.')
         elif len(missing) > 1:
-            sessions_string = '; '.join(map(str, missing))
-            raise KeyError(f'The sessions {sessions_string} are not in the repository.')
+            raise KeyError(f'There are {len(missing)} sessions missing from the repository')
 
         try:
             merged = Session.merge(*sessions)
         except ValueError as e:
-            raise ValueError(f'Sessions cannot be merged: {e}.') from e
+            raise ValueError(f'Unable to merge the sessions. {e}.') from e
         
         if not AssistedRepository.is_good(merged):
-            raise ValueError(f'The sessions were not merged because the result was not good.')
+            raise ValueError(f'The sessions won\'t merge because the result won\'t be \'good\'.')
         
         for s in sessions:
             self.discard(s)
@@ -67,12 +82,12 @@ class AssistedRepository(Repository):
     def add_and_merge(self, session: Session) -> Session:
         '''Add the given session to the repository and repeatedly
         merge it with the closest session in time until no further merge
-        is possible.
+        is possible. The final merged session is returned.
 
         Args:
-            `session` (`Session`): The session to add.
+            `session` (`Session`): The session to add and merge.
 
-        Return:
+        Returns:
             `Session`: The final merged session.
         '''
 

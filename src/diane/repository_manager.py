@@ -845,6 +845,7 @@ class RepositoryManager(AssistedRepository):
             del self._tracking_state[act]
         self._save_state()
 
+        # Save dirty days for all created sessions.
         self._save_dirty_days()
 
         # Update activity notes for all involved activities.
@@ -859,3 +860,57 @@ class RepositoryManager(AssistedRepository):
             self._save_activity_note(a)
 
         return created_sessions
+    
+
+    def do(self, *activities: str, comment: str = '') -> Session:
+        '''Create an instantaneous session for the given activities
+        at the current time, add it to the repository, and merge
+        if possible.
+        
+        Args:
+            `*activities`: Activity slugs to include in the session.
+            `comment`: Optional comment to attach to the session.
+
+        Returns:
+            `Session`: The final merged session.
+        '''
+
+        if not activities:
+            raise ValueError('Specify at least one activity for \'do\'.')
+        
+        unique_slugs = list(dict.fromkeys(activities))
+        resolved_activities = []
+        unknown_slugs = []
+        for slug in unique_slugs:
+            try:
+                resolved_activities.append(self._activities.activity_by_slug(slug))
+            except KeyError:
+                unknown_slugs.append(slug)
+
+        if unknown_slugs:
+            if len(unknown_slugs) == 1:
+                raise ValueError(f'Unknown activity: \'{unknown_slugs[0]}\'.')
+            else:
+                quoted = ', '.join(f'\'{s}\'' for s in unknown_slugs)
+                raise ValueError(f'Unknown activities: {quoted}.')
+            
+        now = Timestamp.now().round_to_second()
+        event = TimeInterval.point(now)
+        timeset = TimeSet(event)
+
+        session = Session(timeset, resolved_activities, comment)
+        merged = self.add_and_merge(session)
+
+        # Save dirty days for all created sessions.
+        self._save_dirty_days()
+
+        # Update activity notes for all involved activities.
+        involved_activities = set(merged.activities)
+        involved_activities_with_ancestors = set()
+        for a in involved_activities:
+            involved_activities_with_ancestors.add(a)
+            involved_activities_with_ancestors.update(self._activities.ancestors(a))
+        for a in involved_activities_with_ancestors:
+            self._save_activity_note(a)
+
+        return merged

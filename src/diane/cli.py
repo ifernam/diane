@@ -195,6 +195,27 @@ def stop(
     except ValueError as e:
         typer.echo(f'Error stopping activities. {e}')
         raise typer.Exit(code=1)
+    
+
+@app.command()
+def do(activities: list[str] = typer.Argument(
+        ...,
+        help='Activities to start.',
+        autocompletion=complete_activity_slugs
+    )
+) -> None:
+
+    repo = get_repo()
+    try:
+        session = repo.do(*activities)
+        indent = '    '
+        bullet = '\u2022'  # Bullet '•'.
+        typer.echo(f'Have done activities {len(session.activities)}:')
+        for a in session.activities:
+            typer.echo(f'{indent}{bullet} {a.title}')
+    except ValueError as e:
+        typer.echo(f'Error doing activities. {e}')
+        raise typer.Exit(code=1)
 
 
 

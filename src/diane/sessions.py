@@ -13,19 +13,23 @@ class Session:
     activities occur.
 
     A session is defined by a non-empty time set, a non-empty set
-    of activities, and an optional comment. Instances are immutable
-    and hashable based on the time set and activities (the comment
+    of activities, and an optional message. Instances are immutable
+    and hashable based on the time set and activities (the message
     is not part of the equality/hash).
 
     Attributes:
-        `_timeset`: `TimeSet` of the session.
-        `_activities`: `frozenset` of `Activity` objects.
-        `comment`: Free-form text comment (may be empty).
+        `timeset` (`TimeSet`): The non-empty time set representing
+            the session's time. The time zones are normalized.
+        `activities` (`frozenset[Activity]`): The activities that have
+            been tracked during the session.
+        `message` (`str`): Free-form brief text providing further
+            details about user activity (may be empty).
     '''
 
     _timeset: TimeSet
     _activities: frozenset[Activity]
-    comment: str
+    message: str
+
     _hash: int
 
 
@@ -51,17 +55,16 @@ class Session:
         self,
         timeset: TimeSet,
         activities: Iterable[Activity],
-        comment: str = ''
+        message: str = ''
     ) -> None:
         '''Initialize a `Session`.
 
         Args:
             `timeset` (`TimeSet`): The time set representing
-                the session's time. The time zones must be normalized.
+                the session's time. Must be non-empty.
             `activities`: Iterable of `Activity` objects. Must
-                not be empty.
-            `comment`: Optional comment string. Defaults to empty
-                string.
+                be non-empty.
+            `message`: Optional message string. Defaults to empty.
 
         Raises:
             `ValueError`: If timeset is empty or activities iterable
@@ -70,7 +73,7 @@ class Session:
 
         object.__setattr__(self, '_timeset', timeset.normalize_time_zones())
         object.__setattr__(self, '_activities', frozenset(activities))
-        object.__setattr__(self, 'comment', comment)
+        object.__setattr__(self, 'message', message)
 
         self._validate()
         
@@ -79,7 +82,15 @@ class Session:
 
     def __eq__(self, other: object) -> bool:
         '''Return `True` if this session equals another based on time
-        set and activities.'''
+        sets and activities.
+        
+        Args:
+            `other` (`object`): The object to compare with.
+
+        Returns:
+            `bool`: `True` if `other` is a `Session` with the same
+            time set and activities; `False` otherwise.
+        '''
 
         if not isinstance(other, Session):
             return NotImplemented
@@ -91,14 +102,32 @@ class Session:
 
 
     def __hash__(self) -> int:
-        '''Return a hash based on the time set and activities.'''
+        '''Return a hash based on the time set and activities.
+        
+        Returns:
+            `int`: The hash value of this session.
+        '''
 
         return self._hash
     
 
     def __str__(self) -> str:
-        '''Return the human-readable string representation
-        of this session.'''
+        '''Return the human-readable string representation of this
+        session.
+        
+        Only the most important information is included
+        for quick understanding:
+        - the start time,
+        - end time,
+        - strict duration (without pauses),
+        - list of activities.
+        The message is not included. String is formatted in multiple
+        lines for better readability.
+        
+        Returns:
+            `str`: The string representation of this session. Includes
+            the start time, end time, duration, and list of activities.
+        '''
 
         indent = '    '
         arrow = '\u2192'   # Arrow '→'.
@@ -115,11 +144,11 @@ class Session:
 
     @property
     def timeset(self) -> TimeSet:
-        '''Return the session's time set.
+        '''Return this session's time set.
 
         Returns:
-            `TimeSet`: The time interval(s) during which the session
-                takes place.
+            `TimeSet`: The time set associated with this session.
+            The time zones are normalized.
         '''
 
         return self._timeset
@@ -130,28 +159,29 @@ class Session:
         '''Return the set of activities performed during the session.
 
         Returns:
-            `frozenset[Activity]`: An immutable set of `Activity`
-                instances.
+            `frozenset[Activity]`: The immutable set of activities
+            associated with this session.
         '''
 
         return self._activities
     
 
     def split_into_days(self) -> list[Session]:
-        '''Split this session into separate sessions per calendar day.
+        '''Split this session into separate sessions each one taking
+        place in a single calendar day.
 
         - The time set is divided into daily closed-open intervals.
         - Each resulting session inherits the same activities
         as the original session.
-        - The comment is **only attached to the first daily session**.
+        - The message is **only attached to the first daily session**.
         This design avoids duplication when the sessions are later read
-        and merged back (the merge operation concatenates comments).
+        and merged back (the merge operation concatenates messages).
 
         Returns:
             `list[Session]`: The list of sessions, each contained
             in a single calendar day, ordered chronologically. The first
-            session retains the original comment; all others have
-            an empty comment.
+            session retains the original message; all others have
+            the empty message.
 
         Raises:
             `ValueError`: If the session is time-unbounded because
@@ -165,7 +195,7 @@ class Session:
         if not timesets_by_day:
             return []
         
-        session_by_day = [Session(timesets_by_day[0], self.activities, self.comment)]
+        session_by_day = [Session(timesets_by_day[0], self.activities, self.message)]
         for ts in timesets_by_day[1:]:
             session_by_day.append(Session(ts, self.activities))
 
@@ -174,7 +204,21 @@ class Session:
 
     def to_dict(self) -> dict:
         '''Convert this session to the dictionary.
-        
+
+        Works only for sessions with normalized time zones, bounded
+        in time, and **spanning no more than one day**.
+
+        The resulting dictionary contains the following keys:
+        - `time_zone`: The IANA time zone name of the session's time.
+        - `intervals`: The list of dictionaries, each with `start` and
+          `end` keys representing the ISO 8601 strings of the start
+          and end times of the session's time intervals. If an interval
+          is a point in time, the `end` value is the same as the `start`
+          value.
+        - `activities`: The list of activity slugs associated with this
+          session.
+        - `message`: The optional message associated with the session.
+
         Raises:
             `ValueError`: If the session is unnormalised, unbounded
             in time, or spans more than one day.
@@ -200,29 +244,37 @@ class Session:
         session_data = {
             'time_zone': time_zone_iana,
             'intervals': intervals_data,
-            'activities': [a.slug for a in self.activities],
+            'activities': sorted([a.slug for a in self.activities]),
         }
-        if self.comment:
-            session_data['comment'] = self.comment
+        if self.message:
+            session_data['message'] = self.message
+
         return session_data
 
 
     @classmethod
     def merge(cls, *sessions: Session) -> Session:
-        '''Merge multiple sessions with identical activities.
+        '''Merge multiple sessions with the **same set of activities**.
 
-        Create a new session that combines the time sets and comments
-        of all provided sessions. The resulting time set is the union
-        of all individual time sets. Comments are concatenated
-        in the order of the input sessions, separated by a newline
-        character. Empty comments are ignored.
+        Create a new session that combines the time sets and messages
+        of all provided sessions.
+        
+        - The resulting time set is the union of all individual time
+          sets. 
+        - The activities of the resulting session are the same
+          as the activities of the input sessions (which must
+          be identical).
+        - Messages are concatenated in chronological order according
+          to their input sessions, with a newline character separating
+          each message. Empty messages are ignored.
 
         Args:
-            `*sessions`: Variable number of `Session` objects to merge.
+            `*sessions` (`Session`): The sessions to merge. Must have
+                the same set of activities.
 
         Returns:
-            `Session`: A new `Session` instance with the united time
-            set, the common activities, and the concatenated comments.
+            `Session`: A new session with the united time set,
+            the common activities, and the concatenated messages.
 
         Raises:
             `ValueError`: If no sessions are provided,
@@ -244,8 +296,8 @@ class Session:
         # As activities are same, take them from the first session.
         activities = sessions[0].activities
 
-        # Concatenate the comments from the given sessions via line
+        # Concatenate the messages from the given sessions via line
         # breaks.
-        comment = '\n'.join(s.comment for s in sessions if s.comment)
+        message = '\n'.join(s.message for s in sessions if s.message)
 
-        return Session(timeset, activities, comment)
+        return Session(timeset, activities, message)

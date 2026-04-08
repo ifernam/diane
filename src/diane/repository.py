@@ -292,6 +292,53 @@ class Repository(MutableSet[Session]):
         self._validate_activities(activities)
         self._activities = activities.copy()
         self._rebuild_activities_index()
+
+
+    def iter_from_last(self, end: Timestamp | None = None) -> Iterator[Session]:
+        '''Iterate over sessions in the repository in descending order
+        of their end time.
+
+        The iteration starts from the latest session whose end time
+        is less than or equal to `end` and proceeds backwards in time.
+
+        Args:
+            `end` (`Timestamp | None`): The upper bound for session end
+                times. If `None`, the iteration starts from the session
+                with the latest end time in the repository.
+
+        Returns:
+            `Iterator[Session]`: An iterator over sessions ordered
+            by decreasing end time.
+        '''
+
+        if not self._sessions:
+            # No sessions in the repository, so the iteration is empty.
+            return
+        
+        if end is None:
+            end = self._ends[-1]  # The latest end time among sessions.
+
+        # Start from the last end time that is `<= end`.
+        idx = self._ends.bisect_right(end) - 1 
+        while idx >= 0:
+            end_time = self._ends[idx]
+            
+            # Iterate sessions with this end time in reverse order
+            # of start time.
+            sessions_with_end = sorted(
+                self._end_to_sessions[end_time],
+                key=lambda s: s.timeset.start,
+                reverse=True
+            )
+            
+            for s in sessions_with_end:
+                # Check if the session is completed by `end`.
+                if s.timeset.end <= end:
+                    # Yield the last session completed by `end`.
+                    yield s
+
+            # Move to the previous end time.    
+            idx -= 1
     
 
     def find_by_activities(self, activities: set[Activity]) -> set[Session]:

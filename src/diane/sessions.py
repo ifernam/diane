@@ -238,8 +238,8 @@ class Session:
         time_zone_iana = self.timeset.start.timestamp.timezone_iana
         intervals_data = []
         for i in self.timeset.components:
-            start_iso = i.start.timestamp.time_iso()
-            end_iso = i.end.timestamp.time_iso(not i.is_point)
+            start_iso = i.start.timestamp.time_iso(allow_24_midnight=False)
+            end_iso = i.end.timestamp.time_iso(allow_24_midnight=not i.is_point)
             intervals_data.append({'start': start_iso, 'end': end_iso})
         session_data = {
             'time_zone': time_zone_iana,

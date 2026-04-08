@@ -1,6 +1,9 @@
+from textwrap import indent
+
 import typer
 from pathlib import Path
 import yaml
+import click
 
 from diane.repository_manager import RepositoryManager
 
@@ -15,7 +18,8 @@ def complete_activity_slugs(incomplete: str) -> list[str]:
     Filters the slugs based on the current incomplete input.
 
     Args:
-        `incomplete` (str): The current incomplete input from the user.
+        `incomplete` (`str`): The current incomplete input from
+            the user.
     
     Returns:
         `list[str]`: The list of activity slugs defined
@@ -133,8 +137,55 @@ def sessions():
     '''Show all recorded sessions.'''
 
     repo = get_repo()
-    for s in repo._sessions:
-        typer.echo(f'\u276F {s}')
+    
+    indent = '    '
+    arrow = '\u2192'   # Arrow '→'.
+    bullet = '\u2022'  # Bullet '•'.
+    gray = (150, 150, 150)
+    purple = (200, 150, 250)
+
+    def generate_sessions():
+        for s in repo.iter_from_last():
+            start_date_str = f'{s.timeset.start.timestamp.date_string} '
+            start_time_str = click.style(
+                s.timeset.start.timestamp.time_iso(offset=False), fg='bright_yellow', bold=True
+            )
+
+            if s.timeset.is_point:
+                end_str = ''
+            else:
+                end_date_str = (
+                    '' if s.timeset.last_day == s.timeset.first_day
+                    else f'{s.timeset.end.timestamp.date_string} '
+                )
+                end_time_str = click.style(
+                    s.timeset.end.timestamp.time_iso(offset=False), fg='bright_yellow', bold=True
+                )
+
+                density = round(100 * (s.timeset.duration / s.timeset.span_duration))
+                duration_density_str = f' (duration: {s.timeset.duration}, density: {density}%)'
+
+                end_str = f' {arrow} {end_date_str}{end_time_str}{duration_density_str}'
+            
+            header = f'{start_date_str}{start_time_str}{end_str}'
+
+            activities_titles = (
+                    f'{indent}{bullet} {click.style(a.title, fg=purple, italic=True)}'
+                    for a in sorted(s._activities, key=lambda a: a.title)
+                )
+            activities_titles_string = '\n'.join(activities_titles)
+            activities_str = f'{indent}Activities:\n{activities_titles_string}'
+
+            session_str = f'{header}\n{activities_str}'
+
+            if s.message:
+                message_text = click.style(s.message, fg=gray, italic=True)
+                message_str = f'{indent}Message: {message_text}'
+                session_str += f'\n{message_str}'
+
+            yield f'\u276F {session_str}\n'
+
+    click.echo_via_pager(generate_sessions())
 
 
 @app.command()
@@ -211,8 +262,9 @@ def do(activities: list[str] = typer.Argument(
     )
 
 ) -> None:
-
+    
     repo = get_repo()
+
     try:
         session = repo.do(*activities, message=message)
         indent = '    '

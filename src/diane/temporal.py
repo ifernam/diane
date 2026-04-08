@@ -9,6 +9,7 @@ import tzlocal
 import sys
 import warnings
 import bisect
+import math
 
 
 
@@ -139,9 +140,21 @@ class Timestamp:
         '''
         
         return self._dt.isoformat()
+
+
+    @property
+    def date_iso(self) -> str:
+        '''Return the date in ISO 8601 format in the time zone in which
+        it was recorded.
+        
+        Returns:
+            ISO 8601 formatted date string (e.g., '2026-03-13').
+        '''
+
+        return self._dt.date().isoformat()
     
 
-    def time_iso(self, allow_24_midnight: bool = False) -> str:
+    def time_iso(self, allow_24_midnight: bool = False, offset: bool = True) -> str:
         '''Return the time in ISO 8601 format in the time zone
         in which it was recorded.
 
@@ -149,16 +162,41 @@ class Timestamp:
             `allow_24_midnight` (`bool`): If `True` and the time
                 is exactly  midnight ('00:00:00'), represent it
                 as '24:00:00'. Defaults to `True`.
+            `offset` (`bool`): If `True`, include the UTC offset.
+                Defaults to `True`.
 
         Returns:
             `str`: ISO 8601 formatted string (e.g., '15:30:00+02:00'
             or '24:00:00+02:00').
         '''
 
-        time_str = self._dt.isoformat().partition('T')[2]
+        if offset:
+            time_str = self._dt.isoformat().partition('T')[2]
+        else:
+            time_str = self._dt.time().isoformat()
+        
         if allow_24_midnight and self.is_midnight:
-                time_str = time_str.replace('00:00:00', '24:00:00', 1)
+            time_str = time_str.replace('00:00:00', '24:00:00', 1)
+        
         return time_str
+
+
+    @property
+    def date_string(self) -> str:
+        '''Return the date in a user-friendly format in the time zone
+        in which it was recorded.
+
+        Returns:
+            `str`: The date string (e.g., 'March 13, 2026').
+        '''
+
+        # Use '%-d' for Unix, '%#d' for Windows, or remove leading zero
+        # manually if neither is supported.
+        try:
+            return self._dt.strftime(r'%B %-d, %Y')
+        except ValueError:
+            # On Windows, fallback to removing leading zero from '%d'.
+            return self._dt.strftime(r'%B %d, %Y').replace(' 0', ' ')
     
 
     @property
@@ -1089,6 +1127,22 @@ class Duration:
         self._validate()
 
 
+    def __str__(self) -> str:
+        match self._kind:
+            case Duration.Kind.UNDEFINED:
+                return '?'
+            case Duration.Kind.NEG_INF:
+                # Return '-∞'.
+                return '-\u221E'
+            case Duration.Kind.FINITE:
+                return str(self._value)
+            case Duration.Kind.POS_INF:
+                # Return '+∞'.
+                return '+\u221E'
+            case _:
+                raise AssertionError(f'The unknown duration kind: \'{self._kind}\'.')
+
+
     def _key(self) -> tuple[int, datetime.timedelta | None]:
         '''Return the key for sorting endpoints.
 
@@ -1240,6 +1294,61 @@ class Duration:
                 return -self
             
         return NotImplemented
+    
+
+    def __truediv__(self, other: object) -> float:
+        '''Divide this duration by another one, returning a float.
+
+        Returns:
+            `float`: The ratio of the two durations.
+                - `math.nan` if either operand is `UNDEFINED`,
+                  or if division is indeterminate (0/0, inf/inf,
+                  -inf/inf, etc.).
+                - `float('inf')` or `-float('inf')` for division by zero
+                  with non-zero numerator, or infinite numerator divided
+                  by finite denominator.
+        '''
+
+        if not isinstance(other, Duration):
+            return NotImplemented
+
+        # Undefined.
+        if self._kind is Duration.Kind.UNDEFINED or other._kind is Duration.Kind.UNDEFINED:
+            return math.nan
+        # Both defined.
+
+        # Both finite.
+        if self._value is not None and other._value is not None:
+            num = self._value.total_seconds()
+            den = other._value.total_seconds()
+            if den == 0.:
+                if num == 0.:
+                    return math.nan  # 0 / 0.
+                # Finite divided by 0.
+                return float('inf') if num > 0 else -float('inf')
+            return num / den
+
+        # `self` finite, `other` infinite.
+        if self.is_finite and other.is_infinite:
+            # Finite divided by infinity equals 0.
+            return 0.
+
+        # `self` infinite, `other` finite.
+        if self.is_infinite and other._value is not None:
+            den = other._value.total_seconds()
+            if den == 0.:
+                # Infinity divided by 0 equals infinity with the same
+                # sign as `self`.
+                return float('inf') if self._kind is Duration.Kind.POS_INF else -float('inf')
+            # Resul sign: `sign(self) * sign(den)`.
+            sign = (1 if self._kind is Duration.Kind.POS_INF else -1) * (1 if den > 0 else -1)
+            return float('inf') if sign > 0 else -float('inf')
+
+        # Both infinite.
+        if self.is_infinite and other.is_infinite:
+            return math.nan
+
+        return math.nan
     
 
     @classmethod
@@ -3187,6 +3296,7 @@ class TimeSet:
         return self._normalized
     
 
+    @property
     def span_duration(self) -> Duration:
         '''Return the duration of the minimal interval covering
         the whole time set.

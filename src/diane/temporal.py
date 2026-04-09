@@ -2552,6 +2552,112 @@ class TimeInterval:
     
 
     @classmethod
+    def today(cls) -> TimeInterval:
+        '''Create a closed-open interval representing the current day
+        in the local time zone.
+
+        The interval starts at midnight (00:00:00) of the current local
+        date and ends at midnight of the following day. The left
+        endpoint is included, the right endpoint is excluded, producing
+        a half-open interval `[start_of_today, start_of_tomorrow)`.
+
+        Returns:
+            `TimeInterval`: The closed-open interval covering exactly
+                the current calendar day.
+        '''
+
+        now = Timestamp.now()
+        tz_iana = now.timezone_iana
+        today_date = now.datetime.date()
+        start = Timestamp.midnight(today_date, tz_iana)
+        end = start + datetime.timedelta(days=1)
+        return cls.closedopen(start, end)
+    
+
+    @classmethod
+    def week(cls) -> TimeInterval:
+        '''Create a closed-open interval representing the current week
+        (Monday to Sunday) in the local time zone.
+
+        The interval starts at midnight (00:00:00) of the Monday
+        of the current week and ends at midnight of the following Monday.
+        The left endpoint is included, the right endpoint is excluded,
+        producing a half-open interval
+        `[start_of_week, start_of_next_week)`.
+
+        Returns:
+            `TimeInterval`: The closed-open interval covering exactly
+            the current calendar week.
+        '''
+
+        now = Timestamp.now()
+        tz_iana = now.timezone_iana
+        today = now.datetime.date()
+        monday = today - datetime.timedelta(days=today.weekday())
+        start = Timestamp.midnight(monday, tz_iana)
+        end = start + datetime.timedelta(days=7)
+        return cls.closedopen(start, end)
+
+    
+    @classmethod
+    def month(cls) -> TimeInterval:
+        '''Create a closed-open interval representing the current month
+        in the local time zone.
+
+        The interval starts at midnight (00:00:00) of the first day
+        of the current month and ends at midnight of the first day
+        of the following month. The left endpoint is included, the right
+        endpoint is excluded, producing a half-open interval
+        `[start_of_month, start_of_next_month)`.
+
+        Returns:
+            `TimeInterval`: The closed-open interval covering exactly
+                the current calendar month.
+        '''
+
+        now = Timestamp.now()
+        tz_iana = now.timezone_iana
+        today = now.datetime.date()
+        first_of_month = today.replace(day=1)
+
+        # Compute first day of next month.
+        if first_of_month.month == 12:
+            next_month = first_of_month.replace(year=first_of_month.year + 1, month=1)
+        else:
+            next_month = first_of_month.replace(month=first_of_month.month + 1)
+        
+        start = Timestamp.midnight(first_of_month, tz_iana)
+        end = Timestamp.midnight(next_month, tz_iana)
+        return cls.closedopen(start, end)
+    
+
+    @classmethod
+    def year(cls) -> TimeInterval:
+        '''Create a closed-open interval representing the current year
+        in the local time zone.
+
+        The interval starts at midnight (00:00:00) of January 1st
+        of the current year and ends at midnight of January 1st
+        of the following year. The left endpoint is included, the right
+        endpoint is excluded, producing a half-open interval
+        `[start_of_year, start_of_next_year)`.
+
+        Returns:
+            `TimeInterval`: The closed-open interval covering exactly
+            the current calendar year.
+        '''
+        
+        now = Timestamp.now()
+        tz_iana = now.timezone_iana
+        today = now.datetime.date()
+        first_of_year = today.replace(month=1, day=1)
+        next_year = first_of_year.replace(year=first_of_year.year + 1)
+        start = Timestamp.midnight(first_of_year, tz_iana)
+        end = Timestamp.midnight(next_year, tz_iana)
+        return cls.closedopen(start, end)
+    
+
+    @classmethod
     def from_dict(cls, time_data: dict, time_zone_iana: str, date_iso: str = '') -> TimeInterval:
         '''Create a closed-open interval or a point from a dictionary.
 

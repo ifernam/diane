@@ -308,7 +308,8 @@ class Repository(MutableSet[Session]):
 
         Returns:
             `Iterator[Session]`: An iterator over sessions ordered
-            by decreasing end time.
+            by decreasing end time. For sessions with the same end time,
+            the order is descending by start time.
         '''
 
         if not self._sessions:
@@ -339,7 +340,102 @@ class Repository(MutableSet[Session]):
 
             # Move to the previous end time.    
             idx -= 1
-    
+
+
+    def iter_overlapping(self, target: TimeSet | TimeInterval) -> Iterator[Session]:
+        '''Iterate over sessions that overlap within the given time set
+        or interval.
+
+        The iteration proceeds in reverse chronological order of session
+        end times.
+
+        Args:
+            `target` (`TimeSet | TimeInterval`): The time set
+                or interval that must overlap within the sessions.
+                An empty target yields no sessions.
+
+        Returns:
+            `Iterator[Session]`: The iterator over sessions that overlap
+            within target, ordered by decreasing end time. For sessions
+            with the same end time, the order is descending by start
+            time.
+        '''
+
+        if not self._sessions:
+            # No sessions in the repository, so the iteration is empty.
+            return
+
+        if isinstance(target, TimeInterval):
+            target = TimeSet(target)
+        
+        if target.is_empty:
+            # Empty target cannot overlap.
+            return
+        
+        start = target.start
+
+        for s in self.iter_from_last():
+            
+            # Ends earlier than target starts.
+            if s.timeset.end < start:
+                # All remaining sessions end even earlier, so none can
+                # overlap.
+                return
+
+            # Does not overlap within target.
+            if not s.timeset.overlaps(target):
+                continue
+
+            yield s
+
+
+    def iter_contained_in(self, target: TimeSet | TimeInterval) -> Iterator[Session]:
+        '''Iterate over sessions that are completely contained within
+        the given time set or interval.
+
+        The iteration proceeds in reverse chronological order of session
+        end times.
+
+        Args:
+            `target` (`TimeSet | TimeInterval`): The time set
+                or interval that must fully contain the sessions.
+                An empty target yields no sessions.
+
+        Returns:
+            `Iterator[Session]`: The iterator over sessions fully
+                contained in target, ordered by decreasing end time.
+                For sessions with the same end time, the order
+                is descending by start time.
+        '''
+
+        if not self._sessions:
+            # No sessions in the repository, so the iteration is empty.
+            return
+
+        if isinstance(target, TimeInterval):
+            target = TimeSet(target)
+        
+        if target.is_empty:
+            # Empty target contains nothing.
+            return
+        
+        end = target.end.timestamp if target.is_right_bounded else None  # Timestamp.
+        start = target.start                                             # Endpoint.
+
+        for s in self.iter_from_last(end):
+            
+            # Ends earlier than target starts.
+            if s.timeset.end < start:
+                # All remaining sessions end even earlier, so none can
+                # be contained.
+                return
+
+            # Not contained in target.
+            if s.timeset not in target:
+                continue
+
+            yield s
+
 
     def find_by_activities(self, activities: set[Activity]) -> set[Session]:
         '''Find sessions that have exactly the given set

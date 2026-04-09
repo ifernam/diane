@@ -1,10 +1,12 @@
 from textwrap import indent
 
+from enum import Enum
 import typer
 from pathlib import Path
 import yaml
 import click
 
+from diane.temporal import TimeInterval, TimeSet
 from diane.repository_manager import RepositoryManager
 
 
@@ -132,11 +134,55 @@ def status():
         typer.echo(f'{indent}{bullet} {activity.title} (started {start})')
 
 
+class SessionsPeriod(str, Enum):
+    all = 'all'
+    today = 'today'
+    week = 'week'
+    month = 'month'
+    year = 'year'
+
+
 @app.command()
-def sessions():
-    '''Show all recorded sessions.'''
+def sessions(
+    today: bool = typer.Option(False, '-t', '--today', help='Show today\'s sessions.'),
+    week: bool = typer.Option(False, '-w', '--week', help='Show this week\'s sessions.'),
+    month: bool = typer.Option(False, '-m', '--month', help='Show this month\'s sessions.'),
+    year: bool = typer.Option(False, '-y', '--year', help='Show this year\'s sessions.'),
+    all: bool = typer.Option(False, '-a', '--all', help='Show all sessions.')
+):
+    '''Show recorded sessions.'''
 
     repo = get_repo()
+
+    selected = [
+        period
+        for period, enabled in {
+            SessionsPeriod.today: today,
+            SessionsPeriod.week: week,
+            SessionsPeriod.month: month,
+            SessionsPeriod.year: year,
+            SessionsPeriod.all: all
+        }.items()
+        if enabled
+    ]
+
+    if len(selected) > 1:
+        typer.echo(
+            'Error: use only one of -t/--today, -w/--week, -m/--month, -y/--year, -a/--all.'
+        )
+        raise typer.Exit(code=1)
+    
+    period = selected[0] if selected else SessionsPeriod.all
+
+    interval_by_period = {
+        SessionsPeriod.today: TimeInterval.today(),
+        SessionsPeriod.week: TimeInterval.week(),
+        SessionsPeriod.month: TimeInterval.month(),
+        SessionsPeriod.year: TimeInterval.year(),
+        SessionsPeriod.all: TimeInterval.timeline()
+    }
+
+    target = TimeSet(interval_by_period[period])
     
     indent = '    '
     arrow = '\u2192'   # Arrow '→'.
@@ -145,7 +191,7 @@ def sessions():
     purple = (200, 150, 250)
 
     def generate_sessions():
-        for s in repo.iter_from_last():
+        for s in repo.iter_overlapping(target):
             start_date_str = f'{s.timeset.start.timestamp.date_string} '
             start_time_str = click.style(
                 s.timeset.start.timestamp.time_iso(offset=False), fg='bright_yellow', bold=True

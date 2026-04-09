@@ -813,7 +813,67 @@ class RepositoryManager(AssistedRepository):
             self._save_state()
 
         return sorted(started_activities, key=lambda a: a.slug)
+    
 
+    def cancel(self, *activities: str, all: bool = False) -> set[Activity]:
+        '''Cancel tracking the specified activities.
+        
+        Args:
+            `*activities` (`str`): Activity slugs to cancel tracking.
+                Ignored if `all=True`.
+            `all` (`bool`): If `True`, cancel all tracked activities
+                instead of a specific list.
+
+        Returns:
+            `set[Activities]`: The cancelled activities.
+        '''
+
+        if all:
+            if not self._tracking_state:
+                warnings.warn('No activities are currently being tracked.')
+                return set()
+            activities_to_cancel = list(self._tracking_state.keys())
+        else:
+            if not activities:
+                raise ValueError('Specify at least one activity to cancel.')
+            unique_slugs = list(dict.fromkeys(activities))
+            activities_to_cancel = []
+            unknown_slugs = []
+
+            for slug in unique_slugs:
+                try:
+                    activities_to_cancel.append(self._activities.activity_by_slug(slug))
+                except KeyError:
+                    unknown_slugs.append(slug)
+
+            if unknown_slugs:
+                if len(unknown_slugs) == 1:
+                    raise ValueError(f'Unknown activity: \'{unknown_slugs[0]}\'.')
+                else:
+                    quoted = ', '.join(f'\'{s}\'' for s in unknown_slugs)
+                    raise ValueError(f'Unknown activities: {quoted}.')
+                
+        # We only keep the ones that are actually being tracked.
+        tracked = set()
+        for a in activities_to_cancel:
+            start = self._tracking_state.get(a)
+            if start is None:
+                warnings.warn(f'Activity \'{a}\' is not being tracked.', stacklevel=2)
+            else:
+                tracked.add(a)
+
+        if not tracked:
+            return set()
+        
+        # Remove activities from those being tracked.
+        for a in tracked:
+            del self._tracking_state[a]
+
+        self._save_state()
+
+        # Return cancelled activities.
+        return tracked
+        
 
     def stop(self, *activities: str, all: bool = False, message: str = '') -> list[Session]:
         '''For each distinct start time among the stopped activities,
@@ -904,8 +964,8 @@ class RepositoryManager(AssistedRepository):
             created_sessions.append(merged)
 
         # Remove stopped activities from those being tracked.
-        for act in tracked:
-            del self._tracking_state[act]
+        for a in tracked:
+            del self._tracking_state[a]
         self._save_state()
 
         # Save dirty days for all created sessions.

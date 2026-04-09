@@ -264,6 +264,58 @@ def start(
     except ValueError as e:
         typer.echo(f'Error starting activities. {e}')
         raise typer.Exit(code=1)
+    
+
+@app.command()
+def cancel(
+    activities: list[str] | None = typer.Argument(
+        None, help='Activities to cancel.', autocompletion=complete_activity_slugs
+    ),
+    all_: bool = typer.Option(
+        False, '-a', '--all', help='Cancel all currently tracked activities.'
+    )
+) -> None:
+    '''Cancel tracking the specified activities.
+
+    Note:
+        The parameter `all_` uses a trailing underscore to avoid
+        shadowing the built-in `all`.
+
+    - If the '-a'/'--all' flag is used, all currently tracked activities
+      are cancelled, regardless of the 'activities' argument.
+    '''
+
+    indent = '    '
+    bullet = '\u2022'  # Bullet '•'.
+    purple = (200, 150, 250)
+
+    repo = get_repo()
+
+    if not all_ and not activities:
+        typer.echo('Specify at least one activity to cancel or use \'-a\'/\'--all\'.')
+        raise typer.Exit(code=1)
+
+    try:
+        cancelled = repo.cancel(*(activities or []), all=all_)
+        if cancelled:
+            activities_titles = (
+                f'{indent}{bullet} {click.style(a.title, fg=purple, italic=True)}'
+                for a in sorted(cancelled, key=lambda a: a.title)
+            )
+            activities_titles_string = '\n'.join(activities_titles)
+            activities_str = (
+                'Tracking of the following activities has been cancelled:\n'
+                f'{activities_titles_string}'
+            )
+            typer.echo(activities_str)
+        else:
+            if not repo._tracking_state:
+                typer.echo('No activities are currently being tracked.')
+            else:
+                typer.echo('No matching activities to cancel.')
+    except ValueError as e:
+        typer.echo(f'Error cancelling activities. {e}')
+        raise typer.Exit(code=1)
 
 
 @app.command()
@@ -272,7 +324,7 @@ def stop(
         None, help='Activities to stop.',
         autocompletion=complete_activity_slugs
     ),
-    all: bool = typer.Option(False, '-a', '--all', help='Stop all tracked activities.'),
+    all_: bool = typer.Option(False, '-a', '--all', help='Stop all tracked activities.'),
     message: str = typer.Option(
         '', '-m', '--message', help='Optional message to attach to the session(s).'
     )
@@ -287,7 +339,7 @@ def stop(
 
     repo = get_repo()
     try:
-        sessions = repo.stop(*(activities or []), all=all, message=message)
+        sessions = repo.stop(*(activities or []), all=all_, message=message)
         if sessions:
             typer.echo(f'Recorded {len(sessions)} sessions:')
             for s in sessions:

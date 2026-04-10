@@ -2572,6 +2572,30 @@ class TimeInterval:
         start = Timestamp.midnight(today_date, tz_iana)
         end = start + datetime.timedelta(days=1)
         return cls.closedopen(start, end)
+
+
+    @classmethod
+    def yesterday(cls) -> TimeInterval:
+        '''Create a closed-open interval representing the previous
+        calendar day in the local time zone.
+
+        The interval starts at midnight (00:00:00) of the previous local
+        date and ends at midnight of the current day. The left endpoint
+        is included, the right endpoint is excluded, producing
+        a half-open interval `[start_of_yesterday, start_of_today)`.
+
+        Returns:
+            `TimeInterval`: The closed-open interval covering exactly
+                the previous calendar day.
+        '''
+
+        now = Timestamp.now()
+        tz_iana = now.timezone_iana
+        today_date = now.datetime.date()
+        yesterday_date = today_date - datetime.timedelta(days=1)
+        start = Timestamp.midnight(yesterday_date, tz_iana)
+        end = Timestamp.midnight(today_date, tz_iana)
+        return cls.closedopen(start, end)
     
 
     @classmethod

@@ -5,13 +5,26 @@ import typer
 from pathlib import Path
 import yaml
 import click
+from collections import defaultdict
+from itertools import chain
 
-from diane.temporal import TimeInterval, TimeSet
+from diane.temporal import Duration, TimeInterval, TimeSet
 from diane.repository_manager import RepositoryManager
 
 
 
+class SessionsPeriod(str, Enum):
+    yesterday = 'yesterday'
+    today = 'today'
+    week = 'week'
+    month = 'month'
+    year = 'year',
+    all = 'all'
+
+
+
 app = typer.Typer()
+
 
 
 def complete_activity_slugs(incomplete: str) -> list[str]:
@@ -132,106 +145,6 @@ def status():
     typer.echo('Tracking activities:')
     for activity, start in repo._tracking_state.items():
         typer.echo(f'{indent}{bullet} {activity.title} (started {start})')
-
-
-class SessionsPeriod(str, Enum):
-    all = 'all'
-    today = 'today'
-    week = 'week'
-    month = 'month'
-    year = 'year'
-
-
-@app.command()
-def sessions(
-    today: bool = typer.Option(False, '-t', '--today', help='Show today\'s sessions.'),
-    week: bool = typer.Option(False, '-w', '--week', help='Show this week\'s sessions.'),
-    month: bool = typer.Option(False, '-m', '--month', help='Show this month\'s sessions.'),
-    year: bool = typer.Option(False, '-y', '--year', help='Show this year\'s sessions.'),
-    all: bool = typer.Option(False, '-a', '--all', help='Show all sessions.')
-):
-    '''Show recorded sessions.'''
-
-    repo = get_repo()
-
-    selected = [
-        period
-        for period, enabled in {
-            SessionsPeriod.today: today,
-            SessionsPeriod.week: week,
-            SessionsPeriod.month: month,
-            SessionsPeriod.year: year,
-            SessionsPeriod.all: all
-        }.items()
-        if enabled
-    ]
-
-    if len(selected) > 1:
-        typer.echo(
-            'Error: use only one of -t/--today, -w/--week, -m/--month, -y/--year, -a/--all.'
-        )
-        raise typer.Exit(code=1)
-    
-    period = selected[0] if selected else SessionsPeriod.all
-
-    interval_by_period = {
-        SessionsPeriod.today: TimeInterval.today(),
-        SessionsPeriod.week: TimeInterval.week(),
-        SessionsPeriod.month: TimeInterval.month(),
-        SessionsPeriod.year: TimeInterval.year(),
-        SessionsPeriod.all: TimeInterval.timeline()
-    }
-
-    target = TimeSet(interval_by_period[period])
-    
-    indent = '    '
-    arrow = '\u2192'   # Arrow '→'.
-    bullet = '\u2022'  # Bullet '•'.
-    gray = (150, 150, 150)
-    purple = (200, 150, 250)
-
-    def generate_sessions():
-        for s in repo.iter_overlapping(target):
-            start_date_str = f'{s.timeset.start.timestamp.date_string} '
-            start_time_str = click.style(
-                s.timeset.start.timestamp.time_iso(offset=False), fg='bright_yellow', bold=True
-            )
-
-            if s.timeset.is_point:
-                end_str = ''
-            else:
-                end_date_str = (
-                    '' if s.timeset.last_day == s.timeset.first_day
-                    else f'{s.timeset.end.timestamp.date_string} '
-                )
-                end_time_str = click.style(
-                    s.timeset.end.timestamp.time_iso(offset=False), fg='bright_yellow', bold=True
-                )
-
-                density = round(100 * (s.timeset.duration / s.timeset.span_duration))
-                duration_density_str = f' (duration: {s.timeset.duration}, density: {density}%)'
-
-                end_str = f' {arrow} {end_date_str}{end_time_str}{duration_density_str}'
-            
-            header = f'{start_date_str}{start_time_str}{end_str}'
-
-            activities_titles = (
-                    f'{indent}{bullet} {click.style(a.title, fg=purple, italic=True)}'
-                    for a in sorted(s._activities, key=lambda a: a.title)
-                )
-            activities_titles_string = '\n'.join(activities_titles)
-            activities_str = f'{indent}Activities:\n{activities_titles_string}'
-
-            session_str = f'{header}\n{activities_str}'
-
-            if s.message:
-                message_text = click.style(s.message, fg=gray, italic=True)
-                message_str = f'{indent}Message: {message_text}'
-                session_str += f'\n{message_str}'
-
-            yield f'\u276F {session_str}\n'
-
-    click.echo_via_pager(generate_sessions())
 
 
 @app.command()
@@ -373,6 +286,168 @@ def do(activities: list[str] = typer.Argument(
     except ValueError as e:
         typer.echo(f'Error doing activities. {e}')
         raise typer.Exit(code=1)
+
+
+@app.command()
+def sessions(
+    today: bool = typer.Option(False, '-t', '--today', help='Show today\'s sessions.'),
+    yesterday: bool = typer.Option(False, '--yesterday', help='Show yesterday\'s sessions.'),
+    week: bool = typer.Option(False, '-w', '--week', help='Show this week\'s sessions.'),
+    month: bool = typer.Option(False, '-m', '--month', help='Show this month\'s sessions.'),
+    year: bool = typer.Option(False, '-y', '--year', help='Show this year\'s sessions.'),
+    all_: bool = typer.Option(False, '-a', '--all', help='Show all sessions.')
+):
+    '''Show recorded sessions.'''
+
+    repo = get_repo()
+
+    # Determine target.
+    periods = [
+        period
+        for period, enabled in {
+            SessionsPeriod.today: today,
+            SessionsPeriod.yesterday: yesterday,
+            SessionsPeriod.week: week,
+            SessionsPeriod.month: month,
+            SessionsPeriod.year: year,
+            SessionsPeriod.all: all_
+        }.items()
+        if enabled
+    ]
+    if not periods:
+        periods = [SessionsPeriod.all]
+    interval_by_period = {
+        SessionsPeriod.today: TimeInterval.today(),
+        SessionsPeriod.yesterday: TimeInterval.yesterday(),
+        SessionsPeriod.week: TimeInterval.week(),
+        SessionsPeriod.month: TimeInterval.month(),
+        SessionsPeriod.year: TimeInterval.year(),
+        SessionsPeriod.all: TimeInterval.timeline()
+    }
+    target = TimeSet.union(*(interval_by_period[p] for p in periods))
+    
+    indent = '    '
+    arrow = '\u2192'   # Arrow '→'.
+    bullet = '\u2022'  # Bullet '•'.
+    gray = (150, 150, 150)
+    purple = (200, 150, 250)
+
+    def generate_sessions():
+        for s in repo.iter_overlapping(target):
+            start_date_str = f'{s.timeset.start.timestamp.date_string} '
+            start_time_str = click.style(
+                s.timeset.start.timestamp.time_iso(offset=False), fg='bright_yellow', bold=True
+            )
+
+            if s.timeset.is_point:
+                end_str = ''
+            else:
+                end_date_str = (
+                    '' if s.timeset.last_day == s.timeset.first_day
+                    else f'{s.timeset.end.timestamp.date_string} '
+                )
+                end_time_str = click.style(
+                    s.timeset.end.timestamp.time_iso(offset=False), fg='bright_yellow', bold=True
+                )
+
+                density = round(100 * (s.timeset.duration / s.timeset.span_duration))
+                duration_density_str = f' (duration: {s.timeset.duration}, density: {density}%)'
+
+                end_str = f' {arrow} {end_date_str}{end_time_str}{duration_density_str}'
+            
+            header = f'{start_date_str}{start_time_str}{end_str}'
+
+            activities_titles = (
+                    f'{indent}{bullet} {click.style(a.title, fg=purple, italic=True)}'
+                    for a in sorted(s._activities, key=lambda a: a.title)
+                )
+            activities_titles_string = '\n'.join(activities_titles)
+            activities_str = f'{indent}Activities:\n{activities_titles_string}'
+
+            session_str = f'{header}\n{activities_str}'
+
+            if s.message:
+                message_text = click.style(s.message, fg=gray, italic=True)
+                message_str = f'{indent}Message: {message_text}'
+                session_str += f'\n{message_str}'
+
+            yield f'\u276F {session_str}\n'
+
+    click.echo_via_pager(generate_sessions())
+    
+
+@app.command()
+def stats(
+    today: bool = typer.Option(False, '-t', '--today', help='Show today\'s sessions.'),
+    yesterday: bool = typer.Option(False, '--yesterday', help='Show yesterday\'s sessions.'),
+    week: bool = typer.Option(False, '-w', '--week', help='Show this week\'s sessions.'),
+    month: bool = typer.Option(False, '-m', '--month', help='Show this month\'s sessions.'),
+    year: bool = typer.Option(False, '-y', '--year', help='Show this year\'s sessions.'),
+    all_: bool = typer.Option(False, '-a', '--all', help='Show all sessions.')
+) -> None:
+
+    repo = get_repo()
+
+    # Determine target.
+    periods = [
+        period
+        for period, enabled in {
+            SessionsPeriod.today: today,
+            SessionsPeriod.yesterday: yesterday,
+            SessionsPeriod.week: week,
+            SessionsPeriod.month: month,
+            SessionsPeriod.year: year,
+            SessionsPeriod.all: all_
+        }.items()
+        if enabled
+    ]
+    if not periods:
+        periods = [SessionsPeriod.all]
+    interval_by_period = {
+        SessionsPeriod.today: TimeInterval.today(),
+        SessionsPeriod.yesterday: TimeInterval.yesterday(),
+        SessionsPeriod.week: TimeInterval.week(),
+        SessionsPeriod.month: TimeInterval.month(),
+        SessionsPeriod.year: TimeInterval.year(),
+        SessionsPeriod.all: TimeInterval.timeline()
+    }
+    target = TimeSet.union(*(interval_by_period[p] for p in periods))
+
+    main_activities = set()
+    ancestor_activities = set()
+    durations = defaultdict(Duration)
+    for s in repo.find_overlapping(target):
+        clipped = s.timeset & target
+
+        if not clipped:
+            continue
+
+        duration = clipped.duration
+        
+        main_activities_in_session = set(s.activities)
+        ancestor_activities_in_session = repo._activities.ancestors(*main_activities_in_session)
+
+        for a in main_activities_in_session | ancestor_activities_in_session:
+            durations[a] += duration
+
+        main_activities.update(main_activities_in_session)
+        ancestor_activities.update(ancestor_activities_in_session)
+
+    not_main_activities = ancestor_activities - main_activities
+
+    indent = '    '
+    bullet = '\u2022'  # Bullet '•'.
+    purple = (200, 150, 250)
+    light_purple = (125, 75, 175)
+            
+    for a in sorted(main_activities, key=lambda a: durations[a], reverse=True):
+        typer.echo(
+            f'{indent}{bullet} {click.style(a.title, fg=purple, italic=True)}: {durations[a]}'
+        )
+    for a in sorted(not_main_activities, key=lambda a: durations[a], reverse=True):
+        typer.echo(
+            f'{indent}{bullet} {click.style(a.title, fg=light_purple, italic=True)}: {durations[a]}'
+        )
 
 
 

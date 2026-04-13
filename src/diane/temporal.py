@@ -1127,6 +1127,12 @@ class Duration:
         self._validate()
 
 
+    def __bool__(self) -> bool:
+        '''Return `True` if duration is defined and non-zero.'''
+
+        return self._kind is not Duration.Kind.UNDEFINED and (self._kind is not Duration.Kind.FINITE or bool(self._value))
+
+
     def __str__(self) -> str:
         match self._kind:
             case Duration.Kind.UNDEFINED:
@@ -2993,7 +2999,7 @@ class TimeSet:
         try:
             TimeSet._validate_components(*self._components)
         except ValueError as e:
-            raise ValueError(f'The time set has been set incorrectly. {e}')
+            raise ValueError(f'The time set {self} has been set incorrectly. {e}')
     
 
     def __init__(self, *intervals: TimeInterval):
@@ -3459,6 +3465,19 @@ class TimeSet:
         '''
 
         return max((c.duration for c in self._components), default=Duration.undefined())
+    
+
+    @property
+    def density(self) -> float:
+        '''Return the ratio of the total duration of the set to the span
+        duration (from earliest start to latest end).
+        
+        Returns:
+            `float`:  The ratio of the total duration to the span
+            duration. `NaN` if the span duration is zero.
+        '''
+
+        return self.duration / self.span_duration
     
 
     def _gaps(self) -> Iterator[Duration]:
@@ -3996,15 +4015,24 @@ class TimeSet:
 
     @classmethod
     def union(cls, *arg: TimeInterval | TimeSet) -> TimeSet:
-        '''Create the time set that is the union of the given time
-        intervals or time sets.
+        '''Create the union of time intervals or time sets.
 
-        Empty components are automatically discarded, and touching
-        intervals are merged.
+        The result consists of all time points that belong to at least
+        one of the given arguments. It is represented as a `TimeSet`
+        whose components are precisely the connected components of that
+        union.
+
+        Args:
+            `*arg`: Time intervals or time sets whose union is to be
+                constructed.
+
+        Returns:
+            `TimeSet`: The union of all provided arguments. If every
+                argument is empty, the result is the empty time set.
         '''
 
         # Remove empty intervals.
-        nonempty_intervals = [
+        intervals = [
             i
             for ts in arg
             for i in (ts.components if isinstance(ts, TimeSet) else [ts])
@@ -4012,44 +4040,36 @@ class TimeSet:
         ]
 
         # If there are no non-empty intervals, then the union is empty.
-        if not nonempty_intervals:
-            return TimeSet.empty()
+        if not intervals:
+            return cls.empty()
 
         # Sort intervals chronologically.
         def sort_key(i: TimeInterval):
             return i.start, i.end
 
-        nonempty_intervals.sort(key=sort_key)
+        intervals.sort(key=sort_key)
 
         # Group touching intervals.
-        components: list[list[TimeInterval]] = []
-        current_group = [nonempty_intervals[0]]
+        components = []
+        current_component = intervals[0]
 
-        for interval in nonempty_intervals[1:]:
-            if current_group[-1].touches(interval):
-                # If the new interval touches the last interval
-                # in the group, add it to the group.
+        for interval in intervals[1:]:
+            if current_component.touches(interval):
+                # New interval touches current component. Unite them.
 
-                current_group.append(interval)
+                current_component = TimeInterval.minimal_cover(current_component, interval)
             else:
-                # If the new interval does not touch the last interval
-                # in the group, we keep the previous group and create
-                # a new one that includes the new interval.
+                # Interval does not touch last component. Keep previous
+                # component and create new one.
 
-                components.append(current_group)
-                current_group = [interval]
+                components.append(current_component)
+                current_component = interval
 
-        # Keep the last group.
-        components.append(current_group)
+        # Keep last component.
+        components.append(current_component)
 
-        # Build minimal covers (connected components).
-        merged_intervals = [
-            TimeInterval.minimal_cover(*group)
-            for group in components
-        ]
-
-        # Construct the time set.
-        return cls(*merged_intervals)
+        # Construct time set.
+        return cls(*components)
     
 
     def closure(self) -> TimeSet:

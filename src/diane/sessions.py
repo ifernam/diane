@@ -301,6 +301,6 @@ class Session:
 
         # Concatenate the messages from the given sessions
         # in chronological order via line breaks.
-        message = '\n'.join(s.message for s in sorted_sessions if s.message)
+        message = ' '.join(s.message for s in sorted_sessions if s.message)
 
         return Session(timeset, activities, message)

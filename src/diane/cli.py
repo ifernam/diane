@@ -7,8 +7,20 @@ import yaml
 import click
 from collections import defaultdict
 from itertools import chain
+from rich.panel import Panel
+from rich.markdown import Markdown
+from rich.text import Text
+from rich.console import Group
+from rich import box
+from rich.rule import Rule
+from rich.padding import Padding
+from rich.columns import Columns
+from rich.console import Console
+from rich.layout import Layout
+from rich.table import Table
 
-from diane.temporal import Duration, TimeInterval, TimeSet
+from diane.temporal import Timestamp, Duration, TimeInterval, TimeSet
+from diane.sessions import Session
 from diane.repository_manager import RepositoryManager
 
 
@@ -18,12 +30,13 @@ class SessionsPeriod(str, Enum):
     today = 'today'
     week = 'week'
     month = 'month'
-    year = 'year',
+    year = 'year'
     all = 'all'
 
 
 
 app = typer.Typer()
+console = Console(force_terminal=True)
 
 
 
@@ -95,6 +108,98 @@ def get_repo() -> RepositoryManager:
     raise typer.Exit(code=1)
 
 
+def _timestamp_text(timestamp: Timestamp, date: bool = True) -> Text:
+
+    elements = []
+    if date:
+        date_text = Text(timestamp.date_string, style='default')
+        elements.append(date_text)
+    time_text = Text(timestamp.time_iso(offset=False), style='bright_yellow')
+    elements.append(time_text)
+    ts_text = Text(' ').join(elements)
+
+    return ts_text
+
+
+def _timeset_text(timeset: TimeSet) -> Text:
+
+    sep = Text(' ')
+
+    start_date_text = Text(timeset.start.timestamp.date_string)
+    start_time_text = Text(timeset.start.timestamp.time_iso(offset=False), style='bright_yellow')
+
+    ts_text = Text.assemble(start_date_text, sep, start_time_text)
+
+    if not timeset.is_point:
+        start_end_sep = Text(' → ', style='default')
+        ts_text.append(start_end_sep)
+
+        if timeset.last_day != timeset.first_day:
+            end_date_text = Text(timeset.end.timestamp.date_string)
+            ts_text.append(end_date_text + sep)
+
+        end_time_text = Text(
+            timeset.end.timestamp.time_iso(offset=False), style='bright_yellow'
+        )
+
+        ts_text.append(end_time_text)
+
+    return ts_text
+
+
+def _session_panel(session: Session) -> Panel:
+
+    header = _timeset_text(session.timeset)
+
+    # Left panel.
+    left_elements = []
+
+    duration = session.timeset.duration
+    
+    if duration:
+        duration_text = Text.assemble(
+            Text('Duration:', style='grey62'),
+            ' ',
+            Text(str(duration), style='bright_yellow')
+        )
+        percentage_density = round(100 * session.timeset.density)
+        density_text = Text.assemble(
+            Text('Density:', style='grey62'),
+            ' ',
+            Text(f'{percentage_density}%', style='bright_yellow'), 
+        )
+
+        left_elements.append(duration_text)
+        left_elements.append(density_text)
+        left_elements.append(Text())
+    left_elements.extend([
+        Text('Activities:', style='grey62'),
+        *[Text(f'• {a.title}', style='italic #cdbef4') 
+            for a in sorted(session._activities, key=lambda a: a.title)]
+    ])
+
+    right_elements = []
+    if session.message:
+        right_elements.extend([
+            Panel(
+                Markdown(session.message),
+                title=Text('Message', style='grey62'),
+                title_align='left',
+                border_style='grey42'
+            )
+        ])
+
+    left = Group(*left_elements)
+    right = Group(*right_elements)
+
+    table = Table.grid(expand=True)
+    table.add_column(ratio=1)
+    table.add_column(ratio=2)
+    table.add_row(left, right)
+
+    return Panel(table, title=header, title_align='right', border_style='dim')
+
+
 @app.command()
 def init():
     '''Initialize a new Diane repository.
@@ -136,22 +241,50 @@ def status():
     '''Show currently tracked activities.'''
 
     repo = get_repo()
+
     if not repo._tracking_state:
-        typer.echo('No activities are currently being tracked.')
+        console.print(Panel(
+            Text('No activities are currently being tracked.'),
+            border_style='dim',
+            expand=True
+        ))
         return
-    
-    indent = '    '
-    bullet = '\u2022'  # Bullet '•'.
-    typer.echo('Tracking activities:')
-    for activity, start in repo._tracking_state.items():
-        typer.echo(f'{indent}{bullet} {activity.title} (started {start})')
+
+    tracking_activities_table = Table(border_style='dim', box=box.ROUNDED, expand=True)
+    tracking_activities_table.add_column(
+        Text('Activity', style='grey62'),
+        style='italic #cdbef4', no_wrap=True, overflow='ellipsis'
+    )
+    tracking_activities_table.add_column(
+        Text('Started', style='grey62'),
+        style='bright_yellow', justify='right', no_wrap=True, overflow='ellipsis'
+    )
+    tracking_activities_table.add_column(
+        Text('Duration', style='grey62'),
+        style='bright_yellow', justify='right', no_wrap=True, overflow='ellipsis'
+    )
+
+    now = Timestamp.now().round_to_second()
+    for a, t in sorted(repo._tracking_state.items(), key=lambda pair: pair[1]):
+        duration = now - t
+        title_text = Text.assemble(
+            Text(a.title), ' ', Text(f'({a.slug})', style='not italic grey62')
+        )
+        tracking_activities_table.add_row(
+            title_text,
+            _timestamp_text(t, t.datetime.date()!=now.datetime.date()),
+            str(duration)
+
+        )
+
+    console.print(tracking_activities_table)
 
 
 @app.command()
 def start(
     activities: list[str] = typer.Argument(
         ...,
-        help='Activities to start.',
+        help='Activity slugs to start tracking.',
         autocompletion=complete_activity_slugs
     )
 ) -> None:
@@ -169,14 +302,29 @@ def start(
     
     try:
         started_activities = manager.start(*activities)
-        typer.echo(f'Started tracking {len(started_activities)} activities.')
-        indent = '    '
-        bullet = '\u2022'  # Bullet '•'.
-        for activity in started_activities:
-            typer.echo(f'{indent}{bullet} {activity.title}')
     except ValueError as e:
-        typer.echo(f'Error starting activities. {e}')
-        raise typer.Exit(code=1)
+        raise click.ClickException(f'Error starting activities. {e}')
+    
+    if not started_activities:
+        console.print(Panel(
+            Text('No activities to start tracking.'),
+            border_style='dim',
+            expand=True
+        ))
+        return
+    
+    header = Text.assemble(
+        Text(f'Started ('),
+        Text(f'{len(started_activities)}', style='#cdbef4'),
+        Text(')')
+    )
+    elements = []
+    for a in sorted(started_activities, key=lambda a: a.title):
+        elements.append(Text(f'• {a.title}', style='italic #cdbef4'))
+    
+    console.print(Panel(
+        Group(*elements), title=header, title_align='left', border_style='dim', expand=True
+    ))
     
 
 @app.command()
@@ -198,43 +346,48 @@ def cancel(
       are cancelled, regardless of the 'activities' argument.
     '''
 
-    indent = '    '
-    bullet = '\u2022'  # Bullet '•'.
-    purple = (200, 150, 250)
-
     repo = get_repo()
 
     if not all_ and not activities:
-        typer.echo('Specify at least one activity to cancel or use \'-a\'/\'--all\'.')
-        raise typer.Exit(code=1)
+        raise typer.BadParameter(
+            'specify at least one activity to cancel or use -a/--all.',
+            param_hint='ACTIVITIES'
+        )
 
     try:
         cancelled = repo.cancel(*(activities or []), all=all_)
         if cancelled:
-            activities_titles = (
-                f'{indent}{bullet} {click.style(a.title, fg=purple, italic=True)}'
-                for a in sorted(cancelled, key=lambda a: a.title)
+            header = Text.assemble(
+                Text(f'Cancelled ('),
+                Text(f'{len(cancelled)}', style='#cdbef4'),
+                Text(')')
             )
-            activities_titles_string = '\n'.join(activities_titles)
-            activities_str = (
-                'Tracking of the following activities has been cancelled:\n'
-                f'{activities_titles_string}'
+            elements = []
+            for a in sorted(cancelled, key=lambda a: a.title):
+                elements.append(Text(f'• {a.title}', style='italic #cdbef4'))
+            
+            console.print(
+                Panel(
+                    Group(*elements), title=header, title_align='left', style='dim', expand=True
+                )
             )
-            typer.echo(activities_str)
+
         else:
             if not repo._tracking_state:
-                typer.echo('No activities are currently being tracked.')
+                raise click.ClickException('No activities are currently being tracked.')
             else:
-                typer.echo('No matching activities to cancel.')
+                raise typer.BadParameter(
+                    'no matching activities to cancel.',
+                    param_hint='ACTIVITIES'
+                )
     except ValueError as e:
-        typer.echo(f'Error cancelling activities. {e}')
-        raise typer.Exit(code=1)
+        raise click.ClickException(f'Error cancelling activities. {e}')
 
 
 @app.command()
 def stop(
     activities: list[str] | None = typer.Argument(
-        None, help='Activities to stop.',
+        None, help='Activity slugs to stop tracking.',
         autocompletion=complete_activity_slugs
     ),
     all_: bool = typer.Option(False, '-a', '--all', help='Stop all tracked activities.'),
@@ -253,19 +406,29 @@ def stop(
     repo = get_repo()
     try:
         sessions = repo.stop(*(activities or []), all=all_, message=message)
-        if sessions:
-            typer.echo(f'Recorded {len(sessions)} sessions:')
-            for s in sessions:
-                typer.echo(f'\u276F {s}')
     except ValueError as e:
-        typer.echo(f'Error stopping activities. {e}')
-        raise typer.Exit(code=1)
+        raise click.ClickException(f'Error stopping activities. {e}')
+    
+    if not sessions:
+        console.print(Panel(
+            Text('No sessions were recorded.'),
+            border_style='dim',
+            expand=True
+        ))
+        return
+
+    console.print(Text(f'Recorded {len(sessions)} sessions:'))
+    elements = []
+    for s in sessions:
+        elements.append(_session_panel(s))
+    console.print(Group(*elements))
+    
     
 
 @app.command()
 def do(activities: list[str] = typer.Argument(
         ...,
-        help='Activities to start.',
+        help='Activity slugs to start.',
         autocompletion=complete_activity_slugs
     ),
     message: str = typer.Option(
@@ -278,14 +441,23 @@ def do(activities: list[str] = typer.Argument(
 
     try:
         session = repo.do(*activities, message=message)
-        indent = '    '
-        bullet = '\u2022'  # Bullet '•'.
-        typer.echo(f'Have done activities {len(session.activities)}:')
-        for a in session.activities:
-            typer.echo(f'{indent}{bullet} {a.title}')
     except ValueError as e:
-        typer.echo(f'Error doing activities. {e}')
-        raise typer.Exit(code=1)
+        raise click.ClickException(f'Error doing activities. {e}')
+    
+    header = Text.assemble(
+        Text(f'Done ('),
+        Text(f'{len(session.activities)}', style='#cdbef4'),
+        Text(')')
+    )
+    elements = []
+    for a in sorted(session.activities, key=lambda a: a.title):
+        elements.append(Text(f'• {a.title}', style='italic #cdbef4'))
+    
+    console.print(
+        Panel(
+            Group(*elements), title=header, title_align='left', border_style='dim', expand=True
+        )
+    )
 
 
 @app.command()
@@ -325,55 +497,13 @@ def sessions(
         SessionsPeriod.all: TimeInterval.timeline()
     }
     target = TimeSet.union(*(interval_by_period[p] for p in periods))
-    
-    indent = '    '
-    arrow = '\u2192'   # Arrow '→'.
-    bullet = '\u2022'  # Bullet '•'.
-    gray = (150, 150, 150)
-    purple = (200, 150, 250)
 
-    def generate_sessions():
+    with console.capture() as capture:
         for s in repo.iter_overlapping(target):
-            start_date_str = f'{s.timeset.start.timestamp.date_string} '
-            start_time_str = click.style(
-                s.timeset.start.timestamp.time_iso(offset=False), fg='bright_yellow', bold=True
-            )
+            console.print(_session_panel(s))
 
-            if s.timeset.is_point:
-                end_str = ''
-            else:
-                end_date_str = (
-                    '' if s.timeset.last_day == s.timeset.first_day
-                    else f'{s.timeset.end.timestamp.date_string} '
-                )
-                end_time_str = click.style(
-                    s.timeset.end.timestamp.time_iso(offset=False), fg='bright_yellow', bold=True
-                )
-
-                density = round(100 * (s.timeset.duration / s.timeset.span_duration))
-                duration_density_str = f' (duration: {s.timeset.duration}, density: {density}%)'
-
-                end_str = f' {arrow} {end_date_str}{end_time_str}{duration_density_str}'
-            
-            header = f'{start_date_str}{start_time_str}{end_str}'
-
-            activities_titles = (
-                    f'{indent}{bullet} {click.style(a.title, fg=purple, italic=True)}'
-                    for a in sorted(s._activities, key=lambda a: a.title)
-                )
-            activities_titles_string = '\n'.join(activities_titles)
-            activities_str = f'{indent}Activities:\n{activities_titles_string}'
-
-            session_str = f'{header}\n{activities_str}'
-
-            if s.message:
-                message_text = click.style(s.message, fg=gray, italic=True)
-                message_str = f'{indent}Message: {message_text}'
-                session_str += f'\n{message_str}'
-
-            yield f'\u276F {session_str}\n'
-
-    click.echo_via_pager(generate_sessions())
+    output = capture.get()
+    click.echo_via_pager(output)
     
 
 @app.command()
@@ -412,43 +542,82 @@ def stats(
         SessionsPeriod.all: TimeInterval.timeline()
     }
     target = TimeSet.union(*(interval_by_period[p] for p in periods))
-
+    
+    activity_to_timesets = defaultdict(set)
     main_activities = set()
     ancestor_activities = set()
-    durations = defaultdict(Duration)
     for s in repo.find_overlapping(target):
         clipped = s.timeset & target
 
-        if not clipped:
-            continue
-
-        duration = clipped.duration
-        
-        main_activities_in_session = set(s.activities)
-        ancestor_activities_in_session = repo._activities.ancestors(*main_activities_in_session)
-
-        for a in main_activities_in_session | ancestor_activities_in_session:
-            durations[a] += duration
-
-        main_activities.update(main_activities_in_session)
-        ancestor_activities.update(ancestor_activities_in_session)
+        if clipped:
+            main_activities_in_sessions = s.activities
+            main_activities.update(main_activities_in_sessions)
+            ancestor_activities_in_sessions = repo._activities.ancestors(*main_activities_in_sessions)
+            ancestor_activities.update(ancestor_activities_in_sessions)
+            for a in main_activities_in_sessions | ancestor_activities_in_sessions:
+                activity_to_timesets[a].add(clipped)
 
     not_main_activities = ancestor_activities - main_activities
 
-    indent = '    '
-    bullet = '\u2022'  # Bullet '•'.
-    purple = (200, 150, 250)
-    light_purple = (125, 75, 175)
-            
-    for a in sorted(main_activities, key=lambda a: durations[a], reverse=True):
-        typer.echo(
-            f'{indent}{bullet} {click.style(a.title, fg=purple, italic=True)}: {durations[a]}'
+    activity_to_duration = {}
+    activity_to_times = {}
+    activity_to_longest_timeset = {}
+    for a in main_activities | ancestor_activities:
+        activity_timeset = TimeSet.union(*activity_to_timesets[a])
+        activity_to_duration[a] = activity_timeset.duration
+        activity_to_times[a] = activity_timeset.components_number
+        activity_to_longest_timeset[a] = max(activity_to_timesets[a], key=lambda ts: ts.duration)
+
+    main_activities_table = Table(border_style='dim', box=box.ROUNDED, expand=True)
+    main_activities_table.add_column(
+        Text('Activity', style='grey62'),
+        style='italic #cdbef4', no_wrap=True, overflow='ellipsis', ratio=25
+    )
+    main_activities_table.add_column(
+        Text('Total duration', style='grey62'),
+        style='bright_yellow', justify='right', no_wrap=True, overflow='ellipsis', ratio=20
+    )
+    main_activities_table.add_column(
+        Text('Times', style='grey62'),
+        justify='right', no_wrap=True, overflow='ellipsis', ratio=10,
+    )
+    main_activities_table.add_column(
+        Text('Longest session', style='grey62'),
+        justify='right', no_wrap=True, overflow='ellipsis', ratio=50
+    )
+
+    for a in sorted(main_activities, key=lambda a: activity_to_duration[a], reverse=True):
+        main_activities_table.add_row(
+            a.title,
+            str(activity_to_duration[a]),
+            str(activity_to_times[a]),
+            Text.assemble(_timeset_text(
+                activity_to_longest_timeset[a]),
+                Text(' ('),
+                Text(str(activity_to_longest_timeset[a].duration), style='bright_yellow'),
+                Text(')'),
+            )
         )
-    for a in sorted(not_main_activities, key=lambda a: durations[a], reverse=True):
-        typer.echo(
-            f'{indent}{bullet} {click.style(a.title, fg=light_purple, italic=True)}: {durations[a]}'
+    main_activities_table.add_section()
+    for a in sorted(not_main_activities, key=lambda a: activity_to_duration[a], reverse=True):
+        main_activities_table.add_row(
+            Text(a.title, style='italic #8f81b4'),
+            str(activity_to_duration[a]),
+            str(activity_to_times[a]),
+            Text.assemble(_timeset_text(
+                activity_to_longest_timeset[a]),
+                Text(' ('),
+                Text(str(activity_to_longest_timeset[a].duration), style='bright_yellow'),
+                Text(')'),
+            )
         )
 
+    with console.capture() as capture:
+        console.print(main_activities_table)
+
+    output = capture.get()
+    click.echo_via_pager(output)
+    
 
 
 if __name__ == '__main__':

@@ -1,10 +1,12 @@
 from textwrap import indent
 
 from enum import Enum
+import math
 import typer
 from pathlib import Path
 import yaml
 import click
+import os
 from collections import defaultdict
 from itertools import chain
 from rich.panel import Panel
@@ -18,6 +20,8 @@ from rich.columns import Columns
 from rich.console import Console
 from rich.layout import Layout
 from rich.table import Table
+from rich.pager import SystemPager
+import plotext as plt
 
 from diane.temporal import Timestamp, Duration, TimeInterval, TimeSet
 from diane.sessions import Session
@@ -40,55 +44,98 @@ console = Console(force_terminal=True)
 
 
 
-def complete_activity_slugs(incomplete: str) -> list[str]:
-    '''Return a list of activity slugs for autocompletion in the CLI.
-    
-    Filters the slugs based on the current incomplete input.
+def _find_repo_root() -> Path | None:
+    '''Return the nearest ancestor directory containing `.diane/`.
 
-    Args:
-        `incomplete` (`str`): The current incomplete input from
-            the user.
-    
-    Returns:
-        `list[str]`: The list of activity slugs defined
-        in the repository.
+    Returns `None` when the current working directory is not inside
+    a Diane repository.
     '''
 
-    # Search for the repository root by looking for the '.diane/'
-    # directory in the current directory and its parents.
     current = Path.cwd()
-    repo_root = None
     for parent in [current, *current.parents]:
-        if (parent / '.diane').exists():
-            repo_root = parent
-            break
-    if not repo_root:
-        return []  # Not in a repository, so no activities to complete.
+        if (parent / '.diane').is_dir():
+            return parent
+    return None
 
-    activities_yaml = repo_root / '.diane' / 'data' / 'activities.yaml'
-    if not activities_yaml.exists():
-        return []
+
+def _load_yaml_mapping(path: Path) -> dict:
+    '''Load a YAML file as a mapping.
+
+    Returns an empty dictionary if the file is missing, unreadable,
+    invalid YAML, or contains a top-level value other than a mapping.
+    '''
+
+    if not path.exists():
+        return {}
 
     try:
-        with activities_yaml.open(encoding='utf-8') as f:
+        with path.open(encoding='utf-8') as f:
             data = yaml.safe_load(f)
     except (yaml.YAMLError, OSError):
-        return []
+        return {}
 
-    if not isinstance(data, dict):
-        return []
-    activities = data.get('activities', [])
+    return data if isinstance(data, dict) else {}
+
+
+def _defined_activity_slugs(repo_root: Path) -> set[str]:
+    '''Return activity slugs declared
+    in `.diane/data/activities.yaml`.'''
+
+    data = _load_yaml_mapping(repo_root / '.diane' / 'data' / 'activities.yaml')
+    activities = data.get('activities', {})
     if not isinstance(activities, dict):
+        return set()
+    return set(activities.keys())
+
+
+def _tracked_activity_slugs(repo_root: Path) -> set[str]:
+    '''Return activity slugs present in `.diane/tracking.yaml`.'''
+
+    data = _load_yaml_mapping(repo_root / '.diane' / 'tracking.yaml')
+    tracking = data.get('tracking', {})
+    if not isinstance(tracking, dict):
+        return set()
+    return set(tracking.keys())
+
+
+def _matching_completions(slugs: set[str], incomplete: str) -> list[str]:
+    '''Return sorted completion candidates matching `incomplete`.'''
+
+    if incomplete:
+        return sorted(slug for slug in slugs if slug.startswith(incomplete))
+    return sorted(slugs)
+
+
+def complete_activity_slugs_start(incomplete: str) -> list[str]:
+    '''Return completion candidates for `start` and `do`.
+
+    Suggestions include defined activity slugs that are not currently
+    tracked. If the repository metadata cannot be read, an empty list
+    is returned.
+    '''
+
+    repo_root = _find_repo_root()
+    if repo_root is None:
         return []
 
-    slugs = list(activities.keys())
+    available_slugs = _defined_activity_slugs(repo_root) - _tracked_activity_slugs(repo_root)
+    return _matching_completions(available_slugs, incomplete)
 
-    # Filter slugs based on the incomplete input. If the input is empty,
-    # return all slugs.
-    if incomplete:
-        return [s for s in slugs if s.startswith(incomplete)]
-    
-    return slugs
+
+def complete_activity_slugs_stop(incomplete: str) -> list[str]:
+    '''Return completion candidates for `cancel` and `stop`.
+
+    Suggestions include currently tracked activity slugs that are still
+    defined in the repository. If the repository metadata cannot be
+    read, an empty list is returned.
+    '''
+
+    repo_root = _find_repo_root()
+    if repo_root is None:
+        return []
+
+    tracked_slugs = _tracked_activity_slugs(repo_root) & _defined_activity_slugs(repo_root)
+    return _matching_completions(tracked_slugs, incomplete)
 
 
 def get_repo() -> RepositoryManager:
@@ -285,7 +332,7 @@ def start(
     activities: list[str] = typer.Argument(
         ...,
         help='Activity slugs to start tracking.',
-        autocompletion=complete_activity_slugs
+        autocompletion=complete_activity_slugs_start
     )
 ) -> None:
     '''Start tracking activities.
@@ -330,7 +377,7 @@ def start(
 @app.command()
 def cancel(
     activities: list[str] | None = typer.Argument(
-        None, help='Activities to cancel.', autocompletion=complete_activity_slugs
+        None, help='Activities to cancel.', autocompletion=complete_activity_slugs_stop
     ),
     all_: bool = typer.Option(
         False, '-a', '--all', help='Cancel all currently tracked activities.'
@@ -388,7 +435,7 @@ def cancel(
 def stop(
     activities: list[str] | None = typer.Argument(
         None, help='Activity slugs to stop tracking.',
-        autocompletion=complete_activity_slugs
+        autocompletion=complete_activity_slugs_stop
     ),
     all_: bool = typer.Option(False, '-a', '--all', help='Stop all tracked activities.'),
     message: str = typer.Option(
@@ -417,7 +464,7 @@ def stop(
         ))
         return
 
-    console.print(Text(f'Recorded {len(sessions)} sessions:'))
+    console.print(Text(f'Recorded ({len(sessions)}):'))
     elements = []
     for s in sessions:
         elements.append(_session_panel(s))
@@ -429,7 +476,7 @@ def stop(
 def do(activities: list[str] = typer.Argument(
         ...,
         help='Activity slugs to start.',
-        autocompletion=complete_activity_slugs
+        autocompletion=complete_activity_slugs_start
     ),
     message: str = typer.Option(
         '', '-m', '--message', help='Optional message to attach to the session.'
@@ -467,7 +514,8 @@ def sessions(
     week: bool = typer.Option(False, '-w', '--week', help='Show this week\'s sessions.'),
     month: bool = typer.Option(False, '-m', '--month', help='Show this month\'s sessions.'),
     year: bool = typer.Option(False, '-y', '--year', help='Show this year\'s sessions.'),
-    all_: bool = typer.Option(False, '-a', '--all', help='Show all sessions.')
+    all_: bool = typer.Option(False, '-a', '--all', help='Show all sessions.'),
+    gantt: bool = typer.Option(False, '-g', '--gantt', help='Show gantt diagram.')
 ):
     '''Show recorded sessions.'''
 
@@ -497,13 +545,15 @@ def sessions(
         SessionsPeriod.all: TimeInterval.timeline()
     }
     target = TimeSet.union(*(interval_by_period[p] for p in periods))
+    sessions_to_show = sorted(repo.iter_overlapping(target), key=lambda s: s.timeset.end, reverse=True)
 
-    with console.capture() as capture:
-        for s in repo.iter_overlapping(target):
-            console.print(_session_panel(s))
-
-    output = capture.get()
-    click.echo_via_pager(output)
+    if gantt:
+        pass
+    else:
+        os.environ.setdefault('PAGER', 'less -R')
+        with console.pager(styles=True):
+            for s in sessions_to_show:
+                console.print(_session_panel(s))
     
 
 @app.command()
@@ -612,11 +662,9 @@ def stats(
             )
         )
 
-    with console.capture() as capture:
+    os.environ.setdefault('PAGER', 'less -R')
+    with console.pager(styles=True):
         console.print(main_activities_table)
-
-    output = capture.get()
-    click.echo_via_pager(output)
     
 
 

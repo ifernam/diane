@@ -391,6 +391,31 @@ class RepositoryManager(AssistedRepository):
         
         # Clear dirty days.
         self._dirty_days.clear()
+
+
+    def _clear_activity_notes(self) -> None:
+        '''Remove all unnecessary activity notes.
+        
+        Removes all Markdown files from the 'diane_activities' directory
+        that do not match any activity slug in the registry.
+
+        Only files named '<activity_slug>.md' are kept.
+        '''
+
+        activities_dir = self._datadir / 'diane_activities'
+        if not activities_dir.exists():
+            return
+
+        # Allowed filenames based on current activities.
+        allowed_filenames = {f'{activity.slug}.md' for activity in self._activities}
+
+        # Iterate over all Markdown files in directory (non‑recursive).
+        for file_path in activities_dir.glob('*.md'):
+            if file_path.name not in allowed_filenames:
+                try:
+                    file_path.unlink()
+                except Exception as e:
+                    pass
     
 
     def _save_activity_note(self, activity: Activity) -> None:
@@ -562,7 +587,23 @@ class RepositoryManager(AssistedRepository):
 
         with path.open('w', encoding='utf-8') as f:
             f.write(new_content)
+
+
+    def update_activities_notes(self) -> None:
+        '''Update all the tracked activities notes. Remove
+        unnecessary.'''
+
+        self._clear_activity_notes()
+
+        tracked_activities = set()
+        for s in self:
+            tracked_activities.update(s.activities)
+
+        tracked_activities.update(self._activities.ancestors(*tracked_activities))
         
+        for a in tracked_activities:
+            self._save_activity_note(a)
+
 
     def _load_state(self) -> None:
         '''Load the tracking state.

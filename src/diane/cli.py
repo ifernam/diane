@@ -665,7 +665,16 @@ def stats(
     os.environ.setdefault('PAGER', 'less -R')
     with console.pager(styles=True):
         console.print(main_activities_table)
+
+
+@app.command()
+def update() -> None:
+    '''Update all the tracked activities notes. Remove unnecessary.'''
     
+    repo = get_repo()
+    
+    repo.update_activities_notes()
+
 
 
 if __name__ == '__main__':

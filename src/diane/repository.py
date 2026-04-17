@@ -19,9 +19,9 @@ class RepositoryError(Exception):
     pass
 
 
-class ActivitiesNotInRegistryError(RepositoryError):
-    '''The session contains activities that are not contained
-    in the registry.'''
+class UnknownActivityError(RepositoryError):
+    '''There is a slug or activity that is not listed in the activities 
+    registry.'''
     pass
 
 class NoActivitiesError(RepositoryError):
@@ -67,13 +67,13 @@ class Repository(MutableSet[Session]):
             `activities` (`Activities`): The activities registry.
 
         Raises:
-            `ActivitiesNotInRegistryError`: If there are activities
+            `UnknownActivityError`: If there are activities
                 in the repository that are not listed in the registry.
         '''
 
         for s in self._sessions:
             if not s.activities <= activities:
-                raise ActivitiesNotInRegistryError(
+                raise UnknownActivityError(
                     f'The session {s} contains activities that are not in the registry.'
                 )
 
@@ -226,13 +226,13 @@ class Repository(MutableSet[Session]):
             `value` (`Session`): The session to add.
 
         Raises:
-            `ActivitiesNotInRegistryError`: If the given session
+            `UnknownActivityError`: If the given session
                 contains activities not listed in the registry.
         '''
 
         if value not in self:
             if not value.activities <= self._activities:
-                raise ActivitiesNotInRegistryError(
+                raise UnknownActivityError(
                     f'The session cannot be added to the repository because it contains '
                     f'activities that are not in the registry.'
                 )
@@ -315,6 +315,10 @@ class Repository(MutableSet[Session]):
             `Iterator[Session]`: An iterator over sessions ordered
             by decreasing end time. For sessions with the same end time,
             the order is descending by start time.
+
+        Raises:
+            `UnknownActivityError`: If the specified activity
+                is not listed in the registry.
         '''
 
         if not self._sessions:
@@ -328,13 +332,10 @@ class Repository(MutableSet[Session]):
         specified_activities = set()
         if activities:
             for a in activities:
-                if isinstance(a, str):
-                    try:
-                        specified_activities.add(self._activities.activity_by_slug(a))
-                    except KeyError:
-                        continue  # Unknown slug.
-                
-                specified_activities.add(a)
+                try:
+                    specified_activities.add(self._activities._resolve_activity(a))
+                except KeyError:
+                    raise UnknownActivityError(f'Unknown activity: \'{a}\'.')
 
         # Start from the last end time that is `<= end`.
         idx = self._ends.bisect_right(end) - 1 

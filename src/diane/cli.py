@@ -29,6 +29,12 @@ from diane.repository_manager import RepositoryManager
 
 
 
+class NoRepositoryError(Exception):
+    '''The repository was not found.'''
+    pass
+
+
+
 class SessionsPeriod(str, Enum):
     yesterday = 'yesterday'
     today = 'today'
@@ -143,16 +149,40 @@ def get_repo() -> RepositoryManager:
     
     Searches the current directory and its parents for the '.diane/'
     directory. If found, returns a 'RepositoryManager' for that
-    directory. If not found, prints an error message and exits with
-    code 1.
+    directory.
     '''
 
     current = Path.cwd()
     for directory in [current, *current.parents]:
         if (directory / '.diane').exists():
             return RepositoryManager(str(directory))
-    typer.echo('Error: not a Diane repository (no .diane/ found).')
-    raise typer.Exit(code=1)
+        
+    raise NoRepositoryError
+
+
+def complete_message(
+    ctx: click.Context,
+    param: click.Parameter,
+    incomplete: str
+) -> list[str]:
+    
+    repo = get_repo()
+    
+    # Determine specified activities.
+    activity_args = ctx.params.get('activities') or []
+    if not activity_args:
+        activity_args = [a for a in ctx.args if not a.startswith('-')]
+    specified_activity_slugs = [a for a in activity_args if a in repo._activities]
+
+    if not specified_activity_slugs:
+        return []
+
+    messages = set()
+    for s in repo.iter_from_last(None, *specified_activity_slugs):
+        if s.message and s.message.startswith(incomplete):
+            messages.add(s.message)
+
+    return sorted(messages)
 
 
 def _timestamp_text(timestamp: Timestamp, date: bool = True) -> Text:
@@ -439,7 +469,8 @@ def stop(
     ),
     all_: bool = typer.Option(False, '-a', '--all', help='Stop all tracked activities.'),
     message: str = typer.Option(
-        '', '-m', '--message', help='Optional message to attach to the session(s).'
+        '', '-m', '--message', help='Optional message to attach to the session(s).',
+        shell_complete=complete_message
     )
 ) -> None:
     '''Stop tracking activities.
@@ -479,9 +510,9 @@ def do(activities: list[str] = typer.Argument(
         autocompletion=complete_activity_slugs_start
     ),
     message: str = typer.Option(
-        '', '-m', '--message', help='Optional message to attach to the session.'
+        '', '-m', '--message', help='Optional message to attach to the session.',
+        shell_complete=complete_message
     )
-
 ) -> None:
     
     repo = get_repo()

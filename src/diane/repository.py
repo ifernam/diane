@@ -24,7 +24,7 @@ class ActivitiesNotInRegistryError(RepositoryError):
     in the registry.'''
     pass
 
-class EmptyActivitiesError(RepositoryError):
+class NoActivitiesError(RepositoryError):
     '''The repository contains a session with the empty activities
     set.'''
     pass
@@ -85,7 +85,7 @@ class Repository(MutableSet[Session]):
 
         for s in self._sessions:
             if not s.activities:
-                raise EmptyActivitiesError(
+                raise NoActivitiesError(
                     'The repository contains a session with the empty activities set.'
                 )
             if s.timeset.is_empty:
@@ -237,7 +237,7 @@ class Repository(MutableSet[Session]):
                     f'activities that are not in the registry.'
                 )
             if not value.activities:
-                raise EmptyActivitiesError('A session must contain at least one activity.')
+                raise NoActivitiesError('A session must contain at least one activity.')
             if value.timeset.is_empty:
                 raise EmptyTimeSetError('A session must be associated with a non-empty time set.')
             if value.timeset.is_unbounded:
@@ -294,7 +294,9 @@ class Repository(MutableSet[Session]):
         self._rebuild_activities_index()
 
 
-    def iter_from_last(self, end: Timestamp | None = None) -> Iterator[Session]:
+    def iter_from_last(
+        self, end: Timestamp | None = None, *activities: Activity | str
+    ) -> Iterator[Session]:
         '''Iterate over sessions in the repository in descending order
         of their end time.
 
@@ -305,6 +307,9 @@ class Repository(MutableSet[Session]):
             `end` (`Timestamp | None`): The upper bound for session end
                 times. If `None`, the iteration starts from the session
                 with the latest end time in the repository.
+            `*activities` (`Activity | str`): Required exact set
+                of activities. If none given, any activity set
+                is accepted.
 
         Returns:
             `Iterator[Session]`: An iterator over sessions ordered
@@ -318,6 +323,18 @@ class Repository(MutableSet[Session]):
         
         if end is None:
             end = self._ends[-1]  # The latest end time among sessions.
+
+        # Resolve activities.
+        specified_activities = set()
+        if activities:
+            for a in activities:
+                if isinstance(a, str):
+                    try:
+                        specified_activities.add(self._activities.activity_by_slug(a))
+                    except KeyError:
+                        continue  # Unknown slug.
+                
+                specified_activities.add(a)
 
         # Start from the last end time that is `<= end`.
         idx = self._ends.bisect_right(end) - 1 
@@ -336,7 +353,14 @@ class Repository(MutableSet[Session]):
                 # Check if the session is completed by `end`.
                 if s.timeset.end <= end:
                     # Yield the last session completed by `end`.
-                    yield s
+
+                    # If activities specified, only return session
+                    # if it has activities as specified.
+                    if specified_activities:
+                        if s.activities == specified_activities:
+                            yield s
+                    else:
+                        yield s
 
             # Move to the previous end time.    
             idx -= 1
@@ -656,20 +680,32 @@ class Repository(MutableSet[Session]):
             # Do nothing for 'C'.
     
 
-    def last(self) -> Session:
-        '''Return the last completed session.
-        
+    def last(self, end: Timestamp | None = None, *activities: Activity | str) -> Session:
+        '''Return the last session (by end time) that matches
+        the criteria.
+
+        Args:
+            `end` (`Timestamp | None`): The upper bound for session end
+                times. If `None`, the latest end time in the repository
+                is used.
+            `*activities` (`Activity | str`): Required exact set
+                of activities. If none given, any activity set
+                is accepted.
+
+        Returns:
+            `Session`: The first session from 
+            `iter_from_last(end, *activities)`.
+
         Raises:
-            `KeyError`: If there are no sessions completed up to present
-                in the repository.
+            `KeyError`: If no session satisfies the conditions.
         '''
-
-        up_to_present = self.find_contained_in(TimeInterval.leftclosed(Timestamp.now()))
-
-        if not up_to_present:
-            raise KeyError('There are no sessions completed up to present in the repository.')
         
-        return max(up_to_present, key=(lambda s: s.timeset.end))
+        if end is None:
+            end = self._ends[-1]  # The latest end time among sessions.
+        try:
+            return next(self.iter_from_last(end, *activities))
+        except StopIteration:
+            raise KeyError('No sessions found matching the criteria.')
 
 
     def merge(self, *sessions: Session) -> Session:

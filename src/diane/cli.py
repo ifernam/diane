@@ -104,14 +104,6 @@ def _tracked_activity_slugs(repo_root: Path) -> set[str]:
     return set(tracking.keys())
 
 
-def _matching_completions(slugs: set[str], incomplete: str) -> list[str]:
-    '''Return sorted completion candidates matching `incomplete`.'''
-
-    if incomplete:
-        return sorted(slug for slug in slugs if slug.startswith(incomplete))
-    return sorted(slugs)
-
-
 def complete_activity_slugs_start(incomplete: str) -> list[str]:
     '''Return completion candidates for `start` and `do`.
 
@@ -125,7 +117,7 @@ def complete_activity_slugs_start(incomplete: str) -> list[str]:
         return []
 
     available_slugs = _defined_activity_slugs(repo_root) - _tracked_activity_slugs(repo_root)
-    return _matching_completions(available_slugs, incomplete)
+    return sorted(s for s in available_slugs if s.startswith(incomplete))
 
 
 def complete_activity_slugs_stop(incomplete: str) -> list[str]:
@@ -141,7 +133,7 @@ def complete_activity_slugs_stop(incomplete: str) -> list[str]:
         return []
 
     tracked_slugs = _tracked_activity_slugs(repo_root) & _defined_activity_slugs(repo_root)
-    return _matching_completions(tracked_slugs, incomplete)
+    return sorted(s for s in tracked_slugs if s.startswith(incomplete))
 
 
 def get_repo() -> RepositoryManager:
@@ -174,8 +166,12 @@ def complete_message(
         activity_args = [a for a in ctx.args if not a.startswith('-')]
     specified_activity_slugs = [a for a in activity_args if a in repo._activities]
 
-    if not specified_activity_slugs:
-        return []
+    # If there is no incomplete input, return last message.
+    if not incomplete:
+        try:
+            return [repo.last(None, *specified_activity_slugs).message]
+        except KeyError:
+            return []
 
     messages = set()
     for s in repo.iter_from_last(None, *specified_activity_slugs):

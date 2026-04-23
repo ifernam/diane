@@ -5,11 +5,113 @@ import yaml
 import warnings
 import re
 import datetime
+from collections import defaultdict, namedtuple
+from collections.abc import Collection
 
 from diane.temporal import Timestamp, TimeInterval, TimeSet
 from diane.activities import Activity, Activities
 from diane.sessions import Session
-from diane.assisted_repository import AssistedRepository
+from diane.repository import UnknownActivityError
+from diane.assisted_repository import AssistedRepository, AssistedRepositoryError
+
+
+
+StartResult = namedtuple('StartResult', ['activities', 'timestamp'])
+
+
+
+class RepositoryManagerRepositoryError(AssistedRepositoryError):
+    '''The base exception for all assisted repository manager errors.'''
+    pass
+
+
+
+class NoActivitiesProvided(RepositoryManagerRepositoryError):
+    '''No activities have been provided.'''
+    pass
+
+
+
+class ActivityAlreadyTracked(RepositoryManagerRepositoryError):
+    '''There is an activity that is already being tracked.'''
+    
+    message: str
+    provided_activities: list[Activity]
+    already_tracked_data: dict[Activity, Timestamp]
+
+    
+    def __init__(
+            self,
+            message: str | None = None,
+            provided_activities: Collection[Activity] | None = None,
+            data: dict[Activity, Timestamp] | None = None
+        ) -> None:
+
+        if message is None:
+            if provided_activities and data:
+                already_tracked = [a for a in provided_activities if a in data]
+                if already_tracked:
+                    self.message = (
+                        'Some of the provided activities are already being tracked: '
+                        + ', '.join(f'\'{a.slug}\'' for a in already_tracked)
+                        + '.'
+                    )
+                else:
+                    self.message = 'Some of the provided activities are already being tracked.'
+            else:
+                self.message = 'Some of the provided activities are already being tracked.'
+        self.provided_activities = (
+            sorted(provided_activities, key=lambda a: a.slug)
+            if provided_activities is not None
+            else []
+        )
+        self.already_tracked_data = data or {}
+        super().__init__(message)
+
+
+    @property
+    def new_activities(self) -> list[Activity]:
+        '''Return the list of provided activities that are not already
+        being tracked.'''
+
+        return [a for a in self.provided_activities if a not in self.already_tracked_data]
+
+
+
+class AncestorActivities(RepositoryManagerRepositoryError):
+    '''Some of provided activities are ancestors of others.'''
+    
+    message: str
+    ancestor_to_activity: dict[Activity, set[Activity]]
+
+    def __init__(self, message: str | None = None, data: dict[Activity, set[Activity]] | None = None) -> None:
+
+        self.message = (
+            message
+            if message is not None
+            else 'Some of provided activities are ancestors of others.'
+        )
+        self.ancestor_to_activity = data or {}
+        super().__init__(message)
+
+
+
+class AncestorActivitiesTracked(RepositoryManagerRepositoryError):
+    '''Some of provided activities are ancestors of activities that
+    are already being tracked.'''
+    
+    message: str
+    ancestor_to_activity: dict[Activity, set[Activity]]
+
+    def __init__(self, message: str | None = None, data: dict[Activity, set[Activity]] | None = None) -> None:
+
+        self.message = (
+            message
+            if message is not None
+            else 'Some of provided activities are ancestors of activities that are already being tracked.'
+        )
+        self.ancestor_to_activity = data or {}
+        super().__init__(message)
 
 
 
@@ -797,7 +899,7 @@ class RepositoryManager(AssistedRepository):
         return result
 
     
-    def start(self, *activities: str) -> list[Activity]:
+    def start(self, *activities: str) -> StartResult:
         '''Start tracking one or more activities.
 
         The activities are marked as being tracked from the current
@@ -811,49 +913,93 @@ class RepositoryManager(AssistedRepository):
                 occurrence is considered).
 
         Raises:
-            `ValueError`: If no activities are provided, or if any
-                of the slugs are not found in the activities registry.
+            `NoActivitiesProvided`: If no activities are provided.
+            `UnknownActivityError`: If any of the activity slugs
+                are not found in the activities registry.
+            `ActivityAlreadyTracked`: If there is activity that
+                is already being tracked.
+            `AncestorActivities`: If some of the specified activities
+                are the ancestors of others.
+            `AncestorActivitiesTracked`: If some of the specified
+                activities are ancestors of activities that
+                are already being tracked.
         '''
 
         if not activities:
-            raise ValueError('Specify at least one activity for tracking.')
+            raise NoActivitiesProvided('Specify at least one activity for tracking.')
         
         # Remove duplicates, preserving order.
         unique_slugs = list(dict.fromkeys(activities))
         
-        activities_to_start = []
-        unknown_slugs = []
-
+        # Check for any unknown activities.
+        activities_to_start: set[Activity] = set()
+        unknown_activity_slugs: set[str] = set()
         for slug in unique_slugs:
             try:
-                activities_to_start.append(self._activities.activity_by_slug(slug))
+                activities_to_start.add(self._activities.activity_by_slug(slug))
             except KeyError:
-                unknown_slugs.append(slug)
-
-        if unknown_slugs:
-            if len(unknown_slugs) == 1:
-                raise ValueError(f'Unknown activity: \'{unknown_slugs[0]}\'.')
-            else:
-                quoted = ', '.join(f'\'{s}\'' for s in unknown_slugs)
-                raise ValueError(f'Unknown activities: {quoted}.')
+                unknown_activity_slugs.add(slug)
+        if unknown_activity_slugs:
+            raise UnknownActivityError(
+                None, unique_slugs, unknown_activity_slugs, activities_to_start
+            )
+        
+        # Check whether any activities are already being tracked.
+        already_tracked = activities_to_start & set(self._tracking_state)
+        if already_tracked:
+            already_tracked_data: dict[Activity, Timestamp] = {
+                a: self._tracking_state[a] for a in already_tracked if a in self._tracking_state
+            }
+            raise ActivityAlreadyTracked(
+                None,
+                activities_to_start,
+                already_tracked_data
+            )
+        
+        # Check whether any of specified activities are ancestors
+        # of others.
+        specified_activity_to_ancestors: dict[Activity, set[Activity]] = {}
+        for a in activities_to_start:
+            specified_activity_to_ancestors[a] = self._activities.ancestors(a)
+        ancestor_to_specified_activity: defaultdict[Activity, set[Activity]] = defaultdict(set)
+        for possible_ancestor in activities_to_start:
+            for activity, ancestors in specified_activity_to_ancestors.items():
+                if possible_ancestor in ancestors:
+                    ancestor_to_specified_activity[possible_ancestor].add(activity)
+        if ancestor_to_specified_activity:
+            raise AncestorActivities(
+                'Some of the provided activities are the ancestors of others.',
+                ancestor_to_specified_activity
+            )
+        
+        # Check whether any of specified activities are ancestors
+        # of activities that are already being tracked.
+        tracked_activity_to_ancestors: dict[Activity, set[Activity]] = {}
+        for a in self._tracking_state:
+            tracked_activity_to_ancestors[a] = self._activities.ancestors(a)
+        ancestor_to_tracked_activity: defaultdict[Activity, set[Activity]] = defaultdict(set)
+        for possible_ancestor in activities_to_start:
+            for activity, ancestors in tracked_activity_to_ancestors.items():
+                if possible_ancestor in ancestors:
+                    ancestor_to_tracked_activity[possible_ancestor].add(activity)
+        if ancestor_to_tracked_activity:
+            raise AncestorActivitiesTracked(
+                'Some of the specified activities are the ancestors of activities that '
+                'are already being tracked.',
+                ancestor_to_tracked_activity
+            )
         
         now = Timestamp.now().round_to_second()
         started_activities = []
 
         for a in activities_to_start:
-            if a in self._tracking_state:
-                warnings.warn(
-                    f'The activity \'{a}\' is already being tracked.',
-                    stacklevel=2
-                )
-            else:
-                self._tracking_state[a] = now
-                started_activities.append(a)
+            self._tracking_state[a] = now
+            started_activities.append(a)
 
         if started_activities:
             self._save_state()
 
-        return sorted(started_activities, key=lambda a: a.slug)
+        return StartResult(started_activities, now)
     
 
     def cancel(self, *activities: str, all: bool = False) -> set[Activity]:

@@ -1,5 +1,5 @@
+from collections.abc import Collection
 from textwrap import indent
-
 from enum import Enum
 import math
 import typer
@@ -21,11 +21,22 @@ from rich.console import Console
 from rich.layout import Layout
 from rich.table import Table
 from rich.pager import SystemPager
+from rich.prompt import Confirm
 import plotext as plt
 
 from diane.temporal import Timestamp, Duration, TimeInterval, TimeSet
+from diane.activities import Activity
 from diane.sessions import Session
-from diane.repository_manager import RepositoryManager
+from diane.repository import UnknownActivityError
+from diane.repository_manager import (
+    RepositoryManager,
+    RepositoryManagerRepositoryError,
+    NoActivitiesProvided,
+    ActivityAlreadyTracked,
+    AncestorActivities,
+    AncestorActivitiesTracked,
+    StartResult
+)
 
 
 
@@ -140,8 +151,11 @@ def get_repo() -> RepositoryManager:
     '''Helper to find the Diane repository for the current directory.
     
     Searches the current directory and its parents for the '.diane/'
-    directory. If found, returns a 'RepositoryManager' for that
+    directory. If found, returns a `RepositoryManager` for that
     directory.
+
+    Raises:
+        `NoRepositoryError`: If no repository is found.
     '''
 
     current = Path.cwd()
@@ -154,7 +168,6 @@ def get_repo() -> RepositoryManager:
 
 def complete_message(
     ctx: click.Context,
-    param: click.Parameter,
     incomplete: str
 ) -> list[str]:
     
@@ -273,6 +286,158 @@ def _session_panel(session: Session) -> Panel:
     return Panel(table, title=header, title_align='right', border_style='dim')
 
 
+def _error_panel(content: Group, title: Text) -> Panel:
+    return Panel(content, title=title, title_align='left', border_style='#fa5252', expand=True)
+
+
+def _message_panel(content: Group, title: Text) -> Panel:
+    return Panel(content, title=title, title_align='left', border_style='dim', expand=True)
+
+
+def _unknown_activity_group(
+    unknown_activity_slugs: Collection[str], recognised_activities: Collection[Activity]
+) -> Group:
+
+    elements = []
+    if unknown_activity_slugs:
+        elements.append(Text.from_markup(
+            'Some provided activity slugs are [#fa5252]unknown[/]:'
+        ))
+        for slug in sorted(unknown_activity_slugs):
+            elements.append(Text(f'• {slug}', style='#fa5252'))
+    if recognised_activities:
+        elements.append(Text())
+        elements.append(Text.from_markup(
+            'However, the following activities have been [#cdbef4]recognised[/]:'
+        ))
+        for activity in sorted(recognised_activities, key=lambda a: a.slug):
+            elements.append(Text.assemble(
+                Text(f'• {activity.title}', style='italic #cdbef4'),
+                ' ',
+                Text(f'({activity.slug})', style='grey62')
+            ))
+        elements.append(Text())
+        elements.append(Text('Do you want to start tracking the recognised activities?', style='bold'))
+
+    return Group(*elements)
+
+
+def _already_tracked_group(
+    provided_activities: Collection[Activity],
+    already_tracked_data: dict[Activity, Timestamp],
+    new_activities: Collection[Activity]
+) -> Group:
+
+    elements = []
+    if already_tracked_data:
+        if new_activities:
+            elements.append(Text.from_markup(
+                'Some provided activities are [#fa5252]already being tracked[/]:'
+            ))
+            for a in sorted(already_tracked_data, key=lambda a: a.slug):
+                elements.append(Text.assemble(
+                    Text(f'• {a.title}', style='italic #fa5252'),
+                    Text(' '),
+                    Text(f'({a.slug})', style='grey62')
+                ))
+            elements.append(Text())
+            elements.append(Text.from_markup(
+                'However, the following activities have not yet been tracked '
+                'and [#cdbef4]can be started[/]:'
+            ))
+            for a in sorted(new_activities, key=lambda a: a.slug):
+                elements.append(Text.assemble(
+                    Text(f'• {a.title}', style='italic #cdbef4'),
+                    ' ',
+                    Text(f'({a.slug})', style='grey62')
+                ))
+            elements.append(Text())
+            elements.append(Text('Do you want to start tracking the new activities?', style='bold'))
+        else:
+            if len(provided_activities) == 1:
+                elements.append(Text.from_markup(
+                    'The provided activity is [#fa5252]already being tracked[/].'
+                ))
+            else:
+                elements.append(Text.from_markup(
+                    'All provided activities are [#fa5252]already being tracked[/].'
+                ))
+    else:
+        elements.append(Text.from_markup(
+            'No provided activities are already being tracked.'
+        ))
+
+    return Group(*elements)
+
+
+def _already_tracked_panel(
+    provided_activities: Collection[Activity],
+    already_tracked_data: dict[Activity, Timestamp],
+    new_activities: Collection[Activity]
+) -> Panel:
+    if already_tracked_data:
+        if len(already_tracked_data) == 1:
+            title = Text('The provided activity is already being tracked')
+        else:
+            title = Text(f'{len(already_tracked_data)} activities are already being tracked')
+        return _error_panel(
+            _already_tracked_group(provided_activities, already_tracked_data, new_activities),
+            title
+        )
+    else:
+        return _message_panel(
+            _already_tracked_group(provided_activities, already_tracked_data, new_activities),
+            Text('No activities are already being tracked')
+        )
+
+
+def _start_group(start_result: StartResult) -> Group:
+
+    elements = []
+    if start_result.activities:
+        if len(start_result.activities) == 1:
+            elements.append(Text('The activity'))
+        else:
+            elements.append(Text('The activities'))
+        for a in sorted(start_result.activities, key=lambda a: a.title):
+            elements.append(Text.assemble(
+                Text(f'• {a.title}', style='italic #cdbef4'),
+                ' ',
+                Text(f'({a.slug})', style='grey62')
+            ))
+        elements.append(Text.assemble(
+            Text('began to be tracked at'),
+            ' ',
+            Text(start_result.timestamp.time_iso(offset=False), style='bright_yellow'),
+            Text(' on ', style='default'),
+            Text(start_result.timestamp.date_string, style='default')
+        ))
+    else:
+        elements.append(Text('No activities have started being tracked.'))
+
+    return Group(*elements)
+
+
+def _start_panel(start_result: StartResult) -> Panel:
+    if not start_result.activities:
+        title = Text('No activities started')
+    elif len(start_result.activities) == 1:
+        title = Text.from_markup('Started tracking [#cdbef4]1[/] activity')
+    else:
+        title = Text.assemble(
+            Text('Started tracking '),
+            Text(f'{len(start_result.activities)}', style='#cdbef4'),
+            Text(' activities')
+        )
+    return Panel(
+        _start_group(start_result),
+        title=title,
+        title_align='left',
+        border_style='dim',
+        expand=True
+    )
+
+
 @app.command()
 def init():
     '''Initialize a new Diane repository.
@@ -361,43 +526,63 @@ def start(
         autocompletion=complete_activity_slugs_start
     )
 ) -> None:
-    '''Start tracking activities.
-    
-    Starts tracking the specified activities from the current time.
-    If an activity is already being tracked, it is ignored. If any
-    specified activities are not defined in the repository, an error
-    message is printed and the command exits with code 1. Otherwise,
-    a success message is printed listing the activities that were
-    started.
-    '''
+    '''Start tracking the specified activities from the current time.'''
 
-    manager = get_repo()
-    
-    try:
-        started_activities = manager.start(*activities)
-    except ValueError as e:
-        raise click.ClickException(f'Error starting activities. {e}')
-    
-    if not started_activities:
-        console.print(Panel(
-            Text('No activities to start tracking.'),
-            border_style='dim',
-            expand=True
-        ))
-        return
-    
-    header = Text.assemble(
-        Text(f'Started ('),
-        Text(f'{len(started_activities)}', style='#cdbef4'),
-        Text(')')
-    )
-    elements = []
-    for a in sorted(started_activities, key=lambda a: a.title):
-        elements.append(Text(f'• {a.title}', style='italic #cdbef4'))
-    
-    console.print(Panel(
-        Group(*elements), title=header, title_align='left', border_style='dim', expand=True
-    ))
+    def _try_start(activity_slugs):
+        try:
+            manager = get_repo()
+            return manager.start(*activity_slugs)
+        except NoRepositoryError:
+            raise click.ClickException('No Diane repository found.')
+        except NoActivitiesProvided:
+            raise click.ClickException('No activities provided to start.')
+        except UnknownActivityError as e:
+            if e.provided_slugs and e.unknown_activity_slugs and e.recognised_activities:
+                console.print(_error_panel(
+                    _unknown_activity_group(e.unknown_activity_slugs, e.recognised_activities),
+                    Text('Unknown activities')
+                ))
+                if Confirm.ask(default=True, console=console):
+                    return _try_start([a.slug for a in e.recognised_activities])
+                else:
+                    console.print(_error_panel(
+                        _start_group(StartResult(set(), Timestamp.now())),
+                        Text('Activity tracking has not started')
+                    ))
+                    raise typer.Exit(code=1) from e
+            else:
+                console.print(_error_panel(
+                    Group(Text('None of the provided activity slugs are recognised.')),
+                    Text('Unknown activities')
+                ))
+                raise typer.Exit(code=1) from e
+        except ActivityAlreadyTracked as e:
+            if e.provided_activities and e.already_tracked_data and e.new_activities:
+                console.print(_already_tracked_panel(
+                    e.provided_activities, e.already_tracked_data, e.new_activities
+                ))
+                if Confirm.ask(default=True, console=console):
+                    return _try_start([a.slug for a in e.new_activities])
+                else:
+                    console.print(_error_panel(
+                        _start_group(StartResult(set(), Timestamp.now())),
+                        Text('Activity tracking has not started')
+                    ))
+                    raise typer.Exit(code=1) from e
+            else:
+                console.print(_already_tracked_panel(
+                    e.provided_activities, e.already_tracked_data, e.new_activities
+                ))
+                raise typer.Exit(code=1) from e
+        except AncestorActivities as e:
+            raise click.ClickException(f'Activity tracking has not started. {e}') from e
+        except AncestorActivitiesTracked as e:
+            raise click.ClickException(f'Activity tracking has not started. {e}') from e
+        except Exception as e:
+            raise click.ClickException(f'Error starting activities. {e}') from e
+
+    start_result = _try_start(activities)
+    console.print(_start_panel(start_result))
     
 
 @app.command()
@@ -460,13 +645,14 @@ def cancel(
 @app.command()
 def stop(
     activities: list[str] | None = typer.Argument(
-        None, help='Activity slugs to stop tracking.',
+        None,
+        help='Activity slugs to stop tracking.',
         autocompletion=complete_activity_slugs_stop
     ),
     all_: bool = typer.Option(False, '-a', '--all', help='Stop all tracked activities.'),
     message: str = typer.Option(
         '', '-m', '--message', help='Optional message to attach to the session(s).',
-        shell_complete=complete_message
+        autocompletion=complete_message
     )
 ) -> None:
     '''Stop tracking activities.
@@ -507,7 +693,7 @@ def do(activities: list[str] = typer.Argument(
     ),
     message: str = typer.Option(
         '', '-m', '--message', help='Optional message to attach to the session.',
-        shell_complete=complete_message
+        autocompletion=complete_message
     )
 ) -> None:
     

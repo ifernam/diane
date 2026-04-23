@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
-from collections.abc import MutableSet
+from collections.abc import Iterable, MutableSet, Collection
 from sortedcontainers import SortedList
 import warnings
 import heapq
@@ -22,7 +22,46 @@ class RepositoryError(Exception):
 class UnknownActivityError(RepositoryError):
     '''There is a slug or activity that is not listed in the activities 
     registry.'''
-    pass
+    
+    message: str
+    provided_slugs: list[str]
+    unknown_activity_slugs: list[str]
+    recognised_activities: list[Activity]
+
+    def __init__(
+        self,
+        message: str | None = None,
+        provided_slugs: Collection[str] | None = None,
+        unknown_activity_slugs: Collection[str] | None = None,
+        recognised_activities: Collection[Activity] | None = None
+    ) -> None:
+        
+        if message is None:
+            if unknown_activity_slugs:
+                if len(unknown_activity_slugs) == 1:
+                    self.message = f'Unknown activity: \'{next(iter(unknown_activity_slugs))}\'.'
+                else:
+                    quoted = ', '.join(f'\'{s}\'' for s in unknown_activity_slugs)
+                    self.message = f'Unknown activities: {quoted}.'
+            else:
+                self.message = 'There is an unknown activity.'
+        else:
+            self.message = message
+        
+        self.provided_slugs = sorted(provided_slugs) if provided_slugs else []
+        self.unknown_activity_slugs = (
+            sorted(unknown_activity_slugs) if unknown_activity_slugs else []
+        )
+        self.recognised_activities = (
+            sorted(recognised_activities, key=lambda a: a.slug) if recognised_activities else []
+        )
+        super().__init__(message)
+
+
+    def __str__(self) -> str:
+        return self.message
+    
+
 
 class NoActivitiesError(RepositoryError):
     '''The repository contains a session with the empty activities
@@ -74,7 +113,7 @@ class Repository(MutableSet[Session]):
         for s in self._sessions:
             if not s.activities <= activities:
                 raise UnknownActivityError(
-                    f'The session {s} contains activities that are not in the registry.'
+                    f'The session contains activities that are not in the registry.'
                 )
 
 

@@ -3,7 +3,13 @@ from dataclasses import dataclass, field
 
 from diane.temporal import TimeSet
 from diane.sessions import Session
-from diane.repository import Repository
+from diane.repository import Repository, RepositoryError
+
+
+
+class AssistedRepositoryError(RepositoryError):
+    '''The base exception for all assisted repository errors.'''
+    pass
 
 
 

@@ -148,7 +148,7 @@ def complete_activity_slugs_stop(incomplete: str) -> list[str]:
 
 
 def get_repo() -> RepositoryManager:
-    '''Helper to find the Diane repository for the current directory.
+    """Helper to find the Diane repository for the current directory.
     
     Searches the current directory and its parents for the '.diane/'
     directory. If found, returns a `RepositoryManager` for that
@@ -156,13 +156,13 @@ def get_repo() -> RepositoryManager:
 
     Raises:
         `NoRepositoryError`: If no repository is found.
-    '''
+    """
 
     current = Path.cwd()
     for directory in [current, *current.parents]:
         if (directory / '.diane').exists():
-            return RepositoryManager(str(directory))
-        
+            return RepositoryManager(directory)
+
     raise NoRepositoryError
 
 
@@ -389,6 +389,60 @@ def _already_tracked_panel(
             _already_tracked_group(provided_activities, already_tracked_data, new_activities),
             Text('No activities are already being tracked')
         )
+    
+
+def _ancestor_activities_group(
+    provided_activities: Collection[Activity],
+    ancestor_to_activities: dict[Activity, set[Activity]]
+) -> Group:
+
+    elements = []
+    if ancestor_to_activities:
+        if len(ancestor_to_activities) == 1:
+            # One ancestor activity.
+            ancestor = next(iter(ancestor_to_activities))
+            if len(ancestor_to_activities[ancestor]) == 1:
+                # The ancestor activity has one descendant.
+                descendant = next(iter(ancestor_to_activities[ancestor]))
+                elements.append(Text.assemble(
+                    Text('The activity '),
+                    Text(f'{ancestor.title}', style='italic #fa5252'),
+                    Text(' is the [#fa5252]ancestor[/] of another provided activity '),
+                    Text(f'{descendant.title}', style='italic #cdbef4'),
+                    Text('.')
+                ))
+            else:
+                elements.append(Text.assemble(
+                    Text('The activity '),
+                    Text(f'{ancestor.title}', style='italic #fa5252'),
+                    Text(' is the [#fa5252]ancestor[/] of several other provided activities:')
+                ))
+                for descendant in sorted(ancestor_to_activities[ancestor], key=lambda a: a.slug):
+                    elements.append(Text.assemble(
+                        Text(f'• {descendant.title}', style='italic #cdbef4'),
+                        Text(' '),
+                        Text(f'({descendant.slug})', style='grey62')
+                    ))
+        else:
+            elements.append(Text.from_markup(
+                'Some of the provided activities are the [#fa5252]ancestors[/] of other provided activities.'
+            ))
+        for ancestor, activities in sorted(ancestor_to_activities.items(), key=lambda pair: pair[0].slug):
+            elements.append(Text.assemble(
+                Text(f'• {ancestor.title}', style='italic #fa5252'),
+                ' ',
+                Text(f'({ancestor.slug})', style='grey62'),
+                Text(' → ', style='default'),
+                Text(', '.join(a.title for a in sorted(activities, key=lambda a: a.slug)), style='italic #cdbef4'),
+                ' ',
+                Text(f'({", ".join(a.slug for a in sorted(activities, key=lambda a: a.slug))})', style='grey62')
+            ))
+    else:
+        elements.append(Text.from_markup(
+            'No provided activities are ancestors of other provided activities.'
+        ))
+
+    return Group(*elements)
 
 
 def _start_group(start_result: StartResult) -> Group:
@@ -440,13 +494,12 @@ def _start_panel(start_result: StartResult) -> Panel:
 
 @app.command()
 def init():
-    '''Initialize a new Diane repository.
+    """Initialize a new Diane repository.
     
     Creates the '.diane/' directory in the current working directory,
     along with a 'data/activities.yaml' file initialized from
-    the package template (if it exists) or as empty. Also creates
-    the empty 'tracking.yaml' file.
-    '''
+    the package template. Also creates the empty 'tracking.yaml' file.
+    """
 
     # Determine paths.
     package_dir = Path(__file__).parent

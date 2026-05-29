@@ -82,14 +82,25 @@ class AncestorActivities(RepositoryManagerRepositoryError):
     '''Some of provided activities are ancestors of others.'''
     
     message: str
+    providied_activities: list[Activity]
     ancestor_to_activity: dict[Activity, set[Activity]]
 
-    def __init__(self, message: str | None = None, data: dict[Activity, set[Activity]] | None = None) -> None:
+    def __init__(
+        self,
+        message: str | None = None,
+        provided_activities: Collection[Activity] | None = None,
+        data: dict[Activity, set[Activity]] | None = None
+    ) -> None:
 
         self.message = (
             message
             if message is not None
             else 'Some of provided activities are ancestors of others.'
+        )
+        self.provided_activities = (
+            sorted(provided_activities, key=lambda a: a.slug)
+            if provided_activities is not None
+            else []
         )
         self.ancestor_to_activity = data or {}
         super().__init__(message)
@@ -168,8 +179,8 @@ class RepositoryManager(AssistedRepository):
             raise ValueError(f'Invalid activity link: \'{link}\'.')
 
 
-    def __init__(self, datadir: str) -> None:
-        '''Load the repository data from the given directory.
+    def __init__(self, repo_dir: Path | str) -> None:
+        """Load the repository data from the given directory.
 
         Args:
             `datadir` (`str`): The directory of the repository.
@@ -180,13 +191,16 @@ class RepositoryManager(AssistedRepository):
 
         Warns:
             `UserWarning`: If any session or activity cannot be loaded.
-        '''
+        """
 
         # Set loading state to `True`.
         self._loading = True
 
         # Set repository directory.
-        self._datadir = Path(datadir)
+        self._datadir = (
+            repo_dir if isinstance(repo_dir, Path)
+            else Path(repo_dir)
+        )
 
         # Load and set activities registry.
         activities_path = self._datadir / '.diane/data/activities.yaml'
@@ -961,16 +975,13 @@ class RepositoryManager(AssistedRepository):
         specified_activity_to_ancestors: dict[Activity, set[Activity]] = {}
         for a in activities_to_start:
             specified_activity_to_ancestors[a] = self._activities.ancestors(a)
-        ancestor_to_specified_activity: defaultdict[Activity, set[Activity]] = defaultdict(set)
+        ancestor_to_specified_activities: defaultdict[Activity, set[Activity]] = defaultdict(set)
         for possible_ancestor in activities_to_start:
             for activity, ancestors in specified_activity_to_ancestors.items():
                 if possible_ancestor in ancestors:
-                    ancestor_to_specified_activity[possible_ancestor].add(activity)
-        if ancestor_to_specified_activity:
-            raise AncestorActivities(
-                'Some of the provided activities are the ancestors of others.',
-                ancestor_to_specified_activity
-            )
+                    ancestor_to_specified_activities[possible_ancestor].add(activity)
+        if ancestor_to_specified_activities:
+            raise AncestorActivities(None, activities_to_start, ancestor_to_specified_activities)
         
         # Check whether any of specified activities are ancestors
         # of activities that are already being tracked.

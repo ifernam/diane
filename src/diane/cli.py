@@ -147,21 +147,23 @@ def complete_activity_slugs_stop(incomplete: str) -> list[str]:
     return sorted(s for s in tracked_slugs if s.startswith(incomplete))
 
 
-def get_repo() -> RepositoryManager:
+def get_repo(repo_dir: Path | str | None = None) -> RepositoryManager:
     """Helper to find the Diane repository for the current directory.
     
-    Searches the current directory and its parents for the '.diane/'
-    directory. If found, returns a `RepositoryManager` for that
-    directory.
+    Searches the current directory for the '.diane/' subdirectory.
+    If found, returns a `RepositoryManager` for that directory.
 
     Raises:
         `NoRepositoryError`: If no repository is found.
     """
 
-    current = Path.cwd()
-    for directory in [current, *current.parents]:
-        if (directory / '.diane').exists():
-            return RepositoryManager(directory)
+    if repo_dir is None:
+        repo_dir = Path.cwd()
+    elif not isinstance(repo_dir, Path):
+        repo_dir = Path(repo_dir)
+
+    if (repo_dir / '.diane').exists():
+        return RepositoryManager(repo_dir)
 
     raise NoRepositoryError
 

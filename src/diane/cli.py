@@ -496,37 +496,46 @@ def _start_panel(start_result: StartResult) -> Panel:
 
 @app.command()
 def init():
-    """Initialize a new Diane repository.
+    """Initialise a new Diane repository.
     
     Creates the '.diane/' directory in the current working directory,
-    along with a 'data/activities.yaml' file initialized from
+    along with a 'data/activities.yaml' file initialised from
     the package template. Also creates the empty 'tracking.yaml' file.
     """
 
     # Determine paths.
     package_dir = Path(__file__).parent
-    diane_dir = Path.cwd() / '.diane'
+    repo_dir = Path.cwd()
+    diane_dir = repo_dir / '.diane'
 
-    # Check if already initialized. Create '.diane/' if not, otherwise
+    # Check if already initialised. Create '.diane/' if not, otherwise
     # exit with message.
-    if diane_dir.exists():
-        typer.echo('Already initialized.')
+    try:
+        get_repo(repo_dir)
+        console.print(_message_panel(
+            Group(Text('The repository has already been initialized.')),
+            Text('Already initialized')
+        ))
         return
-    diane_dir.mkdir()
+    except NoRepositoryError as e:
+        # Initialise new repository.
 
-    # Initialize 'activities.yaml' with template if it doesn't exist,
-    # otherwise reset to empty.
-    repo_activities = Path(diane_dir / 'data' / 'activities.yaml')
-    repo_activities.parent.mkdir(parents=True, exist_ok=True)
-    template_activities = Path(package_dir / 'data' / 'activities.yaml')
-    if template_activities.exists():
-        repo_activities.write_text(template_activities.read_text())
-    else:
-        repo_activities.write_text('activities: []\n')
+        # Initialise 'activities.yaml' with template.
+        repo_activities_path = Path(diane_dir / 'data' / 'activities.yaml')
+        repo_activities_path.parent.mkdir(parents=True, exist_ok=True)
+        template_activities = Path(package_dir / 'data' / 'activities.yaml')
+        if template_activities.exists():
+            repo_activities_path.write_text(template_activities.read_text())
+        else:
+            repo_activities_path.write_text('activities: {}\n')
 
-    # Initialize 'tracking.yaml' as empty.
-    diane_dir.joinpath('tracking.yaml').write_text('tracking: {}\n')
-    typer.echo('Initialized empty diane repository.')
+        # Initialize 'tracking.yaml'.
+        diane_dir.joinpath('tracking.yaml').write_text('tracking: {}\n')
+
+        console.print(_message_panel(
+            Group(Text('A new empty repository has been initialized.')),
+            Text('Initialised new empty repository.')
+        ))
 
 
 @app.command()

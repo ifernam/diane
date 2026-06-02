@@ -1,5 +1,4 @@
 from __future__ import annotations
-from dataclasses import dataclass, field
 from pathlib import Path
 import yaml
 import warnings
@@ -279,6 +278,18 @@ class RepositoryManager(AssistedRepository):
 
         # Set loading state to `False`.
         self._loading = False
+
+
+    @property
+    def tracking_state(self) -> dict[Activity, Timestamp]:
+        """Return the current tracking state.
+
+        Returns:
+            `dict[Activity, Timestamp]`: A copy of the current tracking
+            state. Contains activities with tracking start timestamps.
+        """
+
+        return self._tracking_state.copy()
 
 
     def _update_diane_block(self, block_content: str, new_block: str) -> str:

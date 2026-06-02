@@ -60,6 +60,14 @@ class Activity:
             return NotImplemented
         
         return self._slug == other._slug
+
+
+    def __lt__(self, other: object) -> bool:
+
+        if not isinstance(other, Activity):
+            return NotImplemented
+
+        return self._slug < other.slug
     
 
     def __str__(self) -> str:

@@ -1,28 +1,22 @@
 from collections.abc import Collection
-from textwrap import indent
+from operator import itemgetter
 from enum import Enum
-import math
 import typer
 from pathlib import Path
 import yaml
 import click
 import os
 from collections import defaultdict
-from itertools import chain
+
 from rich.panel import Panel
 from rich.markdown import Markdown
 from rich.text import Text
 from rich.console import Group
 from rich import box
-from rich.rule import Rule
-from rich.padding import Padding
-from rich.columns import Columns
 from rich.console import Console
-from rich.layout import Layout
 from rich.table import Table
-from rich.pager import SystemPager
 from rich.prompt import Confirm
-import plotext as plt
+from sortedcontainers import sortedlist, SortedList
 
 from diane.temporal import Timestamp, Duration, TimeInterval, TimeSet
 from diane.activities import Activity
@@ -30,7 +24,6 @@ from diane.sessions import Session
 from diane.repository import UnknownActivityError
 from diane.repository_manager import (
     RepositoryManager,
-    RepositoryManagerRepositoryError,
     NoActivitiesProvided,
     ActivityAlreadyTracked,
     AncestorActivities,
@@ -292,8 +285,10 @@ def _error_panel(content: Group, title: Text) -> Panel:
     return Panel(content, title=title, title_align='left', border_style='#fa5252', expand=True)
 
 
-def _message_panel(content: Group, title: Text) -> Panel:
-    return Panel(content, title=title, title_align='left', border_style='dim', expand=True)
+def message_panel(content: Group, title: Text, padding=(0, 1)) -> Panel:
+    return Panel(
+        content, title=title, title_align='left', border_style='dim',
+        expand=True, padding=padding)
 
 
 def _unknown_activity_group(
@@ -387,7 +382,7 @@ def _already_tracked_panel(
             title
         )
     else:
-        return _message_panel(
+        return message_panel(
             _already_tracked_group(provided_activities, already_tracked_data, new_activities),
             Text('No activities are already being tracked')
         )
@@ -512,7 +507,7 @@ def init():
     # exit with message.
     try:
         get_repo(repo_dir)
-        console.print(_message_panel(
+        console.print(message_panel(
             Group(Text('The repository has already been initialized.')),
             Text('Already initialized')
         ))
@@ -532,54 +527,83 @@ def init():
         # Initialize 'tracking.yaml'.
         diane_dir.joinpath('tracking.yaml').write_text('tracking: {}\n')
 
-        console.print(_message_panel(
+        console.print(message_panel(
             Group(Text('A new empty repository has been initialized.')),
             Text('Initialised new empty repository.')
         ))
 
 
 @app.command()
-def status():
-    '''Show currently tracked activities.'''
+def status() -> None:
+    """Show currently tracked activities.
+
+    Shows currently tracked activities with their start timestamp
+    and duration.
+    """
 
     repo = get_repo()
+    tracking_state = repo.tracking_state
+    n = len(tracking_state)
 
-    if not repo._tracking_state:
-        console.print(Panel(
-            Text('No activities are currently being tracked.'),
-            border_style='dim',
-            expand=True
+    if not tracking_state:
+        console.print(message_panel(
+            content=Group(Text('No activities are currently being tracked.')),
+            title=Text('No activities tracked'),
         ))
         return
 
-    tracking_activities_table = Table(border_style='dim', box=box.ROUNDED, expand=True)
+    tracking_activities_table = Table(
+        box=None, border_style='dim', expand=True
+    )
     tracking_activities_table.add_column(
         Text('Activity', style='grey62'),
-        style='italic #cdbef4', no_wrap=True, overflow='ellipsis'
+        style='italic #cdbef4', no_wrap=True
     )
     tracking_activities_table.add_column(
         Text('Started', style='grey62'),
-        style='bright_yellow', justify='right', no_wrap=True, overflow='ellipsis'
+        style='bright_yellow', justify='right', no_wrap=True
     )
     tracking_activities_table.add_column(
         Text('Duration', style='grey62'),
-        style='bright_yellow', justify='right', no_wrap=True, overflow='ellipsis'
+        style='bright_yellow', justify='right', no_wrap=True
     )
 
+    tracking_activities_table.add_row('', '', '')
+
+    # Group tracking activities by start timestamps.
+    grouped_tracked_activities = defaultdict(SortedList[Activity])
+    for a, t in sorted(repo.tracking_state.items(), key=itemgetter(1)):
+        grouped_tracked_activities[t].add(a)
+    m = len(grouped_tracked_activities)
+
     now = Timestamp.now().round_to_second()
-    for a, t in sorted(repo._tracking_state.items(), key=lambda pair: pair[1]):
+
+    # Add activities to table.
+    for i, (t, aa) in enumerate(grouped_tracked_activities.items()):
         duration = now - t
-        title_text = Text.assemble(
-            Text(a.title), ' ', Text(f'({a.slug})', style='not italic grey62')
+        start_text = _timestamp_text(
+            t, date=(t.datetime.date() != now.datetime.date())
         )
-        tracking_activities_table.add_row(
-            title_text,
-            _timestamp_text(t, t.datetime.date()!=now.datetime.date()),
-            str(duration)
+        duration_text = Text(str(duration))
+        for j, a in enumerate(aa):
+            title_text = Text.assemble(
+                Text(a.title),
+                ' ',
+                Text(f'({a.slug})',style='not italic grey62')
+            )
+            tracking_activities_table.add_row(
+                title_text,
+                start_text if j == 0 else Text(),
+                duration_text if j == 0 else Text()
+            )
+        if m < n and i != m - 1:
+            tracking_activities_table.add_row('', '', '')
 
-        )
-
-    console.print(tracking_activities_table)
+    console.print(message_panel(
+        content=Group(tracking_activities_table),
+        title=Text('Tracking activities'),
+        padding=0
+    ))
 
 
 @app.command()

@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from operator import itemgetter
 from pathlib import Path
 import yaml
 import warnings
@@ -15,10 +17,6 @@ from diane.assisted_repository import AssistedRepository, AssistedRepositoryErro
 
 
 
-StartResult = namedtuple('StartResult', ['activities', 'timestamp'])
-
-
-
 class RepositoryManagerRepositoryError(AssistedRepositoryError):
     '''The base exception for all assisted repository manager errors.'''
     pass
@@ -32,7 +30,24 @@ class NoActivitiesProvided(RepositoryManagerRepositoryError):
 
 
 class ActivityAlreadyTracked(RepositoryManagerRepositoryError):
-    '''There is an activity that is already being tracked.'''
+    """Some of the provided activities are already being tracked.
+
+    Args:
+        provided_activities (Collection[Activity]): The collection
+            of provided activities.
+        already_tracked_data (dict[Activity, Timestamp]): The dictionary
+            of already tracked activities with their start timestamps.
+        message (str | None): The exception message. If it remains
+            to `None`, it will be generated automatically.
+
+    Attributes:
+        message (str): The exception message.
+        provided_activities (list[Activity]): The list of provided
+            activities sorted by their slugs.
+        already_tracked_data (dict[Activity, Timestamp]): The dictionary
+            of already tracked activities with their start timestamps.
+            Sorted by start timestamps.
+    """
     
     message: str
     provided_activities: list[Activity]
@@ -40,88 +55,188 @@ class ActivityAlreadyTracked(RepositoryManagerRepositoryError):
 
     
     def __init__(
-            self,
-            message: str | None = None,
-            provided_activities: Collection[Activity] | None = None,
-            data: dict[Activity, Timestamp] | None = None
-        ) -> None:
+        self,
+        provided_activities: Collection[Activity],
+        already_tracked_data: dict[Activity, Timestamp],
+        message: str | None = None
+    ) -> None:
 
+        # Sort provided activities.
+        self.provided_activities = sorted(provided_activities)
+
+        # Sort already tracked data.
+        self.already_tracked_data = dict(sorted(
+            already_tracked_data.items(), key=itemgetter(1)
+        ))
+
+        # Set message.
         if message is None:
-            if provided_activities and data:
-                already_tracked = [a for a in provided_activities if a in data]
-                if already_tracked:
-                    self.message = (
-                        'Some of the provided activities are already being tracked: '
-                        + ', '.join(f'\'{a.slug}\'' for a in already_tracked)
-                        + '.'
-                    )
-                else:
-                    self.message = 'Some of the provided activities are already being tracked.'
-            else:
-                self.message = 'Some of the provided activities are already being tracked.'
-        self.provided_activities = (
-            sorted(provided_activities, key=lambda a: a.slug)
-            if provided_activities is not None
-            else []
-        )
-        self.already_tracked_data = data or {}
+            if self.already_tracked_data:
+                preamble = (
+                    'Some of the provided activities are already being '
+                    'tracked: '
+                )
+                quoted_slugs = ', '.join(
+                    f'\'{a.slug}\'' for a in self.already_tracked_data
+                )
+                ending = '.'
+                message = f'{preamble}{quoted_slugs}{ending}'
+        self.message = message
+
         super().__init__(message)
+
+
+    def __str__(self) -> str:
+        return self.message
 
 
     @property
     def new_activities(self) -> list[Activity]:
-        '''Return the list of provided activities that are not already
-        being tracked.'''
+        """Return the list of provided activities that are not already
+        being tracked.
 
-        return [a for a in self.provided_activities if a not in self.already_tracked_data]
+        Returns:
+            list[Activity]: The list of provided activities that are not
+            already being tracked, sorted by their slugs.
+        """
+
+        return [
+            a for a in self.provided_activities
+            if a not in self.already_tracked_data
+        ]
 
 
 
 class AncestorActivities(RepositoryManagerRepositoryError):
-    '''Some of provided activities are ancestors of others.'''
+    """Some of the provided activities are ancestors of the other
+    provided ones.
+
+    Args:
+        provided_activities (Collection[Activity]): The collection of
+            provided activities.
+        ancestors_data (dict[Activity, set[Activity]]): The dictionary
+            mapping each ancestor activity to the set of its descendant
+            activities among the provided ones.
+        message (str | None): The exception message. If it remains
+            to `None`, it will be generated automatically.
+
+    Attributes:
+        message (str): The exception message.
+        provided_activities (list[Activity]): The list of provided
+            activities sorted by their slugs.
+        ancestor_to_descendants (dict[Activity, set[Activity]]):
+            The dictionary mapping each ancestor activity to the set
+            of its descendant activities among the provided ones. Sorted
+            by ancestor slug and then by descendant slug.
+    """
     
     message: str
-    providied_activities: list[Activity]
-    ancestor_to_activity: dict[Activity, set[Activity]]
+    provided_activities: list[Activity]
+    ancestor_to_descendants: dict[Activity, set[Activity]]
 
     def __init__(
         self,
-        message: str | None = None,
-        provided_activities: Collection[Activity] | None = None,
-        data: dict[Activity, set[Activity]] | None = None
+        provided_activities: Collection[Activity],
+        ancestors_data: dict[Activity, set[Activity]],
+        message: str | None = None
+
     ) -> None:
 
+        # Set message.
         self.message = (
             message
             if message is not None
             else 'Some of provided activities are ancestors of others.'
         )
-        self.provided_activities = (
-            sorted(provided_activities, key=lambda a: a.slug)
-            if provided_activities is not None
-            else []
-        )
-        self.ancestor_to_activity = data or {}
+
+        # Set provided activities sorted by slug.
+        self.provided_activities = sorted(provided_activities)
+
+        # Set ancestor to activity mapping sorted by ancestor slug
+        # and then by descendant slug.
+        self.ancestor_to_descendants = dict(sorted(ancestors_data.items()))
+
         super().__init__(message)
+
+
+    def __str__(self) -> str:
+        return self.message
 
 
 
 class AncestorActivitiesTracked(RepositoryManagerRepositoryError):
-    '''Some of provided activities are ancestors of activities that
-    are already being tracked.'''
-    
+    """Some of provided activities are ancestors or descendants
+    of activities that are already being tracked.
+
+    Attributes:
+        message (str): The exception message.
+        provided_activities (list[Activity]): The list of provided
+            activities sorted by slug.
+        ancestor_to_descendants (dict[Activity, set[Activity]]):
+            The dictionary mapping each provided ancestor activity
+            to the set of its descendant activities that have already
+            been tracked. Sorted by ancestor slug.
+        descendant_to_ancestors (dict[Activity, set[Activity]]):
+            The dictionary mapping each provided descendant activity
+            to the set of its ancestor activities that have already
+            been tracked. Sorted by descendant slug.
+
+    Args:
+        provided_activities (Collection[Activity]): The collection
+            of provided activities.
+        ancestor_to_descendants (dict[Activity, set[Activity]]):
+            The dictionary mapping each provided ancestor activity
+            to the set of its descendant activities that have already
+            been tracked.
+        descendant_to_ancestors (dict[Activity, set[Activity]]):
+            The dictionary mapping each provided descendant activity
+            to the set of its ancestor activities that have already
+            been tracked.
+        message (str | None): The exception message. If it remains
+            to `None`, it will be generated automatically.
+    """
+
     message: str
-    ancestor_to_activity: dict[Activity, set[Activity]]
+    provided_activities: list[Activity]
+    ancestor_to_descendants: dict[Activity, set[Activity]]
+    descendant_to_ancestors: dict[Activity, set[Activity]]
 
-    def __init__(self, message: str | None = None, data: dict[Activity, set[Activity]] | None = None) -> None:
 
+    def __init__(
+        self,
+        provided_activities: Collection[Activity],
+        ancestor_to_descendants: dict[Activity, set[Activity]],
+        descendant_to_ancestors: dict[Activity, set[Activity]],
+        message: str | None = None
+    ) -> None:
+
+        # Set message.
         self.message = (
-            message
-            if message is not None
-            else 'Some of provided activities are ancestors of activities that are already being tracked.'
+            message if message is not None
+            else (
+                'Some of provided activities are ancestors or descendants '
+                'of activities that are already being tracked.'
+            )
         )
-        self.ancestor_to_activity = data or {}
+
+        # Set provided activities sorted by slug.
+        self.provided_activities = sorted(provided_activities)
+
+        # Set ancestor to descendant mapping.
+        self.ancestor_to_descendants = dict(sorted(
+            ancestor_to_descendants.items())
+        )
+
+        # Set descendant to ancestor mapping.
+        self.descendant_to_ancestors = dict(sorted(
+            descendant_to_ancestors.items())
+        )
+
         super().__init__(message)
+
+
+    def __str__(self) -> str:
+        return self.message
 
 
 
@@ -923,7 +1038,10 @@ class RepositoryManager(AssistedRepository):
             self._dirty_days.update(result.timeset.days)
         return result
 
-    
+
+    StartResult = namedtuple('StartResult', ['activities', 'timestamp'])
+
+
     def start(self, *activities: str) -> StartResult:
         '''Start tracking one or more activities.
 
@@ -966,7 +1084,9 @@ class RepositoryManager(AssistedRepository):
                 unknown_activity_slugs.add(slug)
         if unknown_activity_slugs:
             raise UnknownActivityError(
-                None, unique_slugs, unknown_activity_slugs, activities_to_start
+                provided_slugs=unique_slugs,
+                unknown_activity_slugs=unknown_activity_slugs,
+                recognised_activities=activities_to_start
             )
         
         # Check whether any activities are already being tracked.
@@ -976,7 +1096,6 @@ class RepositoryManager(AssistedRepository):
                 a: self._tracking_state[a] for a in already_tracked if a in self._tracking_state
             }
             raise ActivityAlreadyTracked(
-                None,
                 activities_to_start,
                 already_tracked_data
             )
@@ -992,25 +1111,29 @@ class RepositoryManager(AssistedRepository):
                 if possible_ancestor in ancestors:
                     ancestor_to_specified_activities[possible_ancestor].add(activity)
         if ancestor_to_specified_activities:
-            raise AncestorActivities(None, activities_to_start, ancestor_to_specified_activities)
+            raise AncestorActivities(activities_to_start, ancestor_to_specified_activities)
         
         # Check whether any of specified activities are ancestors
-        # of activities that are already being tracked.
-        tracked_activity_to_ancestors: dict[Activity, set[Activity]] = {}
-        for a in self._tracking_state:
-            tracked_activity_to_ancestors[a] = self._activities.ancestors(a)
-        ancestor_to_tracked_activity: defaultdict[Activity, set[Activity]] = defaultdict(set)
-        for possible_ancestor in activities_to_start:
-            for activity, ancestors in tracked_activity_to_ancestors.items():
-                if possible_ancestor in ancestors:
-                    ancestor_to_tracked_activity[possible_ancestor].add(activity)
-        if ancestor_to_tracked_activity:
+        # or descendants of activities that are already being tracked.
+        provided = activities_to_start
+        tracked = set(self._tracking_state)
+        ancestors = self._activities.ancestors(*tracked) & provided
+        descendants = self._activities.descendants(*tracked) & provided
+        if ancestors or descendants:
+            ancestors_to_descendants = {}
+            for a in ancestors:
+                ancestors_to_descendants[a] = (
+                    self._activities.descendants(a) & tracked
+                )
+            descendants_to_ancestors = {}
+            for a in descendants:
+                descendants_to_ancestors[a] = (
+                    self._activities.ancestors(a) & tracked
+                )
             raise AncestorActivitiesTracked(
-                'Some of the specified activities are the ancestors of activities that '
-                'are already being tracked.',
-                ancestor_to_tracked_activity
+                provided, ancestors_to_descendants, descendants_to_ancestors
             )
-        
+
         now = Timestamp.now().round_to_second()
         started_activities = []
 
@@ -1021,7 +1144,7 @@ class RepositoryManager(AssistedRepository):
         if started_activities:
             self._save_state()
 
-        return StartResult(started_activities, now)
+        return RepositoryManager.StartResult(started_activities, now)
     
 
     def cancel(self, *activities: str, all: bool = False) -> set[Activity]:

@@ -20,8 +20,28 @@ class RepositoryError(Exception):
 
 
 class UnknownActivityError(RepositoryError):
-    '''There is a slug or activity that is not listed in the activities 
-    registry.'''
+    """There is a slug or activity that is not listed in the activities
+    registry.
+
+    Args:
+        provided_slugs (Collection[str]): The collection of provided
+            activity slugs.
+        unknown_activity_slugs (Collection[str]): The collection
+            of unknown activity slugs.
+        recognised_activities (Collection[Activity]): The collection
+            of recognised activities.
+        message (str | None): The exception message. If it remains
+            to `None`, it will be generated automatically.
+
+    Attributes:
+        message (str): The exception message.
+        provided_slugs (list[str]): The sorted list of provided activity
+            slugs.
+        unknown_activity_slugs (list[str]): The sorted list of unknown
+            activity slugs.
+        recognised_activities (list[Activity]): The list of recognised
+            activities sorted by their slugs.
+    """
     
     message: str
     provided_slugs: list[str]
@@ -30,12 +50,13 @@ class UnknownActivityError(RepositoryError):
 
     def __init__(
         self,
-        message: str | None = None,
-        provided_slugs: Collection[str] | None = None,
-        unknown_activity_slugs: Collection[str] | None = None,
-        recognised_activities: Collection[Activity] | None = None
+        provided_slugs: Collection[str],
+        unknown_activity_slugs: Collection[str],
+        recognised_activities: Collection[Activity],
+        message: str | None = None
     ) -> None:
-        
+
+        # Set message.
         if message is None:
             if unknown_activity_slugs:
                 if len(unknown_activity_slugs) == 1:
@@ -47,14 +68,16 @@ class UnknownActivityError(RepositoryError):
                 self.message = 'There is an unknown activity.'
         else:
             self.message = message
-        
+
+        # Sort activities.
         self.provided_slugs = sorted(provided_slugs) if provided_slugs else []
         self.unknown_activity_slugs = (
             sorted(unknown_activity_slugs) if unknown_activity_slugs else []
         )
         self.recognised_activities = (
-            sorted(recognised_activities, key=lambda a: a.slug) if recognised_activities else []
+            sorted(recognised_activities) if recognised_activities else []
         )
+
         super().__init__(message)
 
 

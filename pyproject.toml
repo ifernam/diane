@@ -5,7 +5,8 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "diane"
 version = "0.1.0"
-requires-python = ">=3.9"
+# Project uses PEP 604 union types `(X | Y)` which require Python 3.10+
+requires-python = ">=3.10"
 dependencies = [
     "tzlocal",
     "networkx",

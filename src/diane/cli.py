@@ -1139,7 +1139,7 @@ def start(
             ))
             return
     else:
-        ts = Timestamp.now()
+        ts = Timestamp.now().round_to_second()
 
     start_result = _try_start(*activities, timestamp=ts)
     if start_result.activities:

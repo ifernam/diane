@@ -1210,27 +1210,58 @@ def stop(
         help='Activity slugs to stop tracking.',
         autocompletion=complete_activity_slugs_stop
     ),
-    all_: bool = typer.Option(False, '-a', '--all', help='Stop all tracked activities.'),
+    at: str | None = typer.Option(
+        None,
+        '--at',
+        help=(
+            'Specify the end time for stopping tracking the activities. '
+            'If not provided, the current time is used. The time '
+            'should be in ISO format (e.g., \'2024-06-01T14:30:00\', '
+            '\'14:30\').'
+        )
+    ),
+    all_: bool = typer.Option(
+        False, '-a', '--all', help='Stop all tracked activities.'
+    ),
     message: str = typer.Option(
-        '', '-m', '--message', help='Optional message to attach to the session(s).',
+        '', '-m', '--message',
+        help='Optional message to attach to the session(s).',
         autocompletion=complete_message
     )
 ) -> None:
-    '''Stop tracking activities.
+    """Stop tracking activities.
 
     Stops tracking the specified activities.
 
     - If the '--all' flag is used, all currently tracked activities
       are stopped, regardless of the 'activities' argument.
-    '''
+    """
 
     repo = get_repo()
+    if at is not None:
+        try:
+            ts = Timestamp.from_iso(at)
+        except ValueError:
+            console.print(_error_panel(
+                content=Group(Text.from_markup(
+                    'The provided time is not in a valid ISO format. '
+                    'Please provide the time in ISO format '
+                    '(e.g., \'2024-06-01T14:30:00\', \'14:30\').'
+                )),
+                title=Text('Invalid time format')
+            ))
+            return
+    else:
+        ts = Timestamp.now().round_to_second()
+
     try:
-        sessions = repo.stop(*(activities or []), all=all_, message=message)
+        ss = repo.stop(
+            *(activities or []), timestamp=ts, all=all_, message=message
+        )
     except ValueError as e:
         raise click.ClickException(f'Error stopping activities. {e}')
 
-    if not sessions:
+    if not ss:
         console.print(Panel(
             Text('No sessions were recorded.'),
             border_style='dim',
@@ -1238,31 +1269,62 @@ def stop(
         ))
         return
 
-    console.print(Text(f'Recorded ({len(sessions)}):'))
+    console.print(Text(f'Recorded ({len(ss)}):'))
     elements = []
-    for s in sessions:
+    for s in ss:
         elements.append(_session_panel(s))
     console.print(Group(*elements))
 
 
 @app.command()
-def do(activities: list[str] = typer.Argument(
+def do(
+    activities: list[str] = typer.Argument(
         ...,
         help='Activity slugs to start.',
         autocompletion=complete_activity_slugs_start
     ),
+    at: str | None = typer.Option(
+        None,
+        '--at',
+        help=(
+            'Specify the activities time. If not provided, the current '
+            'time is used. The time should be in ISO format '
+            '(e.g., \'2024-06-01T14:30:00\', \'14:30\').'
+        )
+    ),
     message: str = typer.Option(
-        '', '-m', '--message', help='Optional message to attach to the session.',
+        '', '-m', '--message',
+        help='Optional message to attach to the session.',
         autocompletion=complete_message
     )
 ) -> None:
 
     repo = get_repo()
 
+    if at is not None:
+        try:
+            t = Timestamp.from_iso(at)
+        except ValueError:
+            console.print(_error_panel(
+                content=Group(Text.from_markup(
+                    'The provided time is not in a valid ISO format. '
+                    'Please provide the time in ISO format '
+                    '(e.g., \'2024-06-01T14:30:00\', \'14:30\').'
+                )),
+                title=Text('Invalid time format')
+            ))
+            return
+    else:
+        t = Timestamp.now().round_to_second()
+
     try:
-        session = repo.do(*activities, message=message)
+        session = repo.do(*activities, timestamp=t, message=message)
     except ValueError as e:
-        raise click.ClickException(f'Error doing activities. {e}')
+        console.print(_error_panel(
+            content=Group(Text.from_markup(f'Error doing activities. {e}')),
+            title=Text('Error')
+        ))
+        return
 
     header = Text.assemble(
         Text(f'Done ('),
@@ -1275,7 +1337,8 @@ def do(activities: list[str] = typer.Argument(
 
     console.print(
         Panel(
-            Group(*elements), title=header, title_align='left', border_style='dim', expand=True
+            Group(*elements), title=header,
+            title_align='left', border_style='dim', expand=True
         )
     )
 

@@ -1212,8 +1212,14 @@ class RepositoryManager(AssistedRepository):
         return tracked
         
 
-    def stop(self, *activities: str, all: bool = False, message: str = '') -> list[Session]:
-        '''For each distinct start time among the stopped activities,
+    def stop(
+        self,
+        *activities: str,
+        timestamp: Timestamp | None = None,
+        all: bool = False,
+        message: str = ''
+    ) -> list[Session]:
+        """For each distinct start time among the stopped activities,
         a separate session is created covering the interval from that
         start time until now (`[start, now)`). The sessions are added
         to the repository and merged with neighbouring sessions
@@ -1245,7 +1251,7 @@ class RepositoryManager(AssistedRepository):
             `ValueError`: If `all=False` and no activities are provided,
                 or if any of the given slugs are not found
                 in the activities registry.
-        '''
+        """
 
         if all:
             if not self._tracking_state:
@@ -1290,7 +1296,10 @@ class RepositoryManager(AssistedRepository):
         for a, start in tracked.items():
             groups.setdefault(start, []).append(a)
 
-        now = Timestamp.now().round_to_second()
+        now = (
+            Timestamp.now().round_to_second() if timestamp is None
+            else timestamp
+        )
         created_sessions = []
 
         for start_time, acts in groups.items():
@@ -1322,18 +1331,30 @@ class RepositoryManager(AssistedRepository):
         return created_sessions
     
 
-    def do(self, *activities: str, message: str = '') -> Session:
-        '''Create an instantaneous session for the given activities
+    def do(
+        self,
+        *activities: str,
+        timestamp: Timestamp | None = None,
+        message: str = ''
+    ) -> Session:
+        """Create an instantaneous session for the given activities
         at the current time, add it to the repository, and merge
         if possible.
         
         Args:
-            `*activities`: Activity slugs to include in the session.
-            `message`: Optional message to attach to the session.
+            *activities (str): Activity slugs to include in the session.
+            timestamp (Timestamp | None): The time at which to create
+                the session. If `None`, the current time is used.
+            message (str): Optional message to attach to the session.
+                Empty by default.
 
         Returns:
-            `Session`: The final merged session.
-        '''
+            Session: The final merged session.
+
+        Raises:
+            ValueError: If no activities are provided, or if any
+            of the given slugs are not found in the activities registry.
+        """
 
         if not activities:
             raise ValueError('Specify at least one activity for \'do\'.')
@@ -1343,7 +1364,9 @@ class RepositoryManager(AssistedRepository):
         unknown_slugs = []
         for slug in unique_slugs:
             try:
-                resolved_activities.append(self._activities.activity_by_slug(slug))
+                resolved_activities.append(
+                    self._activities.activity_by_slug(slug)
+                )
             except KeyError:
                 unknown_slugs.append(slug)
 
@@ -1354,9 +1377,12 @@ class RepositoryManager(AssistedRepository):
                 quoted = ', '.join(f'\'{s}\'' for s in unknown_slugs)
                 raise ValueError(f'Unknown activities: {quoted}.')
             
-        now = Timestamp.now().round_to_second()
-        event = TimeInterval.point(now)
-        timeset = TimeSet(event)
+        t = (
+            timestamp if timestamp is not None
+            else Timestamp.now().round_to_second()
+        )
+        point = TimeInterval.point(t)
+        timeset = TimeSet(point)
 
         session = Session(timeset, resolved_activities, message)
         merged = self.add_and_merge(session)
@@ -1369,7 +1395,9 @@ class RepositoryManager(AssistedRepository):
         involved_activities_with_ancestors = set()
         for a in involved_activities:
             involved_activities_with_ancestors.add(a)
-            involved_activities_with_ancestors.update(self._activities.ancestors(a))
+            involved_activities_with_ancestors.update(
+                self._activities.ancestors(a)
+            )
         for a in involved_activities_with_ancestors:
             self._save_activity_note(a)
 

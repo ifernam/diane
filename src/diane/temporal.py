@@ -294,7 +294,7 @@ class Timestamp:
 
         if not isinstance(other, Timestamp):
             return NotImplemented
-        
+
         return self._dt_utc == other._dt_utc
     
 
@@ -304,7 +304,7 @@ class Timestamp:
     
         if not isinstance(other, Timestamp):
             return NotImplemented
-        
+
         return self._dt_utc < other._dt_utc
     
 
@@ -472,7 +472,66 @@ class Timestamp:
 
         # Return a new timestamp (the internal datetime is already in the target zone).
         return cls(dt_local)
-    
+
+
+    @classmethod
+    def from_iso(
+        cls, iso_str: str, default_date: datetime.date | None = None
+    ) -> Timestamp:
+        """Create a timestamp from an ISO 8601 string.
+
+        The string must be naive (assumed local). The offset
+        and the time zone is determined based on the local time zone.
+        If the date is missing, `default_date` is used.
+        If the `default_date` is set to `None`, the date defaults
+        to today's date.
+
+        Args:
+            iso_str (str): ISO 8601 datetime string without an offset
+                (e.g., '2026-01-20T10:36', '10:36').
+            default_date (datetime.date | None): The date to use
+                if the ISO string does not contain a date. Defaults
+                to `None` (today's date).
+
+        Returns:
+            Timestamp: A new `Timestamp` representing the given local
+            time in the local time zone.
+
+        Raises:
+            ValueError: If the ISO string cannot be parsed,
+                or if it contains an offset (i.e., is not naive).
+
+        TODO: Implement supporting ISO strings with offsets and verify
+            that they are consistent with the local time zone.
+        """
+
+        try:
+            dt_naive = datetime.datetime.fromisoformat(iso_str)
+        except ValueError as e:
+            try:
+                # Try parsing as time only (e.g., '10:36').
+                t = datetime.time.fromisoformat(iso_str)
+
+                d = (
+                    default_date if default_date is not None
+                    else datetime.date.today()
+                )
+                dt_naive = datetime.datetime.combine(d, t)
+            except ValueError as e2:
+                raise ValueError(
+                    f'Invalid ISO 8601 datetime string: \'{iso_str}\'.'
+                ) from e2
+
+        if dt_naive.utcoffset() is not None:
+            raise ValueError('ISO string must not contain an offset.')
+        if dt_naive.tzinfo is not None:
+            raise ValueError('ISO string must be naive (no time zone).')
+
+        local_tz = zoneinfo.ZoneInfo(tzlocal.get_localzone_name())
+        dt_local = dt_naive.replace(tzinfo=local_tz)
+
+        return cls(dt_local)
+
 
     @classmethod
     def midnight(cls, date: datetime.date, time_zone_iana: str) -> Timestamp:

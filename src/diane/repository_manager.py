@@ -1042,8 +1042,10 @@ class RepositoryManager(AssistedRepository):
     StartResult = namedtuple('StartResult', ['activities', 'timestamp'])
 
 
-    def start(self, *activities: str) -> StartResult:
-        '''Start tracking one or more activities.
+    def start(
+            self, *activities: str, timestamp: Timestamp | None = None
+    ) -> StartResult:
+        """Start tracking one or more activities.
 
         The activities are marked as being tracked from the current
         moment. If an activity is already being tracked, a warning
@@ -1066,7 +1068,7 @@ class RepositoryManager(AssistedRepository):
             `AncestorActivitiesTracked`: If some of the specified
                 activities are ancestors of activities that
                 are already being tracked.
-        '''
+        """
 
         if not activities:
             raise NoActivitiesProvided('Specify at least one activity for tracking.')
@@ -1134,7 +1136,10 @@ class RepositoryManager(AssistedRepository):
                 provided, ancestors_to_descendants, descendants_to_ancestors
             )
 
-        now = Timestamp.now().round_to_second()
+        now = (
+            Timestamp.now().round_to_second() if timestamp is None
+            else timestamp
+        )
         started_activities = []
 
         for a in activities_to_start:

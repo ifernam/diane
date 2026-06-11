@@ -996,11 +996,23 @@ def start(
         ...,
         help='Activity slugs to start tracking.',
         autocompletion=complete_activity_slugs_start
+    ),
+    at: str | None = typer.Option(
+        None,
+        '--at',
+        help=(
+            'Specify the start time for tracking the activities. '
+            'If not provided, the current time is used. The time '
+            'should be in ISO format (e.g., \'2024-06-01T14:30:00\', '
+            '\'14:30\').'
+        )
     )
 ) -> None:
     """Start tracking the specified activities from the current time."""
 
-    def _try_start(*activity_slugs: str) -> RepositoryManager.StartResult:
+    def _try_start(
+        *activity_slugs: str, timestamp: Timestamp
+    ) -> RepositoryManager.StartResult:
         try:
             manager = get_repo()
         except NoRepositoryError:
@@ -1008,16 +1020,16 @@ def start(
                 content=Group(Text('No Diane repository has been found.')),
                 title=Text('No repository')
             ))
-            return RepositoryManager.StartResult([], Timestamp.now())
+            return RepositoryManager.StartResult([], timestamp)
 
         try:
-            return manager.start(*activity_slugs)
+            return manager.start(*activity_slugs, timestamp=timestamp)
         except NoActivitiesProvided:
             console.print(_error_panel(
                 content=Group(Text('No activities provided to start.')),
                 title=Text('No activities')
             ))
-            return RepositoryManager.StartResult([], Timestamp.now())
+            return RepositoryManager.StartResult([], timestamp)
         except UnknownActivityError as e:
             if e.recognised_activities:
                 console.print(_error_panel(
@@ -1027,10 +1039,11 @@ def start(
                 ))
                 if Confirm.ask(default=True, console=console):
                     return _try_start(
-                        *(a.slug for a in e.recognised_activities)
+                        *(a.slug for a in e.recognised_activities),
+                        timestamp=timestamp
                     )
                 else:
-                    return RepositoryManager.StartResult([], Timestamp.now())
+                    return RepositoryManager.StartResult([], timestamp)
             else:
                 if len(e.provided_slugs) == 1:
                     console.print(_error_panel(
@@ -1048,7 +1061,7 @@ def start(
                         )),
                         Text('Unknown activities')
                     ))
-                return RepositoryManager.StartResult([], Timestamp.now())
+                return RepositoryManager.StartResult([], timestamp)
         except ActivityAlreadyTracked as e:
             # Inform the user about already tracked activities.
             console.print(_already_tracked_panel(
@@ -1059,9 +1072,12 @@ def start(
             # the user if they want to start them.
             if e.new_activities:
                 if Confirm.ask(default=True, console=console):
-                    return _try_start(*(a.slug for a in e.new_activities))
+                    return _try_start(
+                        *(a.slug for a in e.new_activities),
+                        timestamp=timestamp
+                    )
 
-            return RepositoryManager.StartResult([], Timestamp.now())
+            return RepositoryManager.StartResult([], timestamp)
         except AncestorActivities as e:
             console.print(_ancestor_activities_panel(
                 e.ancestor_to_descendants
@@ -1078,7 +1094,7 @@ def start(
                         a.slug for a in e.provided_activities
                         if a not in descendants
                     )
-                    return _try_start(*slugs)
+                    return _try_start(*slugs, timestamp=timestamp)
 
             return RepositoryManager.StartResult([], Timestamp.now())
         except AncestorActivitiesTracked as e:
@@ -1101,15 +1117,31 @@ def start(
                         a.slug for a in e.provided_activities
                         if a not in ancestor_descendant_activities
                     )
-                    return _try_start(*slugs)
+                    return _try_start(*slugs, timestamp=timestamp)
 
-            return RepositoryManager.StartResult([], Timestamp.now())
+            return RepositoryManager.StartResult([], timestamp)
         except Exception as e:
             raise click.ClickException(
                 f'Error starting activities. {e}'
             ) from e
 
-    start_result = _try_start(*activities)
+    if at is not None:
+        try:
+            ts = Timestamp.from_iso(at)
+        except ValueError:
+            console.print(_error_panel(
+                content=Group(Text.from_markup(
+                    'The provided time is not in a valid ISO format. '
+                    'Please provide the time in ISO format '
+                    '(e.g., \'2024-06-01T14:30:00\', \'14:30\').'
+                )),
+                title=Text('Invalid time format')
+            ))
+            return
+    else:
+        ts = Timestamp.now()
+
+    start_result = _try_start(*activities, timestamp=ts)
     if start_result.activities:
         console.print(_start_panel(start_result))
 

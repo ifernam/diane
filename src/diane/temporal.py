@@ -282,13 +282,38 @@ class Timestamp:
         else:
             dt_rounded = self._dt + datetime.timedelta(seconds=1)
             return Timestamp(dt_rounded.replace(microsecond=0))
-            
+
+
+    def floor_to_minute(self) -> Timestamp:
+        """Return a new timestamp rounded down to the nearest minute.
+
+        Returns:
+            `Timestamp`: A new timestamp with the time rounded
+            down to the nearest minute.
+        """
+
+        return Timestamp(self._dt.replace(second=0, microsecond=0))
+
+
+    def ceil_to_minute(self) -> Timestamp:
+        """Return a new timestamp rounded up to the nearest minute.
+
+        Returns:
+            `Timestamp`: A new timestamp with the time rounded
+            up to the nearest minute.
+        """
+
+        if self._dt.second == 0 and self._dt.microsecond == 0:
+            return self
+
+        dt_ceil = self._dt + datetime.timedelta(minutes=1)
+        return Timestamp(dt_ceil.replace(second=0, microsecond=0))
     
 
     def __eq__(self, other: object) -> bool:
         '''Return `True` if this timestamp represents the same moment
         in time as another one (based on UTC).
-        
+
         Don't take time zones into account.
         '''
 
@@ -296,17 +321,17 @@ class Timestamp:
             return NotImplemented
 
         return self._dt_utc == other._dt_utc
-    
+
 
     def __lt__(self, other: object) -> bool:
         '''Return `True` if this timestamp is earlier than another one
         in absolute (UTC) time.'''
-    
+
         if not isinstance(other, Timestamp):
             return NotImplemented
 
         return self._dt_utc < other._dt_utc
-    
+
 
     def __add__(self, other: datetime.timedelta) -> Timestamp:
         '''Return a new `Timestamp` shifted forward by the given
@@ -877,6 +902,55 @@ class Endpoint:
             _side=self.side,
             _included=self.is_included
         )
+
+
+    def round_to_second(self) -> Endpoint:
+        """Return a new endpoint with the timestamp rounded
+        to the nearest second.
+
+        Endpoints at infinity leave unchanged.
+
+        Returns:
+            Endpoint: A new endpoint with the timestamp rounded
+            to the nearest second.
+        """
+
+        if self.is_infinite:
+            return self
+
+        return Endpoint(
+            _kind=Endpoint.Kind.FINITE,
+            _timestamp=self.timestamp.round_to_second(),
+            _side=self.side,
+            _included=self.is_included
+        )
+
+
+    def ceil_to_minute(self) -> Endpoint:
+        """Return a new endpoint with the timestamp rounded up
+        to the nearest minute for the right endpoints and rounded down
+        for the left endpoints.
+
+        Endpoints at infinity leave unchanged.
+
+        Returns:
+            Endpoint: A new endpoint with the timestamp rounded
+            to the nearest minute.
+        """
+
+        if self.is_infinite:
+            return self
+
+        new_timestamp = (
+            self.timestamp.ceil_to_minute() if self.is_right
+            else self.timestamp.floor_to_minute()
+        )
+        return Endpoint(
+            _kind=Endpoint.Kind.FINITE,
+            _timestamp=new_timestamp,
+            _side=self.side,
+            _included=self.is_included
+        )
         
 
     def opposite(self) -> Endpoint:
@@ -901,7 +975,7 @@ class Endpoint:
             _side=self.side.opposite(),
             _included=(not self.is_included)
         )
-    
+
 
     def include(self) -> Endpoint:
         '''Return the included endpoint with the same timestamp
@@ -1429,6 +1503,11 @@ class Duration:
     @classmethod
     def pos_inf(cls) -> Duration:
         return cls(_kind=Duration.Kind.POS_INF, _value=None)
+
+
+    @classmethod
+    def finite(cls, value: datetime.timedelta) -> Duration:
+        return cls(_kind=Duration.Kind.FINITE, _value=value)
 
 
 
@@ -2110,6 +2189,54 @@ class TimeInterval:
         return self.to_timezone(start_tz_iana)
 
 
+    def ceil_to_minute(self, blow_up_points: bool = False) -> TimeInterval:
+        """Return the smallest interval that contains this interval
+        and has endpoints at whole minutes.
+
+        For an empty interval, the result is also empty. For a non-empty
+        interval, the left endpoint if finite is rounded down
+        to the nearest whole minute and the right endpoint if finite
+        is rounded up to the nearest whole minute. The boundary
+        inclusion is preserved (i.e., if an endpoint is included
+        in the original interval, it remains included in the resulting
+        interval; if it is excluded, it remains excluded). Endpoints
+        at infinity are unchanged.
+
+        Args:
+            blow_up_points (bool, optional): If `True`, and the interval
+                is a point with a minute-aligned timestamp,
+                the resulting interval will be a non-empty closed
+                interval between the original point and the next whole
+                minute.
+
+        Returns:
+            TimeInterval: A new time interval with endpoints at whole
+            minutes that contains the original interval.
+        """
+
+        if self.is_empty:
+            return self
+
+        s = self.start.ceil_to_minute()
+        e = self.end.ceil_to_minute()
+
+        if blow_up_points and s == e:
+            # If the interval is a point with a minute-aligned
+            # timestamp, expand it to a non-empty closed interval from
+            # that point to the next whole minute.
+
+            if not s.is_finite:
+                return TimeInterval(s, e)
+
+            start_ts = s.timestamp
+            end_ts = start_ts + datetime.timedelta(minutes=1)
+
+            s = Endpoint.left_finite(start_ts, included=True)
+            e = Endpoint.right_finite(end_ts, included=True)
+
+        return TimeInterval(s, e)
+
+
     def closure(self) -> TimeInterval:
         '''Return the topological closure of this interval.
 
@@ -2237,7 +2364,7 @@ class TimeInterval:
         if isinstance(other, Timestamp):
             if self.is_empty:
                 return False
-                
+
             return other >= self.start and other <= self.end
         
         elif isinstance(other, TimeInterval):
@@ -3614,7 +3741,30 @@ class TimeSet:
             else self.first_component.end.timestamp.timezone_iana
         )
         return self.to_timezone(start_tz_iana)
-    
+
+
+    def ceil_to_minute(self, blow_up_points: bool = False) -> TimeSet:
+        """Return a new time set with all components ceiled
+        to the nearest minute.
+
+        Args:
+            blow_up_points: If `True`, single-point components will
+                be expanded to one-minute intervals. If `False`, they
+                will remain unchanged.
+
+        Returns:
+            TimeSet: A new time set with all components ceiled
+                to the nearest minute.
+        """
+
+        if self.is_empty:
+            return self
+
+        return TimeSet.union(
+            *(i.ceil_to_minute(blow_up_points=blow_up_points)
+            for i in self.components)
+        )
+
 
     def span(self) -> TimeInterval:
         '''Return the minimal interval covering the whole time set.

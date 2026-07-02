@@ -10,6 +10,7 @@ import sys
 import warnings
 import bisect
 import math
+from fractions import Fraction
 
 
 
@@ -282,6 +283,59 @@ class Timestamp:
         else:
             dt_rounded = self._dt + datetime.timedelta(seconds=1)
             return Timestamp(dt_rounded.replace(microsecond=0))
+
+
+    def to_midnight(self) -> Timestamp:
+        """Return a new timestamp shifted to the start of the day.
+
+        The date and time zone are preserved, while the time component
+        is reset to 00:00:00.000000. If the timestamp is already
+        at midnight, the original timestamp is returned unchanged.
+        """
+
+        if self.is_midnight():
+            return self
+
+        return Timestamp(
+            self._dt.replace(hour=0, minute=0, second=0, microsecond=0)
+        )
+
+
+    def floor_to_midnight(self) -> Timestamp:
+        """Return a new timestamp rounded down to the start of the day.
+
+        The date and time zone are preserved, while the time component
+        is reset to 00:00:00.000000. If the timestamp is already
+        at midnight, the original timestamp is returned unchanged.
+        """
+
+        if self.is_midnight():
+            return self
+
+        return Timestamp(
+            self._dt.replace(hour=0, minute=0, second=0, microsecond=0)
+        )
+
+
+    def ceil_to_midnight(self) -> Timestamp:
+        """Return a new timestamp rounded up to the start of the next
+        day.
+
+        If the timestamp is already at midnight, the original timestamp
+        is returned unchanged. Otherwise, the result is the start
+        of the next calendar day in the same time zone.
+        """
+
+        if self.is_midnight():
+            return self
+
+        next_day = self._dt.date() + datetime.timedelta(days=1)
+        dt_next_midnight = datetime.datetime.combine(
+            next_day,
+            datetime.time.min,
+            self._dt.tzinfo,
+        )
+        return Timestamp(dt_next_midnight)
 
 
     def floor_to_minute(self) -> Timestamp:
@@ -1235,7 +1289,7 @@ class Duration:
 
     _kind: Kind = Kind.FINITE
 
-    # `None` for andefined and infinite kinds.
+    # `None` for undefined and infinite kinds.
     _value: datetime.timedelta | None = datetime.timedelta()
 
 
@@ -1363,7 +1417,7 @@ class Duration:
         )
     
 
-    def __add__(self, other: object) -> Duration:
+    def __add__(self, other: object) -> Duration | Timestamp:
 
         if isinstance(other, Duration):
 
@@ -1403,6 +1457,13 @@ class Duration:
                 return self
             
             return Duration(_kind=Duration.Kind.FINITE, _value=(self.value + other))
+
+        if isinstance(other, Timestamp):
+            if self.is_undefined:
+                return Duration.undefined()
+
+            if self.is_finite:
+                return other + self.value
         
         return NotImplemented
     
@@ -1419,75 +1480,243 @@ class Duration:
             return self + -other
         
         return NotImplemented
-    
-    
-    def __rsub__(self, other: object) -> Duration:
+
+
+    @overload
+    def __rsub__(self, other: datetime.timedelta) -> Duration:
+        ...
+
+
+    @overload
+    def __rsub__(self, other: Timestamp) -> Timestamp:
+        ...
+
+
+    def __rsub__(self, other: object) -> Duration | Timestamp:
 
         if isinstance(other, datetime.timedelta):
             if self.is_undefined:
                 return Duration.undefined()
 
             if self.is_finite:
-                return Duration(_kind=Duration.Kind.FINITE, _value=(other - self.value))
+                return Duration(
+                    _kind=Duration.Kind.FINITE, _value=(other - self.value)
+                )
             else:
                 return -self
+
+        if isinstance(other, Timestamp):
+            if self.is_undefined:
+                return Duration.undefined()
+
+            if self.is_finite:
+                return other - self.value
             
         return NotImplemented
-    
 
-    def __truediv__(self, other: object) -> float:
-        '''Divide this duration by another one, returning a float.
 
-        Returns:
-            `float`: The ratio of the two durations.
-                - `math.nan` if either operand is `UNDEFINED`,
-                  or if division is indeterminate (0/0, inf/inf,
-                  -inf/inf, etc.).
-                - `float('inf')` or `-float('inf')` for division by zero
-                  with non-zero numerator, or infinite numerator divided
-                  by finite denominator.
-        '''
+    def __mul__(self, other: float) -> Duration:
+        """Scale this duration by a float.
 
-        if not isinstance(other, Duration):
+            The result is rounded to the nearest microsecond using
+            standard rounding rules. Finite durations are converted
+            to integer microseconds first, then scaled exactly to avoid
+            avoidable loss of precision.
+
+            Special cases:
+                - undefined * x -> undefined,
+                - finite * NaN -> undefined,
+                - finite * 0.0 -> zero duration,
+                - ±∞ * 0.0 -> undefined,
+                - ±∞ * finite_nonzero -> ±∞ with sign applied,
+                - finite * ±∞ -> ±∞ if the finite duration is non-zero,
+                  undefined if the finite duration is zero,
+                - ±∞ * ±∞ -> undefined.
+            """
+
+        if not isinstance(other, float):
             return NotImplemented
 
-        # Undefined.
-        if self._kind is Duration.Kind.UNDEFINED or other._kind is Duration.Kind.UNDEFINED:
+        if self.is_undefined:
+            return Duration.undefined()
+
+        if math.isnan(other):
+            return Duration.undefined()
+
+        if self.is_infinite:
+            if other == 0.0 or math.isinf(other):
+                return Duration.undefined()
+
+            sign = (
+                    (1 if self._kind is Duration.Kind.POS_INF else -1)
+                    * (1 if other > 0.0 else -1)
+            )
+            return Duration.pos_inf() if sign > 0 else Duration.neg_inf()
+
+        # Finite self.
+        if math.isinf(other):
+            if self.value == datetime.timedelta():
+                return Duration.undefined()
+
+            sign = 1 if self.value > datetime.timedelta() else -1
+            sign *= 1 if other > 0.0 else -1
+            return Duration.pos_inf() if sign > 0 else Duration.neg_inf()
+
+        total_us = (
+                self.value.days * 86_400_000_000
+                + self.value.seconds * 1_000_000
+                + self.value.microseconds
+        )
+
+        exact_us = Fraction(total_us, 1) * Fraction.from_float(other)
+        rounded_us = int(round(exact_us))
+
+        return Duration.finite(datetime.timedelta(microseconds=rounded_us))
+
+
+    __rmul__ = __mul__
+
+
+    @overload
+    def __truediv__(self, other: Duration) -> float:
+        ...
+
+
+    @overload
+    def __truediv__(self, other: float) -> Duration:
+        ...
+    
+
+    def __truediv__(self, other: object) -> float | Duration:
+        """Divide this duration by another duration or by a float.
+
+        Behaviour:
+            - `Duration` / `Duration` -> `float`,
+            - `Duration` / `float` -> `Duration`.
+
+        For division by `Duration`, the result is the ratio of the two
+        durations as a `float`.
+
+        For division by `float`, finite durations are divided with the
+        greatest possible precision and the result is rounded to the
+        nearest microsecond using standard rounding rules.
+
+        Division by zero when `other` is a `float` follows these rules:
+            - undefined / 0.0 -> undefined,
+            - +∞ / 0. -> +∞,
+            - -∞ / 0. -> -∞,
+            - positive finite / 0. -> +∞,
+            - negative finite / 0. -> -∞,
+            - 0. / 0. -> undefined.
+
+        Returns:
+            `float | Duration`: The quotient.
+
+            For `Duration / Duration`:
+                - `math.nan` if either operand is `UNDEFINED`,
+                  or if the division is indeterminate (for example 0/0
+                  or ∞/∞).
+                - `float('inf')` or `-float('inf')` for division by zero
+                  with a non-zero finite numerator, or for division
+                  of an infinite numerator by a finite zero denominator.
+
+            For `Duration / float`:
+                - a new `Duration` instance for finite inputs,
+                - `Duration.undefined()` for undefined or indeterminate
+                  cases,
+                - `Duration.pos_inf()` / `Duration.neg_inf()`
+                  for division by zero according to the sign rules
+                  above.
+        """
+
+        if isinstance(other, Duration):
+            # Undefined.
+            if (
+                self._kind is Duration.Kind.UNDEFINED
+                or other._kind is Duration.Kind.UNDEFINED
+            ):
+                return math.nan
+            # Both defined.
+
+            # Both finite.
+            if self._value is not None and other._value is not None:
+                num = self._value.total_seconds()
+                den = other._value.total_seconds()
+                if den == 0.:
+                    if num == 0.:
+                        return math.nan  # 0 / 0.
+                    # Finite divided by 0.
+                    return float('inf') if num > 0 else -float('inf')
+                return num / den
+
+            # `self` finite, `other` infinite.
+            if self.is_finite and other.is_infinite:
+                # Finite divided by infinity equals 0.
+                return 0.
+
+            # `self` infinite, `other` finite.
+            if self.is_infinite and other._value is not None:
+                den = other._value.total_seconds()
+                if den == 0.:
+                    # Infinity divided by 0 equals infinity with the same
+                    # sign as `self`.
+                    return (
+                        float('inf') if self._kind is Duration.Kind.POS_INF
+                        else -float('inf')
+                    )
+                # Resul sign: `sign(self) * sign(den)`.
+                sign = (
+                    (1 if self._kind is Duration.Kind.POS_INF else -1)
+                    * (1 if den > 0 else -1)
+                )
+                return float('inf') if sign > 0 else -float('inf')
+
+            # Both infinite.
+            if self.is_infinite and other.is_infinite:
+                return math.nan
+
             return math.nan
-        # Both defined.
 
-        # Both finite.
-        if self._value is not None and other._value is not None:
-            num = self._value.total_seconds()
-            den = other._value.total_seconds()
-            if den == 0.:
-                if num == 0.:
-                    return math.nan  # 0 / 0.
-                # Finite divided by 0.
-                return float('inf') if num > 0 else -float('inf')
-            return num / den
+        elif isinstance(other, float):
+            if self.is_undefined:
+                return Duration.undefined()
 
-        # `self` finite, `other` infinite.
-        if self.is_finite and other.is_infinite:
-            # Finite divided by infinity equals 0.
-            return 0.
+            if math.isnan(other):
+                return Duration.undefined()
 
-        # `self` infinite, `other` finite.
-        if self.is_infinite and other._value is not None:
-            den = other._value.total_seconds()
-            if den == 0.:
-                # Infinity divided by 0 equals infinity with the same
-                # sign as `self`.
-                return float('inf') if self._kind is Duration.Kind.POS_INF else -float('inf')
-            # Resul sign: `sign(self) * sign(den)`.
-            sign = (1 if self._kind is Duration.Kind.POS_INF else -1) * (1 if den > 0 else -1)
-            return float('inf') if sign > 0 else -float('inf')
+            if other == 0.:
+                if self.is_finite:
+                    if self.value == datetime.timedelta():
+                        return Duration.undefined()
+                    return (
+                        Duration.pos_inf() if self.value > datetime.timedelta()
+                        else Duration.neg_inf()
+                    )
+                return self
 
-        # Both infinite.
-        if self.is_infinite and other.is_infinite:
-            return math.nan
+            if math.isinf(other):
+                if self.is_finite:
+                    return Duration()
+                return Duration.undefined()
 
-        return math.nan
+            if self.is_infinite:
+                return self if other > 0. else -self
+
+                # Exact arithmetic in integer microseconds.
+            total_us = (
+                    self.value.days * 86_400_000_000
+                    + self.value.seconds * 1_000_000
+                    + self.value.microseconds
+            )
+
+            exact_us = Fraction(total_us, 1) / Fraction.from_float(other)
+            # Nearest microsecond, ties-to-even.
+            rounded_us = int(round(exact_us))
+
+            return Duration.finite(datetime.timedelta(microseconds=rounded_us))
+
+        else:
+            return NotImplemented
     
 
     @classmethod
@@ -1508,6 +1737,30 @@ class Duration:
     @classmethod
     def finite(cls, value: datetime.timedelta) -> Duration:
         return cls(_kind=Duration.Kind.FINITE, _value=value)
+
+
+    @classmethod
+    def minute(cls) -> Duration:
+        return cls(
+            _kind=Duration.Kind.FINITE,
+            _value=datetime.timedelta(minutes=1)
+        )
+
+
+    @classmethod
+    def day(cls) -> Duration:
+        return cls(
+            _kind=Duration.Kind.FINITE,
+            _value=datetime.timedelta(days=1)
+        )
+
+
+    @classmethod
+    def week(cls) -> Duration:
+        return cls(
+            _kind=Duration.Kind.FINITE,
+            _value=datetime.timedelta(weeks=1)
+        )
 
 
 
@@ -2204,10 +2457,8 @@ class TimeInterval:
 
         Args:
             blow_up_points (bool, optional): If `True`, and the interval
-                is a point with a minute-aligned timestamp,
-                the resulting interval will be a non-empty closed
-                interval between the original point and the next whole
-                minute.
+                is a point the resulting interval will be a non-empty,
+                closed-open, one-minute interval.
 
         Returns:
             TimeInterval: A new time interval with endpoints at whole
@@ -2222,17 +2473,15 @@ class TimeInterval:
 
         if blow_up_points and s == e:
             # If the interval is a point with a minute-aligned
-            # timestamp, expand it to a non-empty closed interval from
-            # that point to the next whole minute.
+            # timestamp, expand it to a non-empty closed-open interval
+            # from that point to the next whole minute.
 
-            if not s.is_finite:
-                return TimeInterval(s, e)
-
+            # TODO: Rewrite it using `Endpoint` and `Duration` directly.
             start_ts = s.timestamp
             end_ts = start_ts + datetime.timedelta(minutes=1)
 
             s = Endpoint.left_finite(start_ts, included=True)
-            e = Endpoint.right_finite(end_ts, included=True)
+            e = Endpoint.right_finite(end_ts, included=False)
 
         return TimeInterval(s, e)
 

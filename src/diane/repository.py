@@ -99,6 +99,8 @@ class UnboundedTimeSetError(RepositoryError):
     '''The repository contains a session with an unbounded time set.'''
     pass
 
+class ActivitiesNotTracked(RepositoryError):
+    """The activities provided have not been tracked."""
 
 
 @dataclass
@@ -278,6 +280,94 @@ class Repository(MutableSet[Session]):
             self._add_to_index(session)
 
 
+    def resolve_activity(self, activity: Activity | str) -> Activity:
+        """Resolve the given activity or slug to the corresponding
+        activity in the registry.
+
+        Args:
+            activity (Activity | str): The activity or slug to resolve.
+
+        Returns:
+            Activity: The resolved activity from the registry.
+
+        Raises:
+            UnknownActivityError: If the given activity or slug
+                is not listed in the registry.
+            TypeError: If the `activity` is neither an `Activity`
+                nor a `str`.
+        """
+
+        try:
+            return self._activities.resolve_activity(activity)
+        except KeyError as e:
+            slug = (
+                activity.slug if isinstance(activity, Activity) else activity
+            )
+            raise UnknownActivityError(
+                provided_slugs=(slug,),
+                unknown_activity_slugs=(slug,),
+                recognised_activities=(),
+                message=(
+                    f'The activity slug \'{activity}\' '
+                    f'is not in the registry.'
+                )
+            ) from e
+        except TypeError as e:
+            raise TypeError(
+                'The \'activity\' is neither an \'Activity\' nor a \'str\'.'
+            ) from e
+
+
+    def resolve_activities(
+        self, *activities: Activity | str
+    ) -> tuple[Activity, ...]:
+        """Resolve the given activities or slugs to registry activities.
+
+        Args:
+            *activities (Activity | str): The activities or slugs
+                to resolve.
+
+        Returns:
+            tuple[Activity, ...]: The sorted tuple of distinct resolved
+            activities.
+
+        Raises:
+            UnknownActivityError: If any provided activity or slug
+                is not present in registry.
+            TypeError: If any argument is neither an `Activity`
+                nor a `str`.
+        """
+
+        resolved_activities = set()
+        unknown_slugs = set()
+        for a in activities:
+            try:
+                resolved_activities.add(self.resolve_activity(a))
+            except UnknownActivityError as e:
+                unknown_slugs.add(a.slug if isinstance(a, Activity) else a)
+            except TypeError as e:
+                raise TypeError(
+                    'At least one of the arguments is neither an \'Activity\' '
+                    'nor a \'str\'.'
+                )
+
+        if unknown_slugs:
+            provided_slugs = {
+                a.slug if isinstance(a, Activity) else a for a in activities
+            }
+            raise UnknownActivityError(
+                provided_slugs=provided_slugs,
+                unknown_activity_slugs=unknown_slugs,
+                recognised_activities=resolved_activities
+            )
+
+        return tuple(sorted(resolved_activities))
+
+
+    def tracked_activities(self) -> frozenset[frozenset[Activity]]:
+        return frozenset(self._activities_index.keys())
+
+
     def add(self, value: Session) -> None:
         '''Add the given session to the repository.
         
@@ -395,7 +485,7 @@ class Repository(MutableSet[Session]):
         if activities:
             for a in activities:
                 try:
-                    specified_activities.add(self._activities._resolve_activity(a))
+                    specified_activities.add(self._activities.resolve_activity(a))
                 except KeyError:
                     raise UnknownActivityError(f'Unknown activity: \'{a}\'.')
 
@@ -524,13 +614,39 @@ class Repository(MutableSet[Session]):
             yield s
 
 
-    def find_by_activities(self, activities: set[Activity]) -> set[Session]:
-        '''Find sessions that have exactly the given set
-        of activities.'''
-        
-        key = frozenset(activities)
-        return self._activities_index.get(key, set()).copy()
-    
+    def find_by_activities(
+        self, *activities: Activity | str
+    ) -> frozenset[Session]:
+        """Find the sessions that correspond exactly to the given
+        activities.
+
+        Args:
+            *activities (Activity | str): Activities or slugs
+                for searching for corresponding sessions.
+
+        Returns:
+            frozenset[Session]: Sessions corresponding to the given
+            activities.
+
+        Raises:
+            UnknownActivityError: If any given activity or slug
+                is not listed in the activities registry.
+            TypeError: If any argument is neither an `Activity`
+                nor a `str`.
+            ActivitiesNotTracked: The activities provided have not been
+                tracked.
+        """
+
+        # Resolve activities.
+        resolved_activities = frozenset(self.resolve_activities(*activities))
+
+        try:
+            return frozenset(self._activities_index[resolved_activities])
+        except KeyError as e:
+            raise ActivitiesNotTracked(
+                'The activities provided have not been tracked.'
+            )
+
 
     def find_overlapping(self, timeset: TimeSet | TimeInterval) -> set[Session]:
         '''Find sessions in the repository that overlap with the given

@@ -1,3 +1,4 @@
+import datetime
 from collections.abc import Collection
 from operator import itemgetter
 from enum import Enum
@@ -7,7 +8,7 @@ import yaml
 import click
 import os
 from collections import defaultdict
-
+import plotext as plt
 from rich.panel import Panel
 from rich.markdown import Markdown
 from rich.text import Text
@@ -17,8 +18,10 @@ from rich.console import Console
 from rich.table import Table
 from rich.prompt import Confirm
 from sortedcontainers import SortedList
+import numpy as np
 
-from diane.temporal import Timestamp, TimeInterval, TimeSet
+from diane.assisted_repository import AssistedRepository
+from diane.temporal import Timestamp, TimeInterval, TimeSet, Duration
 from diane.activities import Activity
 from diane.sessions import Session
 from diane.repository import UnknownActivityError
@@ -1510,6 +1513,94 @@ def update() -> None:
     repo = get_repo()
 
     repo.update_activities_notes()
+
+
+@app.command()
+def habits():
+    try:
+        repo = get_repo()
+    except NoRepositoryError as e:
+        console.print(_error_panel(
+            content=Group(Text('No Diane repository has been found.')),
+            title=Text('No repository')
+        ))
+        return
+
+    mean_regularity_index = repo.habits()
+
+    habits_table = Table(
+        box=None, border_style='dim', expand=True
+    )
+    habits_table.add_column(
+        Text('Activity', style='grey62'),
+        style='italic #cdbef4', no_wrap=True
+    )
+    habits_table.add_column(
+        Text('Regularity', style='grey62'),
+        style='', no_wrap=True
+    )
+
+    habits_table.add_row('', '')
+
+    # Add activities to table.
+    n = len(mean_regularity_index)
+    grouped_activities = any(len(aa) > 1 for aa in mean_regularity_index)
+    for i, (aa, r) in enumerate(mean_regularity_index.items()):
+        for j, a in enumerate(sorted(aa, key=lambda a: a.title)):
+            title_text = Text.assemble(
+                Text(a.title),
+                Text(' '),
+                Text(f'({a.slug})', style='not italic grey62')
+            )
+            p = round(100 * r)
+            regularity_index_text = Text(f'{p}%') if j == 0 else Text()
+            habits_table.add_row(
+                title_text,
+                regularity_index_text
+            )
+        if grouped_activities and i != n - 1:
+            habits_table.add_row('', '')
+
+    console.print(_message_panel(
+        content=Group(habits_table),
+        title=Text('Habits'),
+        padding=0
+    ))
+
+
+@app.command()
+def regularity(
+    activities: list[str] = typer.Argument(
+        ...,
+        help='Plot a graph of the given activities regularity index.'
+    )
+):
+    repo = get_repo()
+
+    plt.clf()
+
+    plot = repo.regularity_plot(*activities)
+
+    plt.plot(
+        plot.x,
+        [plot.habit_threshold] * len(plot.x),
+        color='gray',
+        marker='dot',
+        )
+
+    plt.plot(
+        plot.x,
+        plot.y,
+        color='blue',
+        # fillx=True
+    )
+
+    plt.xticks(
+        plot.tick_positions,
+        plot.tick_labels,
+    )
+
+    plt.show()
 
 
 

@@ -213,13 +213,14 @@ class Activities(MutableSet[Activity]):
         self._validate()
         
     
-    def _resolve_activity(self, obj: Activity | str) -> Activity:
-        '''Check for an activity in the registry. If the activity
+    def resolve_activity(self, obj: Activity | str) -> Activity:
+        """Check for an activity in the registry. If the activity
         is found, retrieves it by its slug.
         
         Raises:
-            `KeyError`: If the activity is not in the registry.
-        '''
+            KeyError: If the activity is not in the registry.
+            TypeError: If `obj` is neither an `Activity` nor a `str`.
+        """
 
         if isinstance(obj, Activity):
             slug = obj.slug
@@ -308,7 +309,7 @@ class Activities(MutableSet[Activity]):
         '''
         
         try:
-            activity = self._resolve_activity(value)
+            activity = self.resolve_activity(value)
             self._activities_graph.remove_node(activity)
             del self._slug_to_activity[activity.slug]
         except KeyError:
@@ -327,7 +328,7 @@ class Activities(MutableSet[Activity]):
         '''
         
         try:
-            activity = self._resolve_activity(value)
+            activity = self.resolve_activity(value)
             self._activities_graph.remove_node(activity)
             del self._slug_to_activity[activity.slug]
         except KeyError as e:
@@ -369,8 +370,8 @@ class Activities(MutableSet[Activity]):
                 or if parent and child are the same.
         '''
 
-        parent = self._resolve_activity(parent)
-        child = self._resolve_activity(child)
+        parent = self.resolve_activity(parent)
+        child = self.resolve_activity(child)
 
         if parent is child:
             raise ValueError(f'Self-loop is not allowed: {parent}.')
@@ -400,8 +401,8 @@ class Activities(MutableSet[Activity]):
         If the connection does not exist, the method does nothing.
         '''
 
-        parent = self._resolve_activity(parent)
-        child = self._resolve_activity(child)
+        parent = self.resolve_activity(parent)
+        child = self.resolve_activity(child)
 
         if self._activities_graph.has_edge(parent, child):
             self._activities_graph.remove_edge(parent, child)
@@ -432,8 +433,8 @@ class Activities(MutableSet[Activity]):
         tmp_activities_graph = self._activities_graph.copy()
 
         for p, c in connections:
-            parent = self._resolve_activity(p)
-            child = self._resolve_activity(c)
+            parent = self.resolve_activity(p)
+            child = self.resolve_activity(c)
             
             if parent is child:
                 raise ValueError(f'Self-loop is not allowed: {parent}.')
@@ -488,7 +489,7 @@ class Activities(MutableSet[Activity]):
             `dict`: The dictionary representation of the activity.
         '''
 
-        activity = self._resolve_activity(activity)
+        activity = self.resolve_activity(activity)
         data = {}
         data['title'] = activity.title
         if activity.description:
@@ -511,7 +512,7 @@ class Activities(MutableSet[Activity]):
                 activities.
         '''
 
-        resolved_activities = (self._resolve_activity(a) for a in activities)
+        resolved_activities = (self.resolve_activity(a) for a in activities)
         parents = set()
         for a in resolved_activities:
             parents.update(self._activities_graph.predecessors(a))
@@ -530,7 +531,7 @@ class Activities(MutableSet[Activity]):
                 grandparents, etc.) of the given activities.
         '''
 
-        resolved_activities = (self._resolve_activity(a) for a in activities)
+        resolved_activities = (self.resolve_activity(a) for a in activities)
         ancestors = set()
         for a in resolved_activities:
             ancestors.update(nx.ancestors(self._activities_graph, a))
@@ -549,7 +550,7 @@ class Activities(MutableSet[Activity]):
                 activities.
         '''
 
-        resolved = (self._resolve_activity(a) for a in activities)
+        resolved = (self.resolve_activity(a) for a in activities)
         children = set()
         for a in resolved:
             children.update(self._activities_graph.successors(a))
@@ -568,7 +569,7 @@ class Activities(MutableSet[Activity]):
                 grandchildren, etc.) of the given activities.
         '''
 
-        resolved = (self._resolve_activity(a) for a in activities)
+        resolved = (self.resolve_activity(a) for a in activities)
         descendants = set()
         for a in resolved:
             descendants.update(nx.descendants(self._activities_graph, a))

@@ -12,8 +12,11 @@ dependencies = [
     "networkx",
     "pyyaml",
     "typer",
+    "rich",
     "sortedcontainers",
-    "plotext"
+    "plotext",
+    "pandas",
+    "numpy"
 ]
 
 [tool.setuptools.packages.find]

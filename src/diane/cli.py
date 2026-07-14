@@ -142,11 +142,30 @@ def complete_activity_slugs_stop(incomplete: str) -> list[str]:
     return sorted(s for s in tracked_slugs if s.startswith(incomplete))
 
 
-def get_repo(repo_dir: Path | str | None = None) -> RepositoryManager:
+def get_repo(
+    repo_dir: Path | str | None = None,
+    load_sessions: bool = True,
+    first_day: datetime.date | None = None,
+    last_day: datetime.date | None = None
+) -> RepositoryManager:
     """Helper to find the Diane repository for the current directory.
 
     Searches the current directory for the '.diane/' subdirectory.
     If found, returns a `RepositoryManager` for that directory.
+
+    Args:
+        repo_dir (Path | str | None): The directory of the repository.
+            If `None`, the current working directory is used.
+        load_sessions (bool): If `True`, load sessions from
+            the repository. `True` by default.
+        first_day (datetime.date | None): The first day to load sessions
+            from. If `None`, the first day is the earliest day with
+            sessions. Only taken into account if `load_sessions`
+            is `True`.
+        last_day (datetime.date | None): The last day to load sessions
+            for. If `None`, the last day is the latest day with
+            sessions. Only taken into account if `load_sessions`
+            is `True`.
 
     Raises:
         `NoRepositoryError`: If no repository is found.
@@ -158,7 +177,12 @@ def get_repo(repo_dir: Path | str | None = None) -> RepositoryManager:
         repo_dir = Path(repo_dir)
 
     if (repo_dir / '.diane').exists():
-        return RepositoryManager(repo_dir)
+        return RepositoryManager(
+            repo_dir,
+            load_sessions=load_sessions,
+            first_day=first_day,
+            last_day=last_day
+        )
 
     raise NoRepositoryError
 
@@ -928,7 +952,7 @@ def status() -> None:
     and duration.
     """
 
-    repo = get_repo()
+    repo = get_repo(load_sessions=False)
     tracking_state = repo.tracking_state
     n = len(tracking_state)
 
@@ -1011,13 +1035,22 @@ def start(
         )
     )
 ) -> None:
-    """Start tracking the specified activities from the current time."""
+    """Start tracking the given activities from the current time.
+
+    To improve performance, sessions haven't been loaded.
+
+    Args:
+        activities (list[str]): The slugs of the activities to start
+            tracking.
+        at (str | None): The start time for tracking the activities.
+            If left unspecified, the current time is used.
+    """
 
     def _try_start(
         *activity_slugs: str, timestamp: Timestamp
     ) -> RepositoryManager.StartResult:
         try:
-            manager = get_repo()
+            manager = get_repo(load_sessions=False)
         except NoRepositoryError:
             console.print(_error_panel(
                 content=Group(Text('No Diane repository has been found.')),
@@ -1152,23 +1185,30 @@ def start(
 @app.command()
 def cancel(
     activities: list[str] | None = typer.Argument(
-        None, help='Activities to cancel.', autocompletion=complete_activity_slugs_stop
+        None,
+        help='Activities to cancel.',
+        autocompletion=complete_activity_slugs_stop
     ),
     all_: bool = typer.Option(
-        False, '-a', '--all', help='Cancel all currently tracked activities.'
+        False,
+        '-a', '--all',
+        help='Cancel all currently tracked activities.'
     )
 ) -> None:
-    '''Cancel tracking the specified activities.
+    """Cancel tracking the given activities.
 
-    Note:
-        The parameter `all_` uses a trailing underscore to avoid
-        shadowing the built-in `all`.
+    To improve performance, sessions haven't been loaded.
 
-    - If the '-a'/'--all' flag is used, all currently tracked activities
-      are cancelled, regardless of the 'activities' argument.
-    '''
+    Args:
+        activities (list[str] | None): The slugs of the activities
+            to cancel.
+        all_ (bool): If the '-a'/'--all' flag is used, all currently
+            tracked activities are cancelled, regardless
+            of the 'activities' argument. Uses a trailing underscore
+            to avoid shadowing the built-in `all`.
+    """
 
-    repo = get_repo()
+    repo = get_repo(load_sessions=False)
 
     if not all_ and not activities:
         raise typer.BadParameter(
@@ -1240,7 +1280,6 @@ def stop(
       are stopped, regardless of the 'activities' argument.
     """
 
-    repo = get_repo()
     if at is not None:
         try:
             ts = Timestamp.from_iso(at)
@@ -1256,6 +1295,11 @@ def stop(
             return
     else:
         ts = Timestamp.now().round_to_second()
+    current_day = ts.datetime.date()
+    first_day = current_day - datetime.timedelta(days=1)
+    last_day = current_day + datetime.timedelta(days=1)
+
+    repo = get_repo(first_day=first_day, last_day=last_day)
 
     try:
         ss = repo.stop(
@@ -1301,8 +1345,16 @@ def do(
         autocompletion=complete_message
     )
 ) -> None:
+    """Create a point session with the given activities.
 
-    repo = get_repo()
+    Args:
+        activities: List of activity slugs to include in the session.
+        at: Use the option '--at' to specify the time at which to create
+            the session. If not provided, the current time is used.
+        message: Use the option '-m'/'--message' to specify an optional
+            message to attach to the session. If not provided, an empty
+            message will be attached.
+    """
 
     if at is not None:
         try:
@@ -1319,6 +1371,9 @@ def do(
             return
     else:
         t = Timestamp.now().round_to_second()
+    d = t.datetime.date()
+
+    repo = get_repo(first_day=d, last_day=d)
 
     try:
         session = repo.do(*activities, timestamp=t, message=message)

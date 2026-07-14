@@ -241,16 +241,22 @@ class AncestorActivitiesTracked(RepositoryManagerRepositoryError):
 
 
 class RepositoryManager(AssistedRepository):
-    '''Represents the repository manager.
+    """Represents the repository manager.
     
     This is a wrapper around the `AssistedRepository` that allows
     to manage a repository, i.e., to perform operations such as:
     - creating new sessions,
     - loading and saving repository data from/to disk.
-    '''
+    """
 
-    _datadir: Path
+    _datadir: Path  # The repository directory.
     _tracking_state: dict[Activity, Timestamp]
+
+
+    # Configuration for the repository manager.
+    _daily_notes_subdir: str = 'daily_notes'
+    _daily_note_title_format: str = '%Y-%m-%d'
+    # TODO: Load from config file.
 
     _dirty_days: set[datetime.date]  # Days to update.
     _loading: bool
@@ -293,12 +299,178 @@ class RepositoryManager(AssistedRepository):
             raise ValueError(f'Invalid activity link: \'{link}\'.')
 
 
-    def __init__(self, repo_dir: Path | str) -> None:
+
+    DailyNoteEntry = namedtuple('DailyNoteEntry', ['date', 'path'])
+
+
+
+    def _daily_notes_list(self) -> list[DailyNoteEntry]:
+        """Return a list of all daily notes in the corresponding
+        subdirectory.
+
+        Returns:
+            list[DailyNoteEntry]: A list of all daily notes
+            in the repository sorted by date.
+        """
+
+        sessions_path = self._datadir / self._daily_notes_subdir
+        daily_notes = []
+
+        for file_path in sessions_path.glob('*.md'):
+            if file_path.is_file():
+                date_str = file_path.stem
+                try:
+                    date = datetime.datetime.strptime(
+                        date_str, self._daily_note_title_format
+                    ).date()
+                except ValueError:
+                    continue
+                daily_notes.append(
+                    self.DailyNoteEntry(date=date, path=file_path)
+                )
+
+        return sorted(daily_notes, key=lambda n: n.date)
+
+
+    def _read_sessions_from_daily_note(
+        self, daily_note_entry: DailyNoteEntry
+    ) -> list[Session]:
+
+        try:
+            with daily_note_entry.path.open('r', encoding='utf-8') as f:
+                content = f.read()
+        except FileNotFoundError as e:
+            # TODO: log 'File not found: \'{daily_note_entry.path}\'.'
+            return []
+        except PermissionError as e:
+            # TODO: log 'Permission denied:
+            # TODO \'{daily_note_entry.path}\'.'
+            return []
+        except UnicodeDecodeError as e:
+            # TODO: log 'The file is not valid UTF-8:
+            # TODO: \'{daily_note_entry.path}\'.'
+            return []
+        except OSError as e:
+            # TODO: log 'Input-output error:
+            # TODO: \'{daily_note_entry.path}\'.'
+            return []
+
+        # Find all YAML blocks.
+        block_pattern = re.compile(
+            r'(?m)^\s*---\s*$\n(.*?)\n^\s*---\s*$',
+            re.DOTALL
+        )
+
+        def unlink_activities(session_data: dict) -> dict:
+            activities = session_data.get('activities')
+            if not isinstance(activities, list):
+                raise ValueError('\'activities\' must be a list.')
+            session_data['activities'] = [
+                RepositoryManager._unlink_activity(a) for a in activities
+            ]
+            return session_data
+
+        sessions = []
+        for match in block_pattern.finditer(content):
+            yaml_block = match.group(1).strip()
+            if not yaml_block:
+                continue
+
+            try:
+                data = yaml.safe_load(yaml_block)
+            except yaml.YAMLError:
+                continue
+
+            if not isinstance(data, dict):
+                continue
+
+            sessions_data = data.get('diane_sessions')
+            if not isinstance(sessions_data, list):
+                continue
+
+            for session_dict in sessions_data:
+                if not isinstance(session_dict, dict):
+                    continue
+                try:
+                    session = self.session_from_dict(
+                        unlink_activities(session_dict),
+                        daily_note_entry.date.isoformat()
+                    )
+                    sessions.append(session)
+                except Exception as e:
+                    # TODO: log 'Error adding session from
+                    # TODO: \'{daily_note_entry.path}\'. {e}',
+                    continue
+
+        return sorted(sessions, key=lambda s: s.timeset.start)
+
+
+    def _load_sessions(
+        self,
+        first_day: datetime.date | None = None,
+        last_day: datetime.date | None = None,
+        merge: bool = True
+    ) -> None:
+        """Load sessions from the repository directory.
+
+        Args:
+            first_day (datetime.datetime | None): The first day to load
+                sessions from. If `None`, the first day is the earliest
+                day with sessions.
+            last_day (datetime.datetime | None): The last day to load
+                sessions for. If `None`, the last day is the latest
+                day with sessions.
+            merge (bool): If `True`, merge touching sessions. `True`
+                by default.
+
+        Raises:
+            RuntimeError: If the repository is not in a loading state.
+        """
+
+        if not self._loading:
+            raise RuntimeError(
+                'Cannot load sessions while not in loading state.'
+            )
+
+        # Load sessions from the `first_day` to the `last_day`.
+        daily_notes_list = self._daily_notes_list()
+        for daily_note_entry in daily_notes_list:
+            if first_day and daily_note_entry.date < first_day:
+                continue
+            if last_day and daily_note_entry.date > last_day:
+                break
+            new_sessions = self._read_sessions_from_daily_note(
+                daily_note_entry
+            )
+            for s in new_sessions:
+                self.add(s)
+
+        # Merge touching sessions if requested.
+        if merge:
+            self._merge_touching()
+
+    def __init__(
+        self,
+        repo_dir: Path | str,
+        load_sessions: bool = True,
+        first_day: datetime.date | None = None,
+        last_day: datetime.date | None = None
+    ) -> None:
         """Load the repository data from the given directory.
 
         Args:
-            `datadir` (`str`): The directory of the repository.
-        
+            repo_dir (str): The directory of the repository.
+            load_sessions (bool): If `True`, load sessions from
+                the repository. `True` by default.
+            first_day (datetime.date | None): The first day to load
+                sessions from. If `None`, the first day is the earliest
+                day with sessions. Only taken into account
+                if `load_sessions` is `True`.
+            last_day (datetime.date | None): The last day to load
+                sessions for. If `None`, the last day is the latest day
+                with sessions. Only taken into account
+                if `load_sessions` is `True`.
+
         Raises:
             `ValueError`: If the repository data is invalid or cannot
                 be loaded.
@@ -328,68 +500,8 @@ class RepositoryManager(AssistedRepository):
         self._dirty_days = set()
 
         # Load sessions.
-        sessions_path = self._datadir / 'daily_notes'
-        filename_pattern = re.compile(r'^\d{4}-\d{2}-\d{2}\.md$')
-        block_pattern = re.compile(
-            r'(?m)^\s*---\s*$\n(.*?)\n^\s*---\s*$',
-            re.DOTALL
-        )
-
-        for file_path in sessions_path.glob('*.md'):
-            if not filename_pattern.match(file_path.name):
-                continue
-
-            date_str = file_path.stem  # YYYY-MM-DD.
-
-            try:
-                with file_path.open('r', encoding='utf-8') as f:
-                    content = f.read()
-            except Exception as e:
-                warnings.warn(f'Error reading \'{file_path.name}\'. {e}', stacklevel=2)
-                continue
-
-            # Find all YAML blocks.
-            for match in block_pattern.finditer(content):
-                yaml_block = match.group(1).strip()
-                if not yaml_block:
-                    continue
-
-                try:
-                    data = yaml.safe_load(yaml_block)
-                except yaml.YAMLError:
-                    continue
-
-                if not isinstance(data, dict):
-                    continue
-
-                sessions_data = data.get('diane_sessions')
-                if not isinstance(sessions_data, list):
-                    continue
-                
-                for session_dict in sessions_data:
-                    if not isinstance(session_dict, dict):
-                        continue
-                    try:    
-                        def unlink_activities(session_data: dict) -> dict:
-                            activities = session_data.get('activities')
-                            if not isinstance(activities, list):
-                                raise ValueError('\'activities\' must be a list.')
-                            session_data['activities'] = [
-                                RepositoryManager._unlink_activity(a) for a in activities
-                            ]
-                            return session_data
-                        
-                        session = self.session_from_dict(unlink_activities(session_dict), date_str)
-                        super().add(session)
-                    except Exception as e:
-                        warnings.warn(
-                            f'Error adding session from \'{file_path.name}\'. {e}',
-                            stacklevel=2
-                        )
-                        continue
-        
-        # Merge touching sessions.
-        self._merge_touching()
+        if load_sessions:
+            self._load_sessions(first_day=first_day, last_day=last_day)
 
         # Set loading state to `False`.
         self._loading = False

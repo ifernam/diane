@@ -11,21 +11,21 @@ import warnings
 
 @dataclass(slots=True)
 class Activity:
-    '''Represents a human activity.
+    """Represents a human activity.
     
     Attributes:
-        `slug`: The unique string identifier for an activity. Cannot
+        slug: The unique string identifier for an activity. Cannot
             be changed. Format: lowercase letters, digits,
             and underscores (non-consecutive, not leading/trailing).
             Must contain at least one letter.
             
-        `title`: The human-readable name of the activity. Can
+        title: The human-readable name of the activity. Can
             be changed.
         
-        `description`: The activity description string. Can be changed.
+        description: The activity description string. Can be changed.
             This may be empty if the activity is clearly understood from
             its name.
-        '''
+    """
 
 
     _SLUG_PATTERN = re.compile(r'^(?=.*[a-z])[a-z0-9]+(_[a-z0-9]+)*$')
@@ -34,6 +34,7 @@ class Activity:
     _slug: str
     title: str
     description: str = ''
+    tags: list = field(default_factory=list)
 
 
     @classmethod
@@ -76,101 +77,115 @@ class Activity:
 
     @property
     def slug(self) -> str:
-        '''Return the unique string identifier of the activity.'''
+        """Return the unique string identifier (slug)
+        of the activity.
+
+        Returns:
+            str: The unique string identifier (slug) of the activity.
+        """
 
         return self._slug
     
 
     @classmethod
     def from_dict(cls, slug: str, data: dict) -> Activity:
-        '''Construct an activity from the dictionary.
+        """Construct an activity from the dictionary.
 
-        Slug must be specified as a separate argument. The `'parents'`
-        field is ignored.
+        Slug must be specified as a separate argument.
 
         Args:
-            `slug` (`str`): The unique identifier for the activity.
-            `data` (`dict`): A dictionary containing the activity data.
+            slug (str): The unique identifier for the activity.
+            data (dict): A dictionary containing the activity data.
                 Expected keys:
                 - 'title' (str, required): the human-readable name;
                 - 'description' (str, optional): the description,
                     defaults to '';
+                - 'tags' (list, optional): the tags for the activity;
                 - 'parents' (list, optional): ignored, but may
                     be present.
 
         Returns:
-            `Activity`: The newly created activity.
+            Activity: The newly created activity.
 
         Raises:
-            `ValueError`: If the slug is invalid, or if the `'title'`
-                field is missing.
-            `TypeError`: If `'title'` or `'description'`
-                is not a string.
+            ValueError: If the slug is invalid, or if the 'title' field
+                is missing.
+            TypeError: If 'title' or 'description' is not a string.
 
-        Warns:
-            `UserWarning`: If the dictionary contains extra fields
-                beyond `'title'`, `'description'`, and `'parents'`.
-        
         Example:
-            >>> Activity.from_dict(studying_algebra,
+            >>> Activity.from_dict('studying_algebra', {
             ... {
             ...    'title': 'Studying algebra',
             ...    'description': '',
+            ...    'tags': ['diane_activity', 'logged'],
             ...    'parents': ['studying_math', 'studying']
             ... })
 
             >>> Activity.from_dict(
-            ...     listening_to_podcast,
+            ...     'listening_to_podcast',
             ...     {'title': 'Listening to a podcast'}
             ... )
-        '''
+        """
 
-        # Show a warning if there are extra fields in the activity
-        # dictionary.
-        allowed_keys = {'title', 'description', 'parents'}
+        # Check for extra fields in the activity dictionary.
+        allowed_keys = {'title', 'description', 'tags', 'parents'}
         extra_keys = set(data) - allowed_keys
         if extra_keys:
-            sorted_quoted_extra_keys = [f'\'{str(k)}\'' for k in sorted(extra_keys)]
-            extra_keys_string = ', '.join(sorted_quoted_extra_keys)
-            warnings.warn(
-                f'Activity dictionary corresponding to the slug \'{slug}\' contains unknown '
-                f'fields: {extra_keys_string}.',
-                stacklevel=2
-            )
+            quoted_extra_keys = [f'\'{str(k)}\'' for k in sorted(extra_keys)]
+            extra_keys_string = ', '.join(quoted_extra_keys)
+            # TODO: log 'Activity dictionary corresponding to the slug
+            # TODO: \'{slug}\' contains unknown fields:
+            # TODO: {extra_keys_string}.',
 
+        # Read the activity title.
         try:
             title = data['title']
         except KeyError as e:
-            raise ValueError(f'Activity \'{slug}\' is missing required field \'title\'.') from e
-        
+            raise ValueError(
+                f'Activity \'{slug}\' is missing required field \'title\'.'
+            ) from e
         if not isinstance(title, str):
-            raise TypeError(f'Field \'title\' of activity \'{slug}\' must be a string.')
-        
-        description = data.get('description', '')
+            raise TypeError(
+                f'Field \'title\' of activity \'{slug}\' must be a string.'
+            )
 
+        # Read the activity description.
+        description = data.get('description', '')
         if not isinstance(description, str):
-            raise TypeError(f'Field \'description\' of activity \'{slug}\' must be a string.')
+            raise TypeError(
+                f'Field \'description\' of activity \'{slug}\' must be '
+                f'a string.'
+            )
+
+        # Read the activity tags.
+        tags = data.get('tags', [])
+        if isinstance(tags, str):
+            tags = [tags]
+        if not isinstance(tags, list):
+            raise TypeError(
+                f'Field \'tags\' of activity \'{slug}\' must be a list.'
+            )
 
         return cls(
             _slug=slug,
             title=title,
-            description=description
+            description=description,
+            tags=tags
         )
     
 
 
-@dataclass
 class Activities(MutableSet[Activity]):
-    '''Registry of activities.
+    """Registry of activities.
     
     In addition to the slugs, the titles of activities should also
     be unique within the registry. This is not a strict requirement, but
     rather a useful recommendation designed to avoid confusion.
-    '''
+    """
 
 
-    _slug_to_activity: dict[str, Activity] = field(default_factory=dict)
-    _activities_graph: nx.DiGraph = field(default_factory=nx.DiGraph)
+    _slug_to_activity: dict[str, Activity]
+    _activities_graph: nx.DiGraph
     
 
     @staticmethod
@@ -209,10 +224,14 @@ class Activities(MutableSet[Activity]):
             )
         
         
-    def __post_init__(self) -> None:
-        self._validate()
-        
-    
+    def __init__(self) -> None:
+        """Create an empty activities registry."""
+
+        self._slug_to_activity = {}
+        self._activities_graph = nx.DiGraph()
+        # self._validate()
+
+
     def resolve_activity(self, obj: Activity | str) -> Activity:
         """Check for an activity in the registry. If the activity
         is found, retrieves it by its slug.
@@ -258,7 +277,7 @@ class Activities(MutableSet[Activity]):
         '''
 
         return iter(self._slug_to_activity.values())
-    
+
 
     def __len__(self) -> int:
         '''Return the size of the activities registry.
@@ -620,14 +639,40 @@ class Activities(MutableSet[Activity]):
     
 
     def copy(self) -> Activities:
-        '''Create a shallow copy of the activities registry.
+        """Create a shallow copy of the activities registry.
 
         Returns:
-            `Activities`: A new `Activities` object containing the same
+            Activities: A new `Activities` object containing the same
                 activities and connections.
-        '''
-        return Activities(self._slug_to_activity.copy(), self._activities_graph.copy())
-    
+        """
+
+        activities = Activities()
+        activities._slug_to_activity = self._slug_to_activity.copy()
+        activities._activities_graph = self._activities_graph.copy()
+        return activities
+
+
+    @classmethod
+    def _from_iterable(cls, iterable) -> Activities:
+        """Construct an Activities instance from an iterable of Activity
+        objects.
+
+        This method is used by MutableSet's set operations (`__and__`,
+        `__or__`, etc.) to construct a new instance from an iterable.
+
+        Args:
+            iterable: An iterable of Activity objects.
+
+        Returns:
+            Activities: A new Activities instance containing
+            the activities from the iterable.
+        """
+
+        activities = cls()
+        for activity in iterable:
+            activities.add(activity)
+        return activities
+
 
     @classmethod
     def from_dict(cls, data: dict) -> Activities:

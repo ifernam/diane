@@ -18,9 +18,7 @@ from rich.console import Console
 from rich.table import Table
 from rich.prompt import Confirm
 from sortedcontainers import SortedList
-import numpy as np
 
-from diane.assisted_repository import AssistedRepository
 from diane.temporal import Timestamp, TimeInterval, TimeSet, Duration
 from diane.activities import Activity
 from diane.sessions import Session
@@ -904,9 +902,11 @@ def _start_panel(start_result: RepositoryManager.StartResult) -> Panel:
 def init():
     """Initialise a new Diane repository.
 
-    Creates the '.diane/' directory in the current working directory,
-    along with a 'data/activities.yaml' file initialised from
-    the package template. Also creates the empty 'tracking.yaml' file.
+    Creates:
+    - the '.diane/' directory in the current working directory (means
+      that the repository is initialised);
+    - activities subdirectory with Markdown activities notes;
+    - empty '.diane/tracking.yaml' file.
     """
 
     # Determine paths.
@@ -1070,7 +1070,7 @@ def start(
             if e.recognised_activities:
                 console.print(_error_panel(
                     _unknown_activity_group(
-                        e.unknown_activity_slugs, e.recognised_activities),
+                        e.unknown_slugs, e.recognised_activities),
                     Text('Unknown activities')
                 ))
                 if Confirm.ask(default=True, console=console):
@@ -1402,6 +1402,21 @@ def do(
 
 
 @app.command()
+def activities() -> None:
+    """Show available activities."""
+
+    repo = get_repo()
+
+    for i, activity in enumerate(
+        sorted(repo.activities, key=lambda a: a.title)
+    ):
+        console.print(Text.from_markup(
+            f'{i + 1}) [italic #cdbef4]{activity.title}[/] '
+            f'[grey62]({activity.slug})[/].')
+        )
+
+
+@app.command()
 def sessions(
     today: bool = typer.Option(False, '-t', '--today', help='Show today\'s sessions.'),
     yesterday: bool = typer.Option(False, '--yesterday', help='Show yesterday\'s sessions.'),
@@ -1565,7 +1580,7 @@ def stats(
 def update() -> None:
     '''Update all the tracked activities notes. Remove unnecessary.'''
 
-    repo = get_repo()
+    repo = get_repo(load_sessions=False)
 
     repo.update_activities_notes()
 

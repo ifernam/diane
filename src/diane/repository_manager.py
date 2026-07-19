@@ -8,6 +8,7 @@ import re
 import datetime
 from collections import defaultdict, namedtuple
 from collections.abc import Collection
+from itertools import chain
 
 from diane.temporal import Timestamp, TimeInterval, TimeSet
 from diane.activities import Activity, Activities
@@ -17,19 +18,30 @@ from diane.assisted_repository import AssistedRepository, AssistedRepositoryErro
 
 
 
-class RepositoryManagerRepositoryError(AssistedRepositoryError):
-    '''The base exception for all assisted repository manager errors.'''
+class RepositoryManagerError(AssistedRepositoryError):
+    """The base exception for all assisted repository manager errors."""
     pass
 
 
 
-class NoActivitiesProvided(RepositoryManagerRepositoryError):
-    '''No activities have been provided.'''
+class ActivityReadError(RepositoryManagerError):
+    """An error occurred while reading activity data."""
+
+
+
+class ActivityReadFromMarkdownNoteError(RepositoryManagerError):
+    """An error occurred while reading activity data from a Markdown
+    activity note."""
+
+
+
+class NoActivitiesProvided(RepositoryManagerError):
+    """No activities have been provided."""
     pass
 
 
 
-class ActivityAlreadyTracked(RepositoryManagerRepositoryError):
+class ActivityAlreadyTracked(RepositoryManagerError):
     """Some of the provided activities are already being tracked.
 
     Args:
@@ -107,7 +119,7 @@ class ActivityAlreadyTracked(RepositoryManagerRepositoryError):
 
 
 
-class AncestorActivities(RepositoryManagerRepositoryError):
+class AncestorActivities(RepositoryManagerError):
     """Some of the provided activities are ancestors of the other
     provided ones.
 
@@ -164,7 +176,7 @@ class AncestorActivities(RepositoryManagerRepositoryError):
 
 
 
-class AncestorActivitiesTracked(RepositoryManagerRepositoryError):
+class AncestorActivitiesTracked(RepositoryManagerError):
     """Some of provided activities are ancestors or descendants
     of activities that are already being tracked.
 
@@ -254,6 +266,7 @@ class RepositoryManager(AssistedRepository):
 
 
     # Configuration for the repository manager.
+    _activities_subdir: str = 'diane_activities'
     _daily_notes_subdir: str = 'daily_notes'
     _daily_note_title_format: str = '%Y-%m-%d'
     # TODO: Load from config file.
@@ -277,26 +290,56 @@ class RepositoryManager(AssistedRepository):
         return f'[[diane_activities/{activity_slug}]]'
 
 
-    @staticmethod
-    def _unlink_activity(link: str) -> str:
-        '''Return the activity slug from the given activity link format.
+    def _unlink_activity(self, link: str) -> str:
+        """Return the activity slug from the given activity link format.
         
         Args:
-            `link` (`str`): The activity link.
+            link (str): The activity link.
         
         Returns:
-            `str`: The activity slug.
+            str: The activity slug.
 
         Raises:
-            `ValueError`: If the link format is invalid.
-        '''
+            ValueError: If the link format is invalid.
+        """
 
-        pattern = r'\[\[diane_activities/([^\]]+)\]\]'
+        pattern = rf'\[\[{self._activities_subdir}/([^\]]+)\]\]'
         match = re.search(pattern, link)
         if match:
             return match.group(1)
         else:
             raise ValueError(f'Invalid activity link: \'{link}\'.')
+
+
+
+    ActivityNoteEntry = namedtuple('ActivityNoteEntry', ['slug', 'path'])
+
+
+
+    def _activity_notes_list(self) -> list[ActivityNoteEntry]:
+        """Return a list of all activity notes in the corresponding
+        subdirectory.
+
+        Returns:
+            list[ActivityNoteEntry]: A list of all activity notes
+            in the repository sorted by slug.
+        """
+
+        # Determine activity notes path.
+        activities_path = self._datadir / self._activities_subdir
+        activity_notes = []
+
+        for file_path in chain(
+            activities_path.glob('*.md'),
+            activities_path.glob('*.markdown')
+        ):
+            if file_path.is_file():
+                slug = file_path.stem
+                activity_notes.append(
+                    self.ActivityNoteEntry(slug=slug, path=file_path)
+                )
+
+        return sorted(activity_notes, key=lambda n: n.slug)
 
 
 
@@ -313,10 +356,14 @@ class RepositoryManager(AssistedRepository):
             in the repository sorted by date.
         """
 
+        # Determine daily notes path.
         sessions_path = self._datadir / self._daily_notes_subdir
         daily_notes = []
 
-        for file_path in sessions_path.glob('*.md'):
+        for file_path in chain(
+            sessions_path.glob('*.md'),
+            sessions_path.glob('*.markdown')
+        ):
             if file_path.is_file():
                 date_str = file_path.stem
                 try:
@@ -355,23 +402,22 @@ class RepositoryManager(AssistedRepository):
             # TODO: \'{daily_note_entry.path}\'.'
             return []
 
-        # Find all YAML blocks.
-        block_pattern = re.compile(
+        yaml_front_matter_pattern = re.compile(
             r'(?m)^\s*---\s*$\n(.*?)\n^\s*---\s*$',
             re.DOTALL
         )
 
         def unlink_activities(session_data: dict) -> dict:
-            activities = session_data.get('activities')
-            if not isinstance(activities, list):
-                raise ValueError('\'activities\' must be a list.')
+            aa = session_data.get('activities')
+            if not isinstance(aa, list):
+                raise ValueError("The 'activities' field must be a list.")
             session_data['activities'] = [
-                RepositoryManager._unlink_activity(a) for a in activities
+                self._unlink_activity(a) for a in aa
             ]
             return session_data
 
         sessions = []
-        for match in block_pattern.finditer(content):
+        for match in yaml_front_matter_pattern.finditer(content):
             yaml_block = match.group(1).strip()
             if not yaml_block:
                 continue
@@ -449,6 +495,7 @@ class RepositoryManager(AssistedRepository):
         if merge:
             self._merge_touching()
 
+
     def __init__(
         self,
         repo_dir: Path | str,
@@ -484,14 +531,15 @@ class RepositoryManager(AssistedRepository):
 
         # Set repository directory.
         self._datadir = (
-            repo_dir if isinstance(repo_dir, Path)
-            else Path(repo_dir)
+            repo_dir if isinstance(repo_dir, Path) else Path(repo_dir)
         )
 
-        # Load and set activities registry.
-        activities_path = self._datadir / '.diane/data/activities.yaml'
+        # Load activities.
+        super().__init__()
+        self._load_activities()
+        '''activities_path = self._datadir / '.diane/data/activities.yaml'
         activities = Activities.from_yaml(activities_path)
-        super().__init__(_activities=activities)
+        super().__init__(_activities=activities)'''
 
         # Update tracking activities.
         self._load_state()
@@ -502,6 +550,9 @@ class RepositoryManager(AssistedRepository):
         # Load sessions.
         if load_sessions:
             self._load_sessions(first_day=first_day, last_day=last_day)
+
+        self._rebuild_index()
+        self._validate()
 
         # Set loading state to `False`.
         self._loading = False
@@ -517,6 +568,139 @@ class RepositoryManager(AssistedRepository):
         """
 
         return self._tracking_state.copy()
+
+
+    def _read_activity_from_markdown_note(
+        self,
+        path: Path | str
+    ) -> tuple[Activity, list[str]]:
+        """Read an activity from a Markdown note.
+
+        Args:
+            path (Path | str): The path to the Markdown note.
+
+        Returns:
+            tuple[Activity, list[str]]: The read activity
+                and its parents.
+        """
+
+        # Normalise the path.
+        path = path if isinstance(path, Path) else Path(path)
+
+        # Obtain activity slug.
+        slug = path.stem
+
+        # Define YAML front matter pattern.
+        yaml_front_matter_pattern = re.compile(
+            r'(?m)^\s*---\s*$\n(.*?)\n^\s*---\s*$',
+            re.DOTALL
+        )
+
+        # Read the activity note content.
+        try:
+            with path.open('r', encoding='utf-8') as f:
+                content = f.read()
+        except FileNotFoundError as e:
+            # TODO: log.
+            raise ActivityReadFromMarkdownNoteError(
+                f"The activity note '{path}' not found."
+            ) from e
+        except PermissionError as e:
+            # TODO: log.
+            raise ActivityReadFromMarkdownNoteError(
+                f"Permission to read the activity note '{path}' denied. {e}"
+            ) from e
+        except UnicodeDecodeError as e:
+            # TODO: log.
+            raise ActivityReadFromMarkdownNoteError(
+                f"Unicode decode error while reading activity note '{path}'. "
+                f"{e}"
+            ) from e
+        except OSError as e:
+            # TODO: log.
+            raise ActivityReadFromMarkdownNoteError(
+                f"Input-output error while reading activity note '{path}'. {e}"
+            ) from e
+
+        # Find the YAML front matter.
+        match = yaml_front_matter_pattern.search(content)
+        if not match:
+            raise ActivityReadFromMarkdownNoteError(
+                f"YAML front matter in activity note '{path}' wasn't found."
+            )
+
+        # Parse the YAML front matter.
+        try:
+            data = yaml.safe_load(match.group(1)) or {}
+        except yaml.YAMLError as e:
+            raise ActivityReadFromMarkdownNoteError(
+                f"Invalid YAML in front matter of activity note '{path}'. {e}"
+            ) from e
+        parents = [self._unlink_activity(a) for a in data.get('parents', [])]
+
+        return Activity.from_dict(slug, data), parents
+
+
+    def _load_activities(self):
+        """Load activities from the corresponding subdirectory.
+
+        Loads activities data from Markdown activity notes
+        in the '{self._activities_dir}' subdirectory. By default,
+        any Markdown file in this subdirectory represents an activity.
+        Files with extensions other than '.md' or '.markdown'
+        and subdirectories are ignored.
+
+        It is assumed that the activities subdirectory should exist even
+        if there are no activities. Therefore, if it does not exist,
+        it will be created.
+        """
+
+        # Determine the activities directory.
+        activities_dir = self._datadir / self._activities_subdir
+
+        activity_note_entries = self._activity_notes_list()
+        activities = Activities()
+        connections = []
+        for ar in activity_note_entries:
+            activity, parents = self._read_activity_from_markdown_note(ar.path)
+            activities.add(activity)
+            connections.extend([(parent, activity) for parent in parents])
+        activities.add_connections(connections)
+        self.activities = activities
+
+
+    def _clear_activity_notes(self) -> None:
+        """Remove all activity notes.
+
+        Removes all Markdown files from the '{self._activities_subdir}'
+        subdirectory. By default, any Markdown file in this subdirectory
+        represents an activity. Files with extensions other than '.md'
+        or '.markdown' and subdirectories are ignored.
+
+        It is assumed that the activities subdirectory should exist even
+        if there are no activities. Therefore, if it does not exist,
+        it will be created.
+        """
+
+        # Determine the activities subdirectory.
+        activities_dir = self._datadir / self._activities_subdir
+
+        # Create activities subdirectory if it doesn't exist.
+        if not activities_dir.exists():
+            activities_dir.mkdir(parents=True, exist_ok=True)
+            return
+
+        # Iterate over all Markdown files in directory (non‑recursive)
+        # and delete them.
+        for file_path in chain(
+                activities_dir.glob('*.md'), activities_dir.glob('*.markdown')
+        ):
+            try:
+                file_path.unlink()
+            except OSError as e:
+                # TODO: log 'Could not delete the activity note:
+                # TODO: \'{file_path}\'.'
+                pass
 
 
     def _update_diane_block(self, block_content: str, new_block: str) -> str:
@@ -747,31 +931,6 @@ class RepositoryManager(AssistedRepository):
         self._dirty_days.clear()
 
 
-    def _clear_activity_notes(self) -> None:
-        '''Remove all unnecessary activity notes.
-        
-        Removes all Markdown files from the 'diane_activities' directory
-        that do not match any activity slug in the registry.
-
-        Only files named '<activity_slug>.md' are kept.
-        '''
-
-        activities_dir = self._datadir / 'diane_activities'
-        if not activities_dir.exists():
-            return
-
-        # Allowed filenames based on current activities.
-        allowed_filenames = {f'{activity.slug}.md' for activity in self._activities}
-
-        # Iterate over all Markdown files in directory (non‑recursive).
-        for file_path in activities_dir.glob('*.md'):
-            if file_path.name not in allowed_filenames:
-                try:
-                    file_path.unlink()
-                except Exception as e:
-                    pass
-    
-
     def _save_activity_note(self, activity: Activity) -> None:
         '''Save the note of the given activity to disk.'''
 
@@ -944,18 +1103,11 @@ class RepositoryManager(AssistedRepository):
 
 
     def update_activities_notes(self) -> None:
-        '''Update all the tracked activities notes. Remove
-        unnecessary.'''
+        """Update all the tracked activities notes."""
 
         self._clear_activity_notes()
 
-        tracked_activities = set()
-        for s in self:
-            tracked_activities.update(s.activities)
-
-        tracked_activities.update(self._activities.ancestors(*tracked_activities))
-        
-        for a in tracked_activities:
+        for a in self._activities:
             self._save_activity_note(a)
 
 
@@ -1199,7 +1351,7 @@ class RepositoryManager(AssistedRepository):
         if unknown_activity_slugs:
             raise UnknownActivityError(
                 provided_slugs=unique_slugs,
-                unknown_activity_slugs=unknown_activity_slugs,
+                unknown_slugs=unknown_activity_slugs,
                 recognised_activities=activities_to_start
             )
         

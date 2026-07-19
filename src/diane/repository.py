@@ -1,6 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass, field
-from collections.abc import Iterable, MutableSet, Collection
+from collections.abc import MutableSet, Collection
 from sortedcontainers import SortedList
 import warnings
 import heapq
@@ -15,7 +14,7 @@ from diane.sessions import Session
 
 
 class RepositoryError(Exception):
-    '''The base exception for all repository errors.'''
+    """The base exception for all repository errors."""
     pass
 
 
@@ -26,7 +25,7 @@ class UnknownActivityError(RepositoryError):
     Args:
         provided_slugs (Collection[str]): The collection of provided
             activity slugs.
-        unknown_activity_slugs (Collection[str]): The collection
+        unknown_slugs (Collection[str]): The collection
             of unknown activity slugs.
         recognised_activities (Collection[Activity]): The collection
             of recognised activities.
@@ -37,32 +36,35 @@ class UnknownActivityError(RepositoryError):
         message (str): The exception message.
         provided_slugs (list[str]): The sorted list of provided activity
             slugs.
-        unknown_activity_slugs (list[str]): The sorted list of unknown
-            activity slugs.
+        unknown_slugs (list[str]): The sorted list of unknown activity
+            slugs.
         recognised_activities (list[Activity]): The list of recognised
             activities sorted by their slugs.
     """
     
     message: str
     provided_slugs: list[str]
-    unknown_activity_slugs: list[str]
+    unknown_slugs: list[str]
     recognised_activities: list[Activity]
 
     def __init__(
         self,
         provided_slugs: Collection[str],
-        unknown_activity_slugs: Collection[str],
+        unknown_slugs: Collection[str],
         recognised_activities: Collection[Activity],
         message: str | None = None
     ) -> None:
 
         # Set message.
         if message is None:
-            if unknown_activity_slugs:
-                if len(unknown_activity_slugs) == 1:
-                    self.message = f'Unknown activity: \'{next(iter(unknown_activity_slugs))}\'.'
+            if unknown_slugs:
+                if len(unknown_slugs) == 1:
+                    self.message = (
+                        f"Unknown activity: "
+                        f"'{next(iter(unknown_slugs))}'."
+                    )
                 else:
-                    quoted = ', '.join(f'\'{s}\'' for s in unknown_activity_slugs)
+                    quoted = ', '.join(f"'{s}'" for s in unknown_slugs)
                     self.message = f'Unknown activities: {quoted}.'
             else:
                 self.message = 'There is an unknown activity.'
@@ -71,8 +73,8 @@ class UnknownActivityError(RepositoryError):
 
         # Sort activities.
         self.provided_slugs = sorted(provided_slugs) if provided_slugs else []
-        self.unknown_activity_slugs = (
-            sorted(unknown_activity_slugs) if unknown_activity_slugs else []
+        self.unknown_slugs = (
+            sorted(unknown_slugs) if unknown_slugs else []
         )
         self.recognised_activities = (
             sorted(recognised_activities) if recognised_activities else []
@@ -87,87 +89,111 @@ class UnknownActivityError(RepositoryError):
 
 
 class NoActivitiesError(RepositoryError):
-    '''The repository contains a session with the empty activities
-    set.'''
+    """The repository contains a session with the empty activities
+    set."""
     pass
 
 class EmptyTimeSetError(RepositoryError):
-    '''The repository contains a session with the empty time set.'''
+    """The repository contains a session with the empty time set."""
     pass
 
 class UnboundedTimeSetError(RepositoryError):
-    '''The repository contains a session with an unbounded time set.'''
+    """The repository contains a session with an unbounded time set."""
     pass
 
 class ActivitiesNotTracked(RepositoryError):
     """The activities provided have not been tracked."""
 
 
-@dataclass
 class Repository(MutableSet[Session]):
-    '''Represents a repository of sessions.
+    """Represents a repository of sessions.
 
     Stores sessions and an activities registry.
-    '''
+    """
 
-    _activities: Activities = field(default_factory=Activities)
-    _sessions: set[Session] = field(default_factory=set)
+    _activities: Activities
+    _sessions: set[Session]
     
     # Index.
-    _starts: SortedList = field(default_factory=SortedList, init=False)
-    _ends: SortedList = field(default_factory=SortedList, init=False)
-    _start_to_sessions: dict[Endpoint, set[Session]] = field(default_factory=dict, init=False)
-    _end_to_sessions: dict[Endpoint, set[Session]] = field(default_factory=dict, init=False)
-    _activities_index: dict[frozenset[Activity], set[Session]] = field(
-        default_factory=dict, init=False
-    )
+    _starts: SortedList
+    _ends: SortedList
+    _start_to_sessions: dict[Endpoint, set[Session]]
+    _end_to_sessions: dict[Endpoint, set[Session]]
+    _activities_index: dict[frozenset[Activity], set[Session]]
 
 
     def _validate_activities(self, activities: Activities) -> None:
-        '''Check that all session activities are in the given activity
-        registry.
+        """Check that all the logged activities are in the given
+        activity registry.
         
         Args:
-            `activities` (`Activities`): The activities registry.
+            activities (Activities): The activities registry.
 
         Raises:
-            `UnknownActivityError`: If there are activities
+            UnknownActivityError: If there are logged activities
                 in the repository that are not listed in the registry.
-        '''
+        """
 
         for s in self._sessions:
-            if not s.activities <= activities:
+            provided_slugs = {a.slug for a in s.activities}
+            recognised_activities = s.activities & activities
+            unknown_slugs = {a.slug for a in s.activities - activities}
+            if unknown_slugs:
                 raise UnknownActivityError(
-                    f'The session contains activities that are not in the registry.'
+                    provided_slugs=provided_slugs,
+                    unknown_slugs=unknown_slugs,
+                    recognised_activities=recognised_activities,
+                    message= (
+                        f'The session contains activities '
+                        f'that are not in the registry.'
+                    )
                 )
 
 
     def _validate(self) -> None:
-        '''Check that the repository is in the correct state.'''
+        """Check that the repository is in the correct state.
+
+
+        Requirements:
+            - All logged activities must be in the activity registry.
+            - All sessions must have a non-empty activities set.
+            - All sessions must have a valid time set (non-empty
+              and bounded).
+        """
 
         self._validate_activities(self._activities)
 
         for s in self._sessions:
             if not s.activities:
                 raise NoActivitiesError(
-                    'The repository contains a session with the empty activities set.'
+                    'The repository contains a session with the empty '
+                    'activities set.'
                 )
             if s.timeset.is_empty:
                 raise EmptyTimeSetError(
-                    'The repository contains a session with the empty time set.'
+                    'The repository contains a session with the empty time '
+                    'set.'
                 )
             if s.timeset.is_unbounded:
                 raise UnboundedTimeSetError(
-                    'The repository contains a session with an unbounded time set.'
+                    'The repository contains a session with an unbounded time '
+                    'set.'
                 )
 
 
-    def __post_init__(self) -> None:
+    def __init__(self) -> None:
+        """Create a new empty repository."""
 
-        self._rebuild_index()
-        self._validate()
+        # Initialise the activities and sessions.
+        self._activities = Activities()
+        self._sessions = set()
 
-        self._merge_touching()
+        # Initialise the index.
+        self._starts = SortedList()
+        self._ends = SortedList()
+        self._start_to_sessions = dict()
+        self._end_to_sessions = dict()
+        self._activities_index = dict()
 
 
     def __contains__(self, item: object) -> bool:
@@ -305,7 +331,7 @@ class Repository(MutableSet[Session]):
             )
             raise UnknownActivityError(
                 provided_slugs=(slug,),
-                unknown_activity_slugs=(slug,),
+                unknown_slugs=(slug,),
                 recognised_activities=(),
                 message=(
                     f'The activity slug \'{activity}\' '
@@ -357,7 +383,7 @@ class Repository(MutableSet[Session]):
             }
             raise UnknownActivityError(
                 provided_slugs=provided_slugs,
-                unknown_activity_slugs=unknown_slugs,
+                unknown_slugs=unknown_slugs,
                 recognised_activities=resolved_activities
             )
 
@@ -369,44 +395,64 @@ class Repository(MutableSet[Session]):
 
 
     def add(self, value: Session) -> None:
-        '''Add the given session to the repository.
+        """Add the given session to the repository.
         
-        The session is added only if it is not already present and all
-        its activities are in the registry.
+        The session is added only if:
+        - it is not already present in the repository;
+        - all of its activities are listed in the registry;
+        - it has at least one activity;
+        - it is associated with a non-empty bounded time set.
 
         Args:
-            `value` (`Session`): The session to add.
+            value (Session): The session to add.
 
         Raises:
-            `UnknownActivityError`: If the given session
-                contains activities not listed in the registry.
-        '''
+            UnknownActivityError: If the given session contains
+                activities not listed in the registry.
+        """
 
         if value not in self:
-            if not value.activities <= self._activities:
+            provided_slugs = {a.slug for a in value.activities}
+            recognised_activities = value.activities & self._activities
+            unknown_slugs = {
+                a.slug for a in value.activities - self._activities
+            }
+            if unknown_slugs:
                 raise UnknownActivityError(
-                    f'The session cannot be added to the repository because it contains '
-                    f'activities that are not in the registry.'
+                    provided_slugs=provided_slugs,
+                    unknown_slugs=unknown_slugs,
+                    recognised_activities=recognised_activities,
+                    message=(
+                        f'The session cannot be added to the repository '
+                        f'because it contains activities that are not listed '
+                        f'in the registry.'
+                    )
                 )
             if not value.activities:
-                raise NoActivitiesError('A session must contain at least one activity.')
+                raise NoActivitiesError(
+                    'The session cannot be added to the repository because '
+                    'it does not contain any activities.'
+                )
             if value.timeset.is_empty:
-                raise EmptyTimeSetError('A session must be associated with a non-empty time set.')
+                raise EmptyTimeSetError(
+                    'The session cannot be added to the repository because '
+                    'it is associated with an empty time set.'
+                )
             if value.timeset.is_unbounded:
                 raise UnboundedTimeSetError(
-                    'Only sessions with a bounded time set are permitted in the repository.'
+                    'The session cannot be added to the repository because '
+                    'it is associated with an unbounded time set.'
                 )
-            
             self._sessions.add(value)
             self._add_to_index(value)
 
 
     def discard(self, value: Session) -> None:
-        '''Discard the given session from the repository.
+        """Discard the given session from the repository.
         
         Args:
-            `value` (`Session`): The session to discard.
-        '''
+            value (Session): The session to discard.
+        """
 
         if value not in self._sessions:
             return

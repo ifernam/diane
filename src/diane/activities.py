@@ -1,6 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from collections.abc import MutableSet, Iterable
+from sortedcontainers import SortedList
 import networkx as nx
 import yaml
 from pathlib import Path
@@ -34,7 +35,7 @@ class Activity:
     _slug: str
     title: str
     description: str = ''
-    tags: list = field(default_factory=list)
+    tags: SortedList = field(default_factory=SortedList)
 
 
     @classmethod
@@ -94,15 +95,17 @@ class Activity:
         Slug must be specified as a separate argument.
 
         Args:
-            slug (str): The unique identifier for the activity.
-            data (dict): A dictionary containing the activity data.
+            slug (`str`): The unique identifier for the activity.
+            data (`dict`): A dictionary containing the activity data.
                 Expected keys:
-                - 'title' (str, required): the human-readable name;
-                - 'description' (str, optional): the description,
+                - 'title' (`str`, required): the human-readable title;
+                - 'description' (`str`, optional): the description,
                     defaults to '';
-                - 'tags' (list, optional): the tags for the activity;
-                - 'parents' (list, optional): ignored, but may
-                    be present.
+                - 'tags' (`list`, optional): the tags for the activity;
+                  the default tag 'diane_activity' is ignored;
+                - 'parents' (`list`, optional): ignored, but may
+                  be present. Information about parents (connections)
+                  is stored in the activity registry.
 
         Returns:
             Activity: The newly created activity.
@@ -113,7 +116,8 @@ class Activity:
             TypeError: If 'title' or 'description' is not a string.
 
         Example:
-            >>> Activity.from_dict('studying_algebra', {
+            >>> Activity.from_dict(
+            ... 'studying_algebra',
             ... {
             ...    'title': 'Studying algebra',
             ...    'description': '',
@@ -133,28 +137,26 @@ class Activity:
         if extra_keys:
             quoted_extra_keys = [f'\'{str(k)}\'' for k in sorted(extra_keys)]
             extra_keys_string = ', '.join(quoted_extra_keys)
-            # TODO: log 'Activity dictionary corresponding to the slug
-            # TODO: \'{slug}\' contains unknown fields:
-            # TODO: {extra_keys_string}.',
+            # TODO: log "Activity dictionary corresponding to the slug
+            # TODO: '{slug}' contains unknown fields:
 
         # Read the activity title.
         try:
             title = data['title']
         except KeyError as e:
             raise ValueError(
-                f'Activity \'{slug}\' is missing required field \'title\'.'
+                f"Activity '{slug}' is missing required field 'title'."
             ) from e
         if not isinstance(title, str):
             raise TypeError(
-                f'Field \'title\' of activity \'{slug}\' must be a string.'
+                f"Field 'title' of activity '{slug}' must be a string."
             )
 
         # Read the activity description.
         description = data.get('description', '')
         if not isinstance(description, str):
             raise TypeError(
-                f'Field \'description\' of activity \'{slug}\' must be '
-                f'a string.'
+                f"Field 'description' of activity '{slug}' must be a string."
             )
 
         # Read the activity tags.
@@ -163,14 +165,14 @@ class Activity:
             tags = [tags]
         if not isinstance(tags, list):
             raise TypeError(
-                f'Field \'tags\' of activity \'{slug}\' must be a list.'
+                f"Field 'tags' of activity '{slug}' must be a list."
             )
 
         return cls(
             _slug=slug,
             title=title,
             description=description,
-            tags=tags
+            tags=SortedList(tags)
         )
     
 
@@ -490,32 +492,50 @@ class Activities(MutableSet[Activity]):
         
 
     def activity_to_dict(self, activity: Activity | str) -> dict:
-        '''Convert the given activity to the dictionary representation.
-        
-        The resulting dictionary always contains the following key:
-        - 'title' (`str`): the activity's title.
-        
-        The following keys are included only if non-empty:
+        """Represent the given activity as a dictionary.
+
+        The resulting dictionary contains the following keys:
+        - 'title' (`str`): the activity's title;
         - 'description' (`str`): the activity's description, included
           only if it is not empty;
-        - 'parents' (`list` of `str`): the slugs of the activity's
-          parents, included only if there are any parents.
+        - 'tags' (`list`): the tags associated with the activity,
+          the default tag 'diane_activity' is always included;
+        - 'parents' (`list`): the slugs of the activity's parents,
+          included only if there are any parents.
+
+
+        The dictionary does NOT contain the activity's slug.
 
         Args:
-            `activity` (`Activity | str`): The activity or its slug.
+            activity (Activity | str): The activity or its slug.
 
         Returns:
-            `dict`: The dictionary representation of the activity.
-        '''
+            dict: The dictionary representation of the activity.
 
-        activity = self.resolve_activity(activity)
-        data = {}
-        data['title'] = activity.title
+        Raises:
+            ValueError: If the activity is not listed in the registry.
+        """
+
+        # Resolve the activity.
+        try:
+            activity = self.resolve_activity(activity)
+        except KeyError:
+            raise ValueError(
+                f'The activity {activity} is not listed in the registry.'
+            )
+
+        # Build the dictionary representation.
+        data: dict[str, object] = {'title': activity.title}
         if activity.description:
             data['description'] = activity.description
-        parents = sorted(self.parents(activity), key=lambda a: a.slug)
+        tags = activity.tags
+        if 'diane_activity' not in tags:
+            tags.add('diane_activity')
+        data['tags'] = list(tags)
+        parents = sorted(self.parents(activity))
         if parents:
             data['parents'] = [p.slug for p in parents]
+
         return data
         
 

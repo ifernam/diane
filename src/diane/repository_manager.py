@@ -275,27 +275,29 @@ class RepositoryManager(AssistedRepository):
     _loading: bool
     
 
-    @staticmethod
-    def _link_activity(activity_slug: str) -> str:
-        '''Return the link format for the given activity slug for saving
-        in YAML.
+    def _link_activity(self, activity_slug: str) -> str:
+        """Return the link in the format
+        '[[<activity_subdir>/<activity_slug>]]' for the given activity
+        slug to save in YAML.
         
         Args:
-            `activity_slug` (`str`): The slug of the activity.
+            activity_slug (str): The slug of the activity.
 
         Returns:
-            `str`: The link format for the activity.
-        '''
+            str: The link in the format
+            '[[<activity_subdir>/<activity_slug>]]'.
+        """
 
-        return f'[[diane_activities/{activity_slug}]]'
+        return f'[[{self._activities_subdir}/{activity_slug}]]'
 
 
     def _unlink_activity(self, link: str) -> str:
-        """Return the activity slug from the given activity link format.
+        """Return the activity slug for the given activity link.
         
         Args:
-            link (str): The activity link.
-        
+            link (str): The activity link in the format
+            '[[<activity_subdir>/<activity_slug>]]'.
+
         Returns:
             str: The activity slug.
 
@@ -932,14 +934,19 @@ class RepositoryManager(AssistedRepository):
 
 
     def _save_activity_note(self, activity: Activity) -> None:
-        '''Save the note of the given activity to disk.'''
+        """Save the Markdown note for the given activity to disk.
 
+        Args:
+            activity (Activity): The activity for which to save
+                the Markdown note.
+        """
+
+        # Obtain the activity raw data.
         data = self._activities.activity_to_dict(activity)
 
         # Prepare activity data for saving:
-        # - add tag 'diane_activity';
-        # - add parent links if needed.
-        
+        # - add the 'diane_activity' tag;
+        # - add parent links if the activity has any parents.
         data_for_saving = {
             'tags': 'diane_activity',
             'title': data['title']
@@ -949,11 +956,11 @@ class RepositoryManager(AssistedRepository):
         parents = sorted(self._activities.parents(activity), key=lambda a: a.slug)
         if parents:
             data_for_saving['parents'] = [
-                RepositoryManager._link_activity(p.slug) for p in parents
+                self._link_activity(p.slug) for p in parents
             ]
 
         path = (
-            self._datadir / 'diane_activities' / f'{activity.slug}.md'
+            self._datadir / self._activities_subdir / f'{activity.slug}.md'
         )
         path.parent.mkdir(parents=True, exist_ok=True)
 

@@ -38,7 +38,7 @@ class Activity:
     @classmethod
     def _validate_slug(cls, slug: str) -> None:
         if not cls._SLUG_PATTERN.fullmatch(slug):
-            raise ValueError(f'Incorrect slug format: \'{slug}\'.')
+            raise ValueError(f"Incorrect slug format: '{slug}'.")
         
     
     def _validate(self) -> None:
@@ -142,7 +142,7 @@ class Activity:
         allowed_keys = {'title', 'description', 'tags', 'parents'}
         extra_keys = set(data) - allowed_keys
         if extra_keys:
-            quoted_extra_keys = [f'\'{str(k)}\'' for k in sorted(extra_keys)]
+            quoted_extra_keys = [f"'{str(k)}'" for k in sorted(extra_keys)]
             extra_keys_string = ', '.join(quoted_extra_keys)
             # TODO: log f"Activity dictionary corresponding to the slug
             # TODO: '{slug}' contains unknown fields:
@@ -206,7 +206,9 @@ class Activities(MutableSet[Activity]):
         if not nx.is_directed_acyclic_graph(graph):
             cycle = nx.find_cycle(graph)
             activities_in_cycle = [edge[0] for edge in cycle] + [cycle[0][0]]
-            activities_slugs_in_cycle = [f'\'{activity}\'' for activity in activities_in_cycle]
+            activities_slugs_in_cycle = [
+                f"'{activity}'" for activity in activities_in_cycle
+            ]
             cycle_string = ' -> '.join(activities_slugs_in_cycle)
             raise ValueError(f'Cycle detected: {cycle_string}.')
 
@@ -226,7 +228,7 @@ class Activities(MutableSet[Activity]):
                 seen_titles.add(title)
 
         if duplicates_titles:
-            quoted_duplicates_titles = [f'\'{t}\'' for t in duplicates_titles]
+            quoted_duplicates_titles = [f"'{t}'" for t in duplicates_titles]
             duplicates_string = ', '.join(quoted_duplicates_titles)
             # TODO: log f"Duplicate activity titles detected:
             # TODO {duplicates_string}."
@@ -237,7 +239,6 @@ class Activities(MutableSet[Activity]):
 
         self._slug_to_activity = {}
         self._activities_graph = nx.DiGraph()
-        # self._validate()
 
 
     def resolve_activity(self, obj: Activity | str) -> Activity:
@@ -254,19 +255,19 @@ class Activities(MutableSet[Activity]):
         elif isinstance(obj, str):
             slug = obj
         else:
-            raise TypeError(f'\'obj\' must be \'Activity\' or \'str\'.')
+            raise TypeError(f"'obj' must be 'Activity' or 'str'.")
 
         try:
             return self._slug_to_activity[slug]
         except KeyError as e:
-            raise KeyError(f'Unknown activity: \'{slug}\'.') from e
+            raise KeyError(f"Unknown activity: '{slug}'.") from e
 
     
     def __contains__(self, item: object) -> bool:
-        '''Return `True` if the activity is contained in the registry.
-        
+        """Return `True` if the activity is contained in the registry.
+
         Only takes the slug into account.
-        '''
+        """
 
         if isinstance(item, Activity):
             return item.slug in self._slug_to_activity
@@ -278,38 +279,34 @@ class Activities(MutableSet[Activity]):
     
 
     def __iter__(self):
-        '''Return an iterator over the activities in the registry.
+        """Return an iterator over the activities in the registry.
 
         Returns:
-            `iterator`: An iterator over `Activity` objects.
-        '''
+            iterator: An iterator over `Activity` objects.
+        """
 
         return iter(self._slug_to_activity.values())
 
 
     def __len__(self) -> int:
-        '''Return the size of the activities registry.
-        
+        """Return the size of the activities registry.
+
         Returns:
-            `int`: The number of activities.
-        '''
+            int: The number of activities.
+        """
 
         return len(self._slug_to_activity)
     
 
     def add(self, value: Activity) -> None:
-        '''Add the activity to the registry.
+        """Add the activity to the registry.
 
         Do nothing if the activity with the same slug already exists.
         Issue a warning if another activity already has the same title.
 
         Args:
-            `value` (`Activity`): The activity to add.
-
-        Warns:
-            `UserWarning`: If the title duplicates an existing
-                activity's title.
-        '''
+            value (Activity): The activity to add.
+        """
 
         if value.slug not in self._slug_to_activity:
 
@@ -325,14 +322,14 @@ class Activities(MutableSet[Activity]):
     
 
     def discard(self, value: Activity | str) -> None:
-        '''Remove the activity from the registry if it exists.
+        """Remove the activity from the registry if it exists.
 
         Args:
-            `value` (`Activity | str`): The activity or its slug
+            value (Activity | str): The activity or its slug
                 to remove.
 
         If the activity is not present, the method does nothing.
-        '''
+        """
         
         try:
             activity = self.resolve_activity(value)
@@ -343,58 +340,63 @@ class Activities(MutableSet[Activity]):
 
 
     def remove(self, value: Activity | str) -> None:
-        '''Remove the activity from the registry.
+        """Remove the activity from the registry.
 
         Args:
-            `value` (`Activity | str`): The activity or its slug
+            value (Activity | str): The activity or its slug
                 to remove.
 
         Raises:
-            `KeyError`: If the activity is not in the registry.
-        '''
+            KeyError: If the activity is not in the registry.
+        """
         
         try:
             activity = self.resolve_activity(value)
             self._activities_graph.remove_node(activity)
             del self._slug_to_activity[activity.slug]
         except KeyError as e:
-            raise KeyError(f'The activity \'{value}\' is not in the registry.') from e
+            raise KeyError(
+                f"The activity '{value}' is not in the registry."
+            ) from e
 
 
     def add_activities(self, activities: Iterable[Activity]) -> None:
-        '''Add multiple activities to the registry.
+        """Add multiple activities to the registry.
 
         Args:
-            `activities` (`Iterable[Activity]`): An iterable
-                of `Activity` instances to add.
+            activities (Iterable[Activity]): Activities to add.
 
         Each activity is added individually; if an activity with
         the same slug already exists, it is silently ignored
-        (as per `add` behavior). Duplicate titles will trigger
+        (as per `add` behaviour). Duplicate titles will trigger
         a warning.
-        '''
+        """
         
         for a in activities:
             self.add(a)
 
 
-    def add_connection(self, parent: Activity | str, child: Activity | str) -> None:
-        '''Add a parent -> child connection between activities.
+    def add_connection(
+        self,
+        parent: Activity | str,
+        child: Activity | str
+    ) -> None:
+        """Add a parent -> child connection between activities.
 
         Safely add the connection validating for cycles. It is assumed
         that the activities themselves are already contained
         in the registry.
 
         Args:
-            `parent` (`Activity | str`): The parent activity or its
+            parent (Activity | str): The parent activity or its
                 slug.
-            `child` (`Activity | str`): The child activity or its slug.
+            child (Activity | str): The child activity or its slug.
 
         Raises:
-            `KeyError`: If either activity is not found in the registry.
-            `ValueError`: If adding the connection would create a cycle,
+            KeyError: If either activity is not found in the registry.
+            ValueError: If adding the connection would create a cycle,
                 or if parent and child are the same.
-        '''
+        """
 
         parent = self.resolve_activity(parent)
         child = self.resolve_activity(child)
@@ -407,25 +409,30 @@ class Activities(MutableSet[Activity]):
 
         if nx.has_path(self._activities_graph, child, parent):
             raise ValueError(
-                f'Adding connection \'{parent.slug}\' -> \'{child.slug}\' creates a cycle.'
+                f"Adding connection '{parent.slug}' -> '{child.slug}' creates "
+                f"a cycle."
             )
 
         self._activities_graph.add_edge(parent, child)
 
 
-    def remove_connection(self, parent: Activity | str, child: Activity | str) -> None:
-        '''Remove the parent -> child connection from the registry.
+    def remove_connection(
+        self,
+        parent: Activity | str,
+        child: Activity | str
+    ) -> None:
+        """Remove the parent -> child connection from the registry.
 
         Args:
-            `parent` (`Activity | str`): The parent activity
+            parent (Activity | str): The parent activity
                 or its slug.
-            `child` (`Activity | str`): The child activity or its slug.
+            child (Activity | str): The child activity or its slug.
 
         Raises:
-            `KeyError`: If either activity is not found in the registry.
+            KeyError: If either activity is not found in the registry.
 
         If the connection does not exist, the method does nothing.
-        '''
+        """
 
         parent = self.resolve_activity(parent)
         child = self.resolve_activity(child)
@@ -439,22 +446,22 @@ class Activities(MutableSet[Activity]):
             connections: Iterable[tuple[Activity | str, Activity | str]]
         ) -> None:
 
-        '''Add multiple parent-child connections.
+        """Add multiple parent-child connections.
 
         Safely add the collection of parent-child pairs, validating
         for cycles. It is assumed that the activities themselves
         are already contained in the registry.
 
         Args:
-            `connections` \
-            (`Iterable[tuple[Activity | str, Activity | str]]`):
+            connections \
+            (Iterable[tuple[Activity | str, Activity | str]]):
                 An iterable of `(parent, child)` pairs.
 
         Raises:
-            `KeyError`: If any activity is not found in the registry.
-            `ValueError`: If any connection would create a cycle,
+            KeyError: If any activity is not found in the registry.
+            ValueError: If any connection would create a cycle,
                 or if a parent and child are the same.
-        '''
+        """
 
         tmp_activities_graph = self._activities_graph.copy()
 
@@ -477,23 +484,23 @@ class Activities(MutableSet[Activity]):
 
 
     def activity_by_slug(self, slug: str) -> Activity:
-        '''Retrieve an activity by its slug.
+        """Retrieve an activity by its slug.
 
         Args:
-            `slug` (`str`): The slug of the activity.
+            slug (str): The slug of the activity.
 
         Returns:
-            `Activity`: The activity with the given slug.
+            Activity: The activity with the given slug.
 
         Raises:
-            `KeyError`: If the activity with the specified slug
+            KeyError: If the activity with the specified slug
                 is not found.
-        '''
+        """
 
         try:
             return self._slug_to_activity[slug]
         except KeyError as e:
-            raise KeyError(f'Unknown activity: \'{slug}\'.') from e
+            raise KeyError(f"Unknown activity: '{slug}'.") from e
         
 
     def activity_to_dict(self, activity: Activity | str) -> dict:
@@ -545,16 +552,16 @@ class Activities(MutableSet[Activity]):
         
 
     def parents(self, *activities: Activity | str) -> set[Activity]:
-        '''Return the parents of the specified activities.
+        """Return the parents of the specified activities.
 
         Args:
-            `*activities` (`Activity | str`): Variable number
+            *activities (Activity | str): Variable number
                 of activities or slugs.
 
         Returns:
-            `set[Activity]`: A set of all direct parents of the given
+            set[Activity]: A set of all direct parents of the given
                 activities.
-        '''
+        """
 
         resolved_activities = (self.resolve_activity(a) for a in activities)
         parents = set()
@@ -564,16 +571,16 @@ class Activities(MutableSet[Activity]):
     
 
     def ancestors(self, *activities: Activity | str) -> set[Activity]:
-        '''Return all ancestors of the specified activities.
+        """Return all ancestors of the specified activities.
 
         Args:
-            `*activities` (`Activity | str`): Variable number
+            *activities (Activity | str): Variable number
                 of activities or slugs.
 
         Returns:
-            `set[Activity]`: A set of all ancestors (parents,
+            set[Activity]: A set of all ancestors (parents,
                 grandparents, etc.) of the given activities.
-        '''
+        """
 
         resolved_activities = (self.resolve_activity(a) for a in activities)
         ancestors = set()
@@ -583,16 +590,16 @@ class Activities(MutableSet[Activity]):
     
 
     def children(self, *activities: Activity | str) -> set[Activity]:
-        '''Return all children of the specified activities.
+        """Return all children of the specified activities.
 
         Args:
-            `*activities` (`Activity | str`): Variable number
+            *activities (Activity | str): Variable number
                 of activities or slugs.
 
         Returns:
-            `set[Activity]`: A set of all direct children of the given
+            set[Activity]: A set of all direct children of the given
                 activities.
-        '''
+        """
 
         resolved = (self.resolve_activity(a) for a in activities)
         children = set()
@@ -602,16 +609,16 @@ class Activities(MutableSet[Activity]):
 
 
     def descendants(self, *activities: Activity | str) -> set[Activity]:
-        '''Return all descendants of the specified activities.
+        """Return all descendants of the specified activities.
 
         Args:
             `*activities` (`Activity | str`): Variable number
                 of activities or slugs.
 
         Returns:
-            `set[Activity]`: A set of all descendants (children,
+            set[Activity]: A set of all descendants (children,
                 grandchildren, etc.) of the given activities.
-        '''
+        """
 
         resolved = (self.resolve_activity(a) for a in activities)
         descendants = set()
@@ -621,35 +628,35 @@ class Activities(MutableSet[Activity]):
     
 
     def root_activities(self) -> set[Activity]:
-        '''Return all activities that have no parents (roots).
+        """Return all activities that have no parents (roots).
 
         Returns:
-            `set[Activity]`: A set of activities with in-degree zero.
-        '''
+            set[Activity]: A set of activities with in-degree zero.
+        """
 
         return {a for a in self._activities_graph.nodes
                 if self._activities_graph.in_degree(a) == 0}
 
 
     def leaf_activities(self) -> set[Activity]:
-        '''Return all activities that have no children (leaves).
+        """Return all activities that have no children (leaves).
 
         Returns:
-            `set[Activity]`: A set of activities with out-degree zero.
-        '''
+            set[Activity]: A set of activities with out-degree zero.
+        """
         
         return {a for a in self._activities_graph.nodes
                 if self._activities_graph.out_degree(a) == 0}
 
 
     def isolated_activities(self) -> set[Activity]:
-        '''Return all activities that have neither parents nor children
+        """Return all activities that have neither parents nor children
         (isolated).
 
         Returns:
-            `set[Activity]`: A set of activities with both in-degree
+            set[Activity]: A set of activities with both in-degree
                 and out-degree zero.
-        '''
+        """
 
         return {a for a in self._activities_graph.nodes
                 if self._activities_graph.in_degree(a) == 0
@@ -657,7 +664,7 @@ class Activities(MutableSet[Activity]):
 
 
     def clear(self) -> None:
-        '''Remove all activities and connections from the registry.'''
+        """Remove all activities and connections from the registry."""
 
         self._activities_graph.clear()
         self._slug_to_activity.clear()
@@ -701,7 +708,7 @@ class Activities(MutableSet[Activity]):
 
     @classmethod
     def from_dict(cls, data: dict) -> Activities:
-        '''Construct an activities registry from a dictionary.
+        """Construct an activities registry from a dictionary.
 
         The dictionary should map activity slugs to their data
         dictionaries. Each data dictionary **must** contain a `'title'`
@@ -709,19 +716,19 @@ class Activities(MutableSet[Activity]):
         and `'parents'` (`list` of slugs) keys.
 
         Args:
-            `data` (`dict`): A dictionary with slugs as keys
+            data (dict): A dictionary with slugs as keys
                 and activity data dicts as values.
 
         Returns:
-            `Activities`: A new `Activities` instance populated with
+            Activities: A new `Activities` instance populated with
                 the activities and connections.
 
         Raises:
-            `ValueError`: If the data is malformed (e.g., missing title,
+            ValueError: If the data is malformed (e.g., missing title,
                 invalid parent reference).
-            `KeyError`: If a parent references a non-existent activity
+            KeyError: If a parent references a non-existent activity
                 slug.
-        '''
+        """
         
         activities = cls()
 
@@ -742,13 +749,17 @@ class Activities(MutableSet[Activity]):
                 parents = []
 
             if isinstance(parents, str) or not isinstance(parents, Iterable):
-                raise ValueError(f'\'parents\' of \'{slug}\' must be an iterable of strings.')
+                raise ValueError(
+                    f"'parents' of '{slug}' must be an iterable of strings."
+                )
 
             child = activities.activity_by_slug(slug)
 
             for parent_slug in parents:
                 if not isinstance(parent_slug, str):
-                    raise ValueError(f'The parent slug \'{parent_slug}\' must be a string.')
+                    raise ValueError(
+                        f"The parent slug '{parent_slug}' must be a string."
+                    )
 
                 parent = activities.activity_by_slug(parent_slug)
                 connections.append((parent, child))
@@ -760,25 +771,25 @@ class Activities(MutableSet[Activity]):
 
     @classmethod
     def from_yaml(cls, filename: str | Path) -> Activities:
-        '''Construct an activities registry from a YAML file.
+        """Construct an activities registry from a YAML file.
 
         The YAML file must contain a top-level mapping with
         an 'activities' key, whose value is a dictionary mapping slugs
         to activity data.
 
         Args:
-            `filename` (`str | Path`): Path to the YAML file.
+            filename (str | Path): Path to the YAML file.
 
         Returns:
-            `Activities`: A new Activities instance.
+            Activities: A new Activities instance.
 
         Raises:
-            `FileNotFoundError`: If the file does not exist.
-            `ValueError`: If the YAML content is invalid or does not
+            FileNotFoundError: If the file does not exist.
+            ValueError: If the YAML content is invalid or does not
                 conform to the expected structure.
-            `KeyError`: If a parent references a non-existent activity
+            KeyError: If a parent references a non-existent activity
                 slug.
-        '''
+        """
 
         try:
             if isinstance(filename, str):
@@ -794,12 +805,12 @@ class Activities(MutableSet[Activity]):
 
             activities_data = data.get('activities')
             if not isinstance(activities_data, dict):
-                raise ValueError('\'activities\' must be a mapping.')
-            
+                raise ValueError(f"'activities' must be a mapping.")
+
             return Activities.from_dict(activities_data)
         
         except FileNotFoundError as e:
             raise FileNotFoundError(f'File not found: {filename}.') from e
         
         except yaml.YAMLError as e:
-            raise ValueError(f'Invalid YAML file \'{filename}\': {e}.') from e
+            raise ValueError(f"Invalid YAML file '{filename}': {e}.") from e

@@ -6,7 +6,6 @@ import networkx as nx
 import yaml
 from pathlib import Path
 import re
-import warnings
 
 
 
@@ -137,8 +136,9 @@ class Activity:
         if extra_keys:
             quoted_extra_keys = [f'\'{str(k)}\'' for k in sorted(extra_keys)]
             extra_keys_string = ', '.join(quoted_extra_keys)
-            # TODO: log "Activity dictionary corresponding to the slug
+            # TODO: log f"Activity dictionary corresponding to the slug
             # TODO: '{slug}' contains unknown fields:
+            # TODO: '{extra_keys_string}'."
 
         # Read the activity title.
         try:
@@ -220,11 +220,9 @@ class Activities(MutableSet[Activity]):
         if duplicates_titles:
             quoted_duplicates_titles = [f'\'{t}\'' for t in duplicates_titles]
             duplicates_string = ', '.join(quoted_duplicates_titles)
-            warnings.warn(
-                f'Duplicate activity titles detected: {duplicates_string}.',
-                stacklevel=2
-            )
-        
+            # TODO: log f"Duplicate activity titles detected:
+            # TODO {duplicates_string}."
+
         
     def __init__(self) -> None:
         """Create an empty activities registry."""
@@ -310,10 +308,9 @@ class Activities(MutableSet[Activity]):
             # Check for duplicate titles.
             for a in self._slug_to_activity.values():
                 if value.title == a.title:
-                    warnings.warn(
-                        f'Duplicate activity title detected: \'{value.title}\'.',
-                        stacklevel=2
-                    )
+                    # TODO: log f"Duplicate activity title detected:
+                    # TODO '{value.title}'."
+                    pass
 
             self._slug_to_activity[value.slug] = value
             self._activities_graph.add_node(value)

@@ -1,5 +1,4 @@
 from __future__ import annotations
-from dataclasses import dataclass, field
 from collections.abc import MutableSet, Iterable
 from sortedcontainers import SortedList
 import networkx as nx
@@ -9,7 +8,6 @@ import re
 
 
 
-@dataclass(slots=True)
 class Activity:
     """Represents a human activity.
     
@@ -33,8 +31,8 @@ class Activity:
     
     _slug: str
     title: str
-    description: str = ''
-    tags: SortedList = field(default_factory=SortedList)
+    description: str
+    tags: SortedList
 
 
     @classmethod
@@ -47,7 +45,17 @@ class Activity:
         Activity._validate_slug(self._slug)
 
 
-    def __post_init__(self) -> None:
+    def __init__(
+        self,
+        slug: str,
+        title: str,
+        description: str = '',
+        tags: Iterable[str] = ()
+    ) -> None:
+        self._slug = slug
+        self.title = title
+        self.description = description
+        self.tags = SortedList(tags)
         self._validate()
 
 
@@ -169,10 +177,10 @@ class Activity:
             )
 
         return cls(
-            _slug=slug,
+            slug=slug,
             title=title,
             description=description,
-            tags=SortedList(tags)
+            tags=tags
         )
     
 

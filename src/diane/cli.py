@@ -19,7 +19,7 @@ from rich.table import Table
 from rich.prompt import Confirm
 from sortedcontainers import SortedList
 
-from diane.temporal import Timestamp, TimeInterval, TimeSet, Duration
+from diane.temporal import Timestamp, TimeInterval, TimeSet
 from diane.activities import Activity
 from diane.sessions import Session
 from diane.repository import UnknownActivityError

@@ -2,8 +2,6 @@ from __future__ import annotations
 from collections.abc import MutableSet, Iterable
 from sortedcontainers import SortedList
 import networkx as nx
-import yaml
-from pathlib import Path
 import re
 
 
@@ -108,9 +106,10 @@ class Activity:
                 - 'title' (`str`, required): the human-readable title;
                 - 'description' (`str`, optional): the description,
                     defaults to '';
-                - 'tags' (`list`, optional): the tags for the activity;
-                  the default tag 'diane_activity' is ignored;
-                - 'parents' (`list`, optional): ignored, but may
+                - 'tags' (`list` or `str`, optional): the tags
+                  for the activity; the default tag 'diane_activity'
+                  is ignored;
+                - 'parents' (optional): ignored, but may
                   be present. Information about parents (connections)
                   is stored in the activity registry.
 
@@ -711,37 +710,43 @@ class Activities(MutableSet[Activity]):
         """Construct an activities registry from a dictionary.
 
         The dictionary should map activity slugs to their data
-        dictionaries. Each data dictionary **must** contain a `'title'`
-        key (`str`) and may optionally contain `'description'` (`str`)
-        and `'parents'` (`list` of slugs) keys.
+        dictionaries. Each data dictionary **must** contain
+        - the 'title' key (`str`)
+        and may optionally contain
+        - the 'description' (`str`) key,
+        - the 'tags' (`list[str]`) key,
+        - the 'parents' (`list[str]`) key.
 
         Args:
-            data (dict): A dictionary with slugs as keys
-                and activity data dicts as values.
+            data (dict): A dictionary with slugs as keys and activity
+                data dicts as values.
 
         Returns:
-            Activities: A new `Activities` instance populated with
+            Activities: A new activities registry populated with
                 the activities and connections.
 
         Raises:
             ValueError: If the data is malformed (e.g., missing title,
-                invalid parent reference).
-            KeyError: If a parent references a non-existent activity
-                slug.
+                invalid parent reference, etc.).
         """
-        
+
+        # Create empty activities registry.
         activities = cls()
 
-        # Load activities.
+        # Load activities and remember connections.
+        connections = []
         for slug, item in data.items():
             if not isinstance(item, dict):
                 raise ValueError('Each activity entry must be a mapping.')
 
+            # Save activity.
             activity = Activity.from_dict(slug, item)
             activities.add(activity)
 
-        # Load connections.
-        connections = []
+            # Remember connections.
+            parents = item.get('parents', [])
+            if not isinstance(parents, list):
+                raise ValueError("The 'parents' field must be a list.")
 
         for slug, item in data.items():
             parents = item.get('parents', [])
@@ -767,50 +772,3 @@ class Activities(MutableSet[Activity]):
         activities.add_connections(connections)
 
         return activities
-        
-
-    @classmethod
-    def from_yaml(cls, filename: str | Path) -> Activities:
-        """Construct an activities registry from a YAML file.
-
-        The YAML file must contain a top-level mapping with
-        an 'activities' key, whose value is a dictionary mapping slugs
-        to activity data.
-
-        Args:
-            filename (str | Path): Path to the YAML file.
-
-        Returns:
-            Activities: A new Activities instance.
-
-        Raises:
-            FileNotFoundError: If the file does not exist.
-            ValueError: If the YAML content is invalid or does not
-                conform to the expected structure.
-            KeyError: If a parent references a non-existent activity
-                slug.
-        """
-
-        try:
-            if isinstance(filename, str):
-                path = Path(filename)
-            else:
-                path = filename
-
-            with path.open('r', encoding='utf-8') as f:
-                data = yaml.safe_load(f)
-
-            if not isinstance(data, dict):
-                raise ValueError('YAML root must be a mapping.')
-
-            activities_data = data.get('activities')
-            if not isinstance(activities_data, dict):
-                raise ValueError(f"'activities' must be a mapping.")
-
-            return Activities.from_dict(activities_data)
-        
-        except FileNotFoundError as e:
-            raise FileNotFoundError(f'File not found: {filename}.') from e
-        
-        except yaml.YAMLError as e:
-            raise ValueError(f"Invalid YAML file '{filename}': {e}.") from e

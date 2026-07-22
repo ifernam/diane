@@ -35,6 +35,11 @@ class ActivityReadFromMarkdownNoteError(RepositoryManagerError):
 
 
 
+class ActivitiesReadFromYAMLError(RepositoryManagerError):
+    """An error occurred while reading activities data from a YAML file."""
+
+
+
 class NoActivitiesProvided(RepositoryManagerError):
     """No activities have been provided."""
     pass
@@ -570,6 +575,61 @@ class RepositoryManager(AssistedRepository):
         """
 
         return self._tracking_state.copy()
+
+
+    @staticmethod
+    def read_activities_from_yaml(path: str | Path) -> Activities:
+        """Construct an activities registry from a YAML file.
+
+        The YAML file must contain a top-level mapping with
+        an 'activities' key, whose value is a dictionary mapping slugs
+        to activity data.
+
+        Args:
+            path (str | Path): Path to the YAML file.
+
+        Returns:
+            Activities: A new activities registry.
+        """
+
+        try:
+            path = path if isinstance(path, Path) else Path(path)
+            with path.open('r', encoding='utf-8') as f:
+                data = yaml.safe_load(f)
+                if not isinstance(data, dict):
+                    raise ValueError('YAML root must be a mapping.')
+                try:
+                    activities_data = data.get('activities')
+                except AttributeError:
+                    raise ValueError(
+                        "Activities data not found in YAML file. "
+                        "The file should contain an 'activities' key."
+                    )
+                if not isinstance(activities_data, dict):
+                    raise ValueError("Activities data must be a mapping.")
+                return Activities.from_dict(activities_data)
+        except FileNotFoundError as e:
+            raise ActivitiesReadFromYAMLError(
+                f"The activities file '{path}' not found."
+            ) from e
+        except PermissionError as e:
+            raise ActivitiesReadFromYAMLError(
+                f"Permission to read the activities file '{path}' denied. {e}"
+            ) from e
+        except UnicodeDecodeError as e:
+            raise ActivitiesReadFromYAMLError(
+                f"Unicode decode error while reading activities file "
+                f"'{path}'. {e}"
+            ) from e
+        except OSError as e:
+            raise ActivitiesReadFromYAMLError(
+                f"Input-output error while reading activities file '{path}'."
+                f" {e}"
+            ) from e
+        except yaml.YAMLError as e:
+            raise ActivitiesReadFromYAMLError(
+                f"Invalid YAML file '{path}': {e}."
+            ) from e
 
 
     def _read_activity_from_markdown_note(

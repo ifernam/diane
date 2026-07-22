@@ -1577,15 +1577,6 @@ def stats(
 
 
 @app.command()
-def update() -> None:
-    '''Update all the tracked activities notes. Remove unnecessary.'''
-
-    repo = get_repo(load_sessions=False)
-
-    repo.update_activities_notes()
-
-
-@app.command()
 def habits():
     try:
         repo = get_repo()

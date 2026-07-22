@@ -1169,14 +1169,6 @@ class RepositoryManager(AssistedRepository):
             f.write(new_content)
 
 
-    def update_activities_notes(self) -> None:
-        """Update all the tracked activities notes."""
-
-        self._clear_activity_notes()
-
-        for a in self._activities:
-            self._save_activity_note(a)
-
 
     def _load_state(self) -> None:
         '''Load the tracking state.

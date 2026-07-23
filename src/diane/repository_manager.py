@@ -861,6 +861,13 @@ class RepositoryManager(AssistedRepository):
         )
 
 
+    def _save_activity_notes(self) -> None:
+        """Save Markdown notes for all activities."""
+
+        for a in self._activities:
+            self._save_activity_note(a)
+
+
     def _update_diane_block(self, block_content: str, new_block: str) -> str:
         '''Update the 'diane_sessions' field inside a single YAML block.
         

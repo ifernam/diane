@@ -9,6 +9,7 @@ import datetime
 from collections import defaultdict, namedtuple
 from collections.abc import Collection
 from itertools import chain
+import frontmatter
 
 from diane.temporal import Timestamp, TimeInterval, TimeSet
 from diane.activities import Activity, Activities
@@ -271,8 +272,8 @@ class RepositoryManager(AssistedRepository):
 
 
     # Configuration for the repository manager.
-    _activities_subdir: str = 'diane_activities'
-    _daily_notes_subdir: str = 'daily_notes'
+    _activities_subdir: Path = Path('diane_activities')
+    _daily_notes_subdir: Path = Path('daily_notes')
     _daily_note_title_format: str = '%Y-%m-%d'
     # TODO: Load from config file.
 
@@ -765,6 +766,80 @@ class RepositoryManager(AssistedRepository):
                 pass
 
 
+    @staticmethod
+    def save_activity_note_to(
+        activities: Activities,
+        activity: Activity,
+        path: Path | str
+    ) -> None:
+        """Create an activity note for the given activity.
+
+        Creates a Markdown note if it doesn't already exist. The note
+        will contain YAML frontmatter with activity data. If the note
+        already exists, only the YAML frontmatter is rewritten, leaving
+        the body unchanged. The file will be created at the specified
+        path.
+
+        The given activity must be part of the specified activities
+        registry.
+
+        Args:
+            activities (Activities): The activities registry.
+            activity (Activity): The activity for which to save
+                the note.
+            path (Path | str): The path where the activity note should
+                be saved.
+
+        Raises:
+            ValueError: If the activity is not listed in the specified
+                activities registry.
+        """
+
+        # Obtain the activity raw data.
+        data = activities.activity_to_dict(activity)
+
+        # Prepare the path and create parent directories if needed.
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        if path.exists():
+            # Load existing note.
+            note = frontmatter.load(path)
+        else:
+            # Create a new note with empty body.
+            note = frontmatter.Post(content='')
+
+        # Replace activity data.
+        note.metadata = data
+
+        # Write the note.
+        frontmatter.dump(note, path)
+
+
+
+    def _save_activity_note(self, activity: Activity) -> None:
+        """Save the Markdown note for the given activity.
+
+        Args:
+            activity (Activity): The activity for which to save
+                the Markdown note.
+
+        Raises:
+            ValueError: If the activity is not listed in the activities
+                registry.
+        """
+
+        # Prepare the activity note path.
+        path = self._datadir / self._activities_subdir / f'{activity.slug}.md'
+
+        # Write the activity note.
+        RepositoryManager.save_activity_note_to(
+            activities=self._activities,
+            activity=activity,
+            path=path
+        )
+
+
     def _update_diane_block(self, block_content: str, new_block: str) -> str:
         '''Update the 'diane_sessions' field inside a single YAML block.
         
@@ -991,183 +1066,6 @@ class RepositoryManager(AssistedRepository):
         
         # Clear dirty days.
         self._dirty_days.clear()
-
-
-    def _save_activity_note(self, activity: Activity) -> None:
-        """Save the Markdown note for the given activity to disk.
-
-        Args:
-            activity (Activity): The activity for which to save
-                the Markdown note.
-        """
-
-        # Obtain the activity raw data.
-        data = self._activities.activity_to_dict(activity)
-
-        # Prepare activity data for saving:
-        # - add the 'diane_activity' tag;
-        # - add parent links if the activity has any parents.
-        data_for_saving = {
-            'tags': 'diane_activity',
-            'title': data['title']
-        }
-        if 'description' in data:
-            data_for_saving['description'] = data['description']
-        parents = sorted(self._activities.parents(activity), key=lambda a: a.slug)
-        if parents:
-            data_for_saving['parents'] = [
-                self._link_activity(p.slug) for p in parents
-            ]
-
-        path = (
-            self._datadir / self._activities_subdir / f'{activity.slug}.md'
-        )
-        path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Helper to merge tag values.
-        def merge_tag(existing, new_tags):
-            if existing is None:
-                return new_tags
-            if isinstance(existing, str):
-                tags = existing.split()
-                if new_tags not in tags:
-                    tags.append(new_tags)
-                return ' '.join(tags)
-            if isinstance(existing, list):
-                if new_tags not in existing:
-                    existing.append(new_tags)
-                return existing
-            # Fallback: replace with new_tags (should not happen normally)
-            return new_tags
-
-        if not path.exists():
-            # Create new file with only the YAML block.
-            yaml_str = yaml.safe_dump(
-                data_for_saving,
-                allow_unicode=True,
-                sort_keys=False,
-                default_flow_style=False
-            )
-            content = f'---\n{yaml_str}---\n'
-            with path.open('w', encoding='utf-8') as f:
-                f.write(content)
-            return
-        
-        # File exists: read and update.
-        with path.open('r', encoding='utf-8') as f:
-            content = f.read()
-
-        # Find YAML frontmatter block.
-        block_pattern = re.compile(
-            r'^---\s*\n(.*?)\n---\s*\n?',
-            re.MULTILINE | re.DOTALL
-        )
-        match = block_pattern.search(content)
-        if not match:
-            # No YAML block: create one at the beginning.
-            yaml_str = yaml.safe_dump(
-                data_for_saving,
-                allow_unicode=True,
-                sort_keys=False,
-                default_flow_style=False
-            )
-            new_content = f'---\n{yaml_str}---\n' + content
-            with path.open('w', encoding='utf-8') as f:
-                f.write(new_content)
-            return
-
-        # Parse existing YAML block.
-        yaml_block = match.group(1).strip()
-        try:
-            existing_data = yaml.safe_load(yaml_block) or {}
-        except yaml.YAMLError:
-            existing_data = {}
-        if not isinstance(existing_data, dict):
-            existing_data = {}
-
-        # We'll collect all YAML blocks and update them.
-        blocks = []  # List of `(start, end, data_dict)`.
-        updated_fields = set()  # fields that have been updated in any block
-
-        # Process all YAML blocks.
-        for m in block_pattern.finditer(content):
-            start, end = m.span()
-            yaml_content = m.group(1).strip()
-            try:
-                block_data = yaml.safe_load(yaml_content) or {}
-            except yaml.YAMLError:
-                block_data = {}
-            if not isinstance(block_data, dict):
-                block_data = {}
-            blocks.append((start, end, block_data))
-
-        # Update each block.
-        for i, (start, end, block_data) in enumerate(blocks):
-            modified = False
-            # Update title
-            if 'title' in data_for_saving and block_data.get('title') != data_for_saving['title']:
-                block_data['title'] = data_for_saving['title']
-                updated_fields.add('title')
-                modified = True
-            # Update description (only if present in data_for_saving)
-            if 'description' in data_for_saving:
-                if block_data.get('description') != data_for_saving['description']:
-                    block_data['description'] = data_for_saving['description']
-                    updated_fields.add('description')
-                    modified = True
-            # Update parents (only if present)
-            if 'parents' in data_for_saving:
-                if block_data.get('parents') != data_for_saving['parents']:
-                    block_data['parents'] = data_for_saving['parents']
-                    updated_fields.add('parents')
-                    modified = True
-            # Update tag (merge)
-            if 'tags' in data_for_saving:
-                old_tags = block_data.get('tags')
-                new_tags = merge_tag(old_tags, data_for_saving['tags'])
-                if old_tags != new_tags:
-                    block_data['tags'] = new_tags
-                    updated_fields.add('tags')
-                    modified = True
-
-            if modified:
-                # Replace this block in the list with updated data
-                blocks[i] = (start, end, block_data)
-
-        # Add missing fields to the last block
-        last_start, last_end, last_data = blocks[-1]
-        missing_fields = set(data_for_saving.keys()) - updated_fields
-        if missing_fields:
-            for field in missing_fields:
-                if field == 'tags':
-                    # Merge tag with existing
-                    old_tags = last_data.get('tags')
-                    new_tags = merge_tag(old_tags, data_for_saving['tags'])
-                    last_data['tags'] = new_tags
-                else:
-                    last_data[field] = data_for_saving[field]
-            blocks[-1] = (last_start, last_end, last_data)
-
-        # Rebuild content with updated blocks
-        new_parts = []
-        last_idx = 0
-        for start, end, block_data in blocks:
-            new_parts.append(content[last_idx:start])
-            # Serialize block_data
-            yaml_str = yaml.safe_dump(
-                block_data,
-                allow_unicode=True,
-                sort_keys=False,
-                default_flow_style=False
-            )
-            new_parts.append(f'---\n{yaml_str}---\n')
-            last_idx = end
-        new_parts.append(content[last_idx:])
-        new_content = ''.join(new_parts)
-
-        with path.open('w', encoding='utf-8') as f:
-            f.write(new_content)
-
 
 
     def _load_state(self) -> None:
@@ -1640,17 +1538,6 @@ class RepositoryManager(AssistedRepository):
         # Save dirty days for all created sessions.
         self._save_dirty_days()
 
-        # Update activity notes for all involved activities.
-        involved_activities = set()
-        for s in created_sessions:
-            involved_activities.update(s.activities)
-        involved_activities_with_ancestors = set()
-        for a in involved_activities:
-            involved_activities_with_ancestors.add(a)
-            involved_activities_with_ancestors.update(self._activities.ancestors(a))
-        for a in involved_activities_with_ancestors:
-            self._save_activity_note(a)
-
         return created_sessions
     
 
@@ -1712,16 +1599,5 @@ class RepositoryManager(AssistedRepository):
 
         # Save dirty days for all created sessions.
         self._save_dirty_days()
-
-        # Update activity notes for all involved activities.
-        involved_activities = set(merged.activities)
-        involved_activities_with_ancestors = set()
-        for a in involved_activities:
-            involved_activities_with_ancestors.add(a)
-            involved_activities_with_ancestors.update(
-                self._activities.ancestors(a)
-            )
-        for a in involved_activities_with_ancestors:
-            self._save_activity_note(a)
 
         return merged

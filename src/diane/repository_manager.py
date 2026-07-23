@@ -770,15 +770,15 @@ class RepositoryManager(AssistedRepository):
     def save_activity_note_to(
         activities: Activities,
         activity: Activity,
-        path: Path | str
+        directory: Path | str
     ) -> None:
         """Create an activity note for the given activity.
 
         Creates a Markdown note if it doesn't already exist. The note
         will contain YAML frontmatter with activity data. If the note
         already exists, only the YAML frontmatter is rewritten, leaving
-        the body unchanged. The file will be created at the specified
-        path.
+        the body unchanged. The file named '<activity slug>.md' will be
+        created at the specified directory.
 
         The given activity must be part of the specified activities
         registry.
@@ -787,8 +787,8 @@ class RepositoryManager(AssistedRepository):
             activities (Activities): The activities registry.
             activity (Activity): The activity for which to save
                 the note.
-            path (Path | str): The path where the activity note should
-                be saved.
+            directory (Path | str): The directory where the activity
+                note should be saved.
 
         Raises:
             ValueError: If the activity is not listed in the specified
@@ -799,7 +799,7 @@ class RepositoryManager(AssistedRepository):
         data = activities.activity_to_dict(activity)
 
         # Prepare the path and create parent directories if needed.
-        path = Path(path)
+        path = Path(directory) / f'{activity.slug}.md'
         path.parent.mkdir(parents=True, exist_ok=True)
 
         if path.exists():
@@ -816,6 +816,27 @@ class RepositoryManager(AssistedRepository):
         frontmatter.dump(note, path)
 
 
+    @staticmethod
+    def save_activity_notes_to(
+        activities: Activities,
+        directory: Path | str
+    ) -> None:
+        """Create notes for all activities in the given registry.
+
+        Creates a Markdown note for each activity in the specified
+        activities registry. The notes will be saved in the specified
+        directory.
+
+        Args:
+            activities (Activities): The activities registry.
+            directory (Path | str): The directory where the activity
+                notes should be saved.
+        """
+
+        for a in activities:
+             RepositoryManager.save_activity_note_to(activities, a, directory)
+
+
 
     def _save_activity_note(self, activity: Activity) -> None:
         """Save the Markdown note for the given activity.
@@ -830,13 +851,13 @@ class RepositoryManager(AssistedRepository):
         """
 
         # Prepare the activity note path.
-        path = self._datadir / self._activities_subdir / f'{activity.slug}.md'
+        directory = self._datadir / self._activities_subdir
 
         # Write the activity note.
         RepositoryManager.save_activity_note_to(
             activities=self._activities,
             activity=activity,
-            path=path
+            directory=directory
         )
 
 

@@ -633,6 +633,18 @@ class RepositoryManager(AssistedRepository):
             ) from e
 
 
+    def load_activities_from_template(self, template_path: Path | str) -> None:
+        """Load activities from a template YAML file.
+
+        Args:
+            template_path (Path | str): The path to the template YAML file.
+        """
+
+        activities = RepositoryManager.read_activities_from_yaml(template_path)
+        self.activities = activities
+
+
+
     def _read_activity_from_markdown_note(
         self,
         path: Path | str

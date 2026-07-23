@@ -545,15 +545,6 @@ class RepositoryManager(AssistedRepository):
         # Load activities.
         super().__init__()
         self._load_activities()
-        '''activities_path = self._datadir / '.diane/data/activities.yaml'
-        activities = Activities.from_yaml(activities_path)
-        super().__init__(_activities=activities)'''
-
-        # Update tracking activities.
-        self._load_state()
-
-        # No days to update.
-        self._dirty_days = set()
 
         # Load sessions.
         if load_sessions:
@@ -564,6 +555,12 @@ class RepositoryManager(AssistedRepository):
 
         # Set loading state to `False`.
         self._loading = False
+
+        # Update tracking activities.
+        self._load_state()
+
+        # No days to update.
+        self._dirty_days = set()
 
 
     @property

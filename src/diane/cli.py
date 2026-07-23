@@ -924,18 +924,19 @@ def init():
         ))
         return
     except NoRepositoryError as e:
-        # Initialise new repository.
+        # Initialise a new repository.
+        # Create Diane ('.diane') subdirectory.
+        diane_dir.mkdir(exist_ok=True)
 
-        # Initialise 'activities.yaml' with template.
-        repo_activities_path = Path(diane_dir / 'data' / 'activities.yaml')
-        repo_activities_path.parent.mkdir(parents=True, exist_ok=True)
-        template_activities = Path(package_dir / 'data' / 'activities.yaml')
-        if template_activities.exists():
-            repo_activities_path.write_text(template_activities.read_text())
-        else:
-            repo_activities_path.write_text('activities: {}\n')
+        # Create activity notes from template.
+        activities = RepositoryManager.read_activities_from_yaml(
+            package_dir / 'data' / 'activities.yaml'
+        )
+        activities_dir = repo_dir / 'diane_activities'
+        RepositoryManager.save_activity_notes_to(activities, activities_dir)
 
-        # Initialize 'tracking.yaml'.
+
+        # Create 'tracking.yaml'.
         diane_dir.joinpath('tracking.yaml').write_text('tracking: {}\n')
 
         console.print(_message_panel(

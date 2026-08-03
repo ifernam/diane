@@ -112,11 +112,10 @@ class Repository:
             RepositoryConfig: A copy of the current repository's
             configuration.
         """
-        if self._config is not None:
-            return self._config.model_copy()
-        else:
+        if self._config is None:
             raise RepositoryNotInitialisedError(self.path)
-
+        return self._config.model_copy()
+        
     def initialise(self, config: RepositoryConfig) -> None:
         """Initialise the repository.
 

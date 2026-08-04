@@ -35,12 +35,12 @@ class RepositoryConfig(BaseSettings):
     """Repository configuration."""
     name: str
 
-    activities_subdir: Path = Path('diane_activities')
-    default_activity_emoji: str = '⚫'
+    activities_subdir: Path
+    default_activity_emoji: str
 
-    daily_notes_subdir: Path = Path('daily_notes')
-    daily_note_title_format: str = '%Y-%m-%d'
-    daily_note_template_path: Path | None = None
+    daily_notes_subdir: Path
+    daily_note_title_format: str
+    daily_note_template_path: Path | None
 
 
 class Repository:

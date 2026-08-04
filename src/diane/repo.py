@@ -32,7 +32,24 @@ class RepositoryAlreadyInitialisedError(RepositoryError):
 
 
 class RepositoryConfig(BaseSettings):
-    """Repository configuration."""
+    """A repository's configuration.
+
+    Attributes:
+        name (str): A repository's name.
+        activities_subdir (Path): A subdirectory within a repository's
+            directory where activity notes are stored. For example,
+            'diane_activities'.
+        default_activity_emoji (str): The default activity's Unicode
+            emoji. For example, '⚫'.
+        daily_notes_subdir (Path): A subdirectory within a repository's
+            directory where daily notes are stored. For example,
+            'daily_notes'.
+        daily_note_title_format (str): A daily note's title `strftime`
+            format. For example, '%Y-%m-%d'.
+        daily_note_template_path (Path | None): An optional relative
+            path to a daily note's template in a repository.
+            For example, 'templates/daily_note_template'.
+    """
     name: str
 
     activities_subdir: Path

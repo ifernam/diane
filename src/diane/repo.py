@@ -44,7 +44,7 @@ class RepositoryConfig(BaseSettings):
         daily_notes_subdir (Path): A subdirectory within a repository's
             directory where daily notes are stored. For example,
             'daily_notes'.
-        daily_note_title_format (str): A daily note's title `strftime`
+        daily_note_name_format (str): A daily note's name `strftime`
             format. For example, '%Y-%m-%d'.
         daily_note_template_path (Path | None): An optional relative
             path to a daily note's template in a repository.
@@ -56,7 +56,7 @@ class RepositoryConfig(BaseSettings):
     default_activity_emoji: str
 
     daily_notes_subdir: Path
-    daily_note_title_format: str
+    daily_note_name_format: str
     daily_note_template_path: Path | None
 
 

@@ -50,6 +50,7 @@ class RepositoryConfig(BaseSettings):
             path to a daily note's template in a repository.
             For example, 'templates/daily_note_template'.
     """
+
     name: str
 
     activities_subdir: Path

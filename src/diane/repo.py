@@ -79,7 +79,7 @@ class Repository:
     def diane_subdir(self) -> Path:
         """Return a Diane directory of the repository.
 
-        This directory contains the repository’s metadata.
+        This directory contains the repository's metadata.
 
         Returns:
             Path: The repository's Diane directory.

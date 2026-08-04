@@ -39,7 +39,7 @@ class RepositoryConfig(BaseSettings):
         activities_subdir (Path): A subdirectory within a repository's
             directory where activity notes are stored. For example,
             'diane_activities'.
-        default_activity_emoji (str): The default activity's Unicode
+        fallback_activity_emoji (str): The fallback activity's Unicode
             emoji. For example, '⚫'.
         daily_notes_subdir (Path): A subdirectory within a repository's
             directory where daily notes are stored. For example,
@@ -53,7 +53,7 @@ class RepositoryConfig(BaseSettings):
     name: str
 
     activities_subdir: Path
-    default_activity_emoji: str
+    fallback_activity_emoji: str
 
     daily_notes_subdir: Path
     daily_note_name_format: str

@@ -96,10 +96,14 @@ class Repository:
     def initialise(self, config: RepositoryConfig) -> None:
         """Initialise the repository.
 
-        Initialises the repository with the supplied configuration.
+        Initialises the repository with a supplied configuration.
 
         Args:
-           config (RepositoryConfig): The given configuration to set.
+           config (RepositoryConfig): A configuration to apply.
+
+        Raises:
+            RepositoryAlreadyInitialisedError: The repository has
+                already been initialised.
         """
         if self._config is not None:
             raise RepositoryAlreadyInitialisedError()
@@ -107,7 +111,7 @@ class Repository:
 
     @property
     def diane_subdir(self) -> Path:
-        """Return a Diane directory of the repository.
+        """Return the Diane directory of the repository.
 
         This directory contains the repository's metadata.
 
@@ -118,10 +122,10 @@ class Repository:
 
     @property
     def path(self) -> Path:
-        """Return a path to the repository in the file system.
+        """Return the path to the repository in the file system.
 
         Returns:
-            Path: A path to the repository.
+            Path: The path to the repository.
         """
         return self._path
 
@@ -136,11 +140,15 @@ class Repository:
 
     @property
     def config(self) -> RepositoryConfig:
-        """Return a copy of the current repository's configuration.
+        """Return a copy of the current repository configuration.
 
         Returns:
-            RepositoryConfig: A copy of the current repository's
-            configuration.
+            RepositoryConfig: A copy of the current repository
+                configuration.
+
+        Raises:
+            RepositoryNotInitialisedError: If the repository has not
+                been initialised.
         """
         if self._config is None:
             raise RepositoryNotInitialisedError(self.path)

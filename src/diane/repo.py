@@ -51,14 +51,14 @@ class RepositoryConfig(BaseSettings):
             For example, 'templates/daily_note_template'.
     """
 
-    name: str
+    name: str = 'Repository'
 
-    activities_subdir: Path
-    fallback_activity_emoji: str
+    activities_subdir: Path = Path('diane_activities')
+    fallback_activity_emoji: str = '⚫'
 
-    daily_notes_subdir: Path
-    daily_note_name_format: str
-    daily_note_template_path: Path | None
+    daily_notes_subdir: Path = Path('daily_notes')
+    daily_note_name_format: str = '%Y-%m-%d'
+    daily_note_template_path: Path | None = None
 
 
 class Repository:

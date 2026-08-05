@@ -7,6 +7,7 @@ from pydantic_settings import BaseSettings
 
 class RepositoryError(Exception):
     """A general repository error."""
+    ...
 
 
 class RepositoryNotInitialisedError(RepositoryError):

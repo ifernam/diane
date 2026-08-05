@@ -58,7 +58,15 @@ class AppSession:
         self._config = None
 
     def initialise(self, config: AppConfig) -> None:
-        """Initialise the programme."""
+        """Initialise the programme.
+
+        Args:
+            config (AppConfig): A programme configuration.
+
+        Raises:
+            AppAlreadyInitialisedError: If the programme has already
+                been initialised.
+        """
         if self._config is not None:
             raise AppAlreadyInitialisedError()
         self._config = config
@@ -96,6 +104,10 @@ class AppSession:
 
         Returns:
             AppConfig: The programme's configuration.
+
+        Raises:
+            AppNotInitialisedError: If the programme has not been
+                initialised.
         """
         if self._config is None:
             raise AppNotInitialisedError()

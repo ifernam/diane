@@ -30,7 +30,7 @@ class AppConfig(BaseSettings):
         repo_defaults (RepositoryConfig): A default repository
             configuration.
     """
-    locale: str
+    locale: str = 'en-US'
     repo_defaults: RepositoryConfig
 
 

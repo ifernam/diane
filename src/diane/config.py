@@ -54,7 +54,6 @@ class Configurator:
                 not match the schema.
             AppAlreadyInitialisedError: If the programme has already
                 been initialised.
-
         """
         programme_dir = app_session.programme_dir
         config_path = programme_dir / 'config' / 'config.toml'

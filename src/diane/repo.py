@@ -70,7 +70,7 @@ class Repository:
     or not initialised. A newly created repository is not initialised.
     Set the configuration to initialise.
 
-    - Does not load a configuration. Use the `ConfigurationManager`
+    - Does not load a configuration. Use the `Configurator`
       to initialise a repository.
     - Does not handle user data (activities, sessions, etc.) directly.
       This is the responsibility of the `StorageEngine`.

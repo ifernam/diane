@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime
 import zoneinfo
+from typing import override
 
 import tzlocal
 
@@ -34,8 +35,8 @@ class Timestamp:
             a `ZoneInfo` time zone.
     """
 
-    # UTC time zone.
     _UTC: zoneinfo.ZoneInfo = zoneinfo.ZoneInfo('Etc/UTC')
+    _STR_FORMAT: str = '%Y.%m.%d %H:%M:%S %:z %Z'
 
     _dt: datetime.datetime
 
@@ -115,3 +116,16 @@ class Timestamp:
             Timestamp: A timestamp representing the current UTC time.
         """
         return cls(datetime.datetime.now(cls._UTC))
+
+    @override
+    def __str__(self) -> str:
+        """Return a human-readable string representation
+        of the timestamp.
+
+        The output format is specified by the class variable
+        `_STR_FORMAT`.
+
+        Returns:
+            str: A human-readable representation of the timestamp.
+        """
+        return self._dt.strftime(self._STR_FORMAT)

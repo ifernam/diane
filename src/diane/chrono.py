@@ -129,3 +129,27 @@ class Timestamp:
             str: A human-readable representation of the timestamp.
         """
         return self._dt.strftime(self._STR_FORMAT)
+
+    @override
+    def __eq__(self, other: object) -> bool:
+        """Compare the timestamp with another time-based object relative
+        to UTC.
+
+        Args:
+            other (object): A time-based object to compare against.
+
+        Returns:
+            bool: `True` if the timestamp represents the same moment
+        in time as another time-based object.
+        """
+        if isinstance(other, Timestamp):
+            return self._dt == other._dt
+
+        if isinstance(other, datetime.datetime):
+            try:
+                return self._dt == other
+            except TypeError:
+                # The `other` `datetime` object is naive.
+                return NotImplemented
+
+        return NotImplemented

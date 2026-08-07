@@ -5,8 +5,6 @@ import zoneinfo
 from functools import total_ordering
 from typing import override
 
-import tzlocal
-
 
 class TimeError(Exception):
     """A general time error."""
@@ -15,11 +13,6 @@ class TimeError(Exception):
 
 class InvalidTimezoneError(TimeError):
     """An invalid time zone."""
-    ...
-
-
-class LocalTimezoneDetectionError(TimeError):
-    """Failed to determine the local time zone."""
     ...
 
 
@@ -92,22 +85,26 @@ class Timestamp:
         self._dt = dt
 
     @classmethod
-    def now(cls) -> Timestamp:
-        """Create a new timestamp representing the current local time.
+    def now(cls, timezone: str) -> Timestamp:
+        """Create a new timestamp representing the current time
+        in the provided time zone.
+
+        Args:
+            timezone (str): An IANA time zone.
 
         Returns:
-            Timestamp: A timestamp representing the current local time.
+            Timestamp: A timestamp representing the current time.
 
         Raises:
-            LocalTimezoneDetectionError: If the local time zone
-                could not be determined.
+            InvalidTimezoneError: If the provided IANA time zone
+                is invalid.
         """
         try:
-            tz = tzlocal.get_localzone()
+            tz = zoneinfo.ZoneInfo(timezone)
             return cls(datetime.datetime.now(tz))
-        except Exception as exc:
-            raise LocalTimezoneDetectionError(
-                f'Failed to determine the local time zone. {exc}'
+        except zoneinfo.ZoneInfoNotFoundError as exc:
+            raise InvalidTimezoneError(
+                f"The IANA time zone '{timezone}' is invalid."
             ) from exc
 
     @classmethod

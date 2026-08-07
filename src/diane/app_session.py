@@ -27,10 +27,12 @@ class AppConfig(BaseSettings):
 
     Attributes:
         locale (str): A locale identifier in the IETF BCP 47 format.
+        timezone (str | None): The default IANA time zone. Optional.
         repo_defaults (RepositoryConfig): A default repository
             configuration.
     """
     locale: str = 'en-US'
+    timezone: str | None = None
     repo_defaults: RepositoryConfig
 
 

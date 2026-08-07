@@ -1,9 +1,13 @@
+import datetime
 import tomllib
+import zoneinfo
 
+import tzlocal
 from pydantic import ValidationError
 from pydantic_settings import TomlConfigSettingsSource
 
 from diane.app_session import AppConfig, AppSession
+from diane.chrono import Timestamp
 from diane.repo import Repository, RepositoryConfig
 
 
@@ -28,6 +32,16 @@ class ConfigurationIOError(ConfigurationError):
 
 class InvalidConfigurationError(ConfigurationError):
     """An invalid configuration."""
+    ...
+
+
+class InvalidDefaultTimezoneError(ConfigurationError):
+    """The default timezone is invalid."""
+    ...
+
+
+class LocalTimezoneDetectionError(ConfigurationError):
+    """Failed to determine the local time zone."""
     ...
 
 
@@ -158,3 +172,90 @@ class Configurator:
             ) from exc
 
         repo.initialise(config)
+
+    @classmethod
+    def _current_timezone(cls, app_session: AppSession) -> zoneinfo.ZoneInfo:
+        """Determine the current `ZoneInfo` time zone.
+
+        If the default time zone has been specified in the programme
+        configuration, return that time zone. Otherwise, return
+        the local time zone.
+
+        Args:
+            app_session (AppSession): A programme session providing
+                the default time zone.
+
+        Returns:
+            zoneinfo.ZoneInfo: The current time zone.
+
+        Raises:
+            InvalidDefaultTimezoneError: If the default time zone
+                is invalid.
+            LocalTimezoneDetectionError: If the local time zone
+                could not be determined.
+        """
+        default_timezone = app_session.config.timezone
+        if default_timezone is not None:
+            try:
+                timezone = zoneinfo.ZoneInfo(default_timezone)
+            except zoneinfo.ZoneInfoNotFoundError as exc:
+                raise InvalidDefaultTimezoneError(
+                    f"The default IANA time zone '{default_timezone}' "
+                    "is invalid."
+                ) from exc
+        else:
+            try:
+                timezone = tzlocal.get_localzone()
+            except Exception as exc:
+                raise LocalTimezoneDetectionError(
+                    f'Failed to determine the local time zone. {exc}'
+                ) from exc
+
+        return timezone
+
+    @classmethod
+    def current_timezone(cls, app_session: AppSession) -> str:
+        """Determine the current IANA time zone.
+
+        If the default time zone has been specified in the programme
+        configuration, return that time zone. Otherwise, return
+        the local time zone.
+
+        Args:
+            app_session (AppSession): A programme session providing
+                the default time zone.
+
+        Returns:
+            str: The current IANA time zone.
+
+        Raises:
+            InvalidDefaultTimezoneError: If the default time zone
+                is invalid.
+            LocalTimezoneDetectionError: If the local time zone
+                could not be determined.
+        """
+        return cls._current_timezone(app_session).key
+
+    @classmethod
+    def now(cls, app_session: AppSession) -> Timestamp:
+        """Create a new timestamp representing the current time.
+
+        If the default time zone has been specified in the programme
+        configuration, return the current time in that time zone.
+        Otherwise, return the current local time.
+
+        Args:
+            app_session (AppSession): A programme session providing
+                the default time zone.
+
+        Returns:
+            Timestamp: A timestamp representing the current time.
+
+        Raises:
+            InvalidDefaultTimezoneError: If the default time zone
+                is invalid.
+            LocalTimezoneDetectionError: If the local time zone
+                could not be determined.
+        """
+        current_timezone = cls._current_timezone(app_session)
+        return Timestamp(datetime.datetime.now(current_timezone))

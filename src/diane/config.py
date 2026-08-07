@@ -4,7 +4,7 @@ from pydantic import ValidationError
 from pydantic_settings import TomlConfigSettingsSource
 
 from diane.app_session import AppConfig, AppSession
-from diane.repo import RepositoryConfig, Repository
+from diane.repo import Repository, RepositoryConfig
 
 
 class ConfigurationError(Exception):

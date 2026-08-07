@@ -106,3 +106,12 @@ class Timestamp:
             raise LocalTimezoneDetectionError(
                 f'Failed to determine the local time zone. {exc}'
             ) from exc
+
+    @classmethod
+    def now_utc(cls) -> Timestamp:
+        """Create a new timestamp representing the current time in UTC.
+
+        Returns:
+            Timestamp: A timestamp representing the current UTC time.
+        """
+        return cls(datetime.datetime.now(cls._UTC))

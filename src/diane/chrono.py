@@ -14,6 +14,11 @@ class InvalidTimezoneError(TimeError):
     ...
 
 
+class LocalTimezoneDetectionError(TimeError):
+    """Failed to determine the local time zone."""
+    ...
+
+
 class Timestamp:
     """Represents a timestamp with a time zone specified in the IANA
     format.
@@ -79,3 +84,22 @@ class Timestamp:
         """
         self._validate_timezone(dt)
         self._dt = dt
+
+    @classmethod
+    def now(cls) -> Timestamp:
+        """Create a new timestamp representing the current local time.
+
+        Returns:
+            Timestamp: A timestamp representing the current local time.
+
+        Raises:
+            LocalTimezoneDetectionError: If the local time zone
+                could not be determined.
+        """
+        try:
+            tz = tzlocal.get_localzone()
+            return cls(datetime.datetime.now(tz))
+        except Exception as exc:
+            raise LocalTimezoneDetectionError(
+                f'Failed to determine the local time zone. {exc}'
+            ) from exc

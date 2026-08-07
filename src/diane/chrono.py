@@ -57,7 +57,8 @@ class Timestamp:
             utc_off = dt.utcoffset()
         except Exception as exc:
             raise InvalidTimezoneError(
-                f"Failed to obtain the UTC offset for '{dt.isoformat()}'. {exc}"
+                f"Failed to obtain the UTC offset for '{dt.isoformat()}'. "
+                "{exc}"
             ) from exc
 
         if utc_off is None:

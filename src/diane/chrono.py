@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime
 import zoneinfo
+from functools import total_ordering
 from typing import override
 
 import tzlocal
@@ -22,6 +23,7 @@ class LocalTimezoneDetectionError(TimeError):
     ...
 
 
+@total_ordering
 class Timestamp:
     """Represents a timestamp whose time zone is identified by an IANA
     time zone name.
@@ -148,6 +150,29 @@ class Timestamp:
         if isinstance(other, datetime.datetime):
             try:
                 return self._dt == other
+            except TypeError:
+                # The `other` `datetime` object is naive.
+                return NotImplemented
+
+        return NotImplemented
+
+    def __lt__(self, other: object) -> bool:
+        """Compare the timestamp with another time-based object relative
+        to UTC.
+
+        Args:
+            other (object): A time-based object to compare against.
+
+        Returns:
+            bool: `True` if the timestamp represents an earlier moment
+        than another time-based object.
+        """
+        if isinstance(other, Timestamp):
+            return self._dt < other._dt
+
+        if isinstance(other, datetime.datetime):
+            try:
+                return self._dt < other
             except TypeError:
                 # The `other` `datetime` object is naive.
                 return NotImplemented

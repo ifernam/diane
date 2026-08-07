@@ -153,3 +153,26 @@ class Timestamp:
                 return NotImplemented
 
         return NotImplemented
+
+    def to_timezone(self, timezone: str) -> Timestamp:
+        """Convert this timestamp to an IANA time zone.
+
+        Args:
+            timezone (str): An IANA time zone (e.g., 'Europe/London').
+
+        Returns:
+            Timestamp: A new timestamp representing the same moment
+                in the specified IANA time zone.
+
+        Raises:
+            InvalidTimezoneError: If an IANA time zone is invalid.
+        """
+        try:
+            tz = zoneinfo.ZoneInfo(timezone)
+        except zoneinfo.ZoneInfoNotFoundError as exc:
+            raise InvalidTimezoneError(
+                f"The IANA time zone '{timezone}' is invalid."
+            ) from exc
+
+        dt = self._dt.astimezone(tz)
+        return Timestamp(dt)

@@ -61,7 +61,7 @@ class Timestamp:
         except Exception as exc:
             raise InvalidTimezoneError(
                 f"Failed to obtain the UTC offset for '{dt.isoformat()}'. "
-                "{exc}"
+                f"{exc}"
             ) from exc
 
         if utc_off is None:
@@ -71,7 +71,7 @@ class Timestamp:
 
         if not isinstance(dt.tzinfo, zoneinfo.ZoneInfo):
             raise InvalidTimezoneError(
-                f"Time zone must be a `ZoneInfo` instance, got "
+                "Time zone must be a `ZoneInfo` instance, got "
                 f"'{type(dt.tzinfo).__name__}' for '{dt.isoformat()}'."
             )
 

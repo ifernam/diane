@@ -20,8 +20,8 @@ class LocalTimezoneDetectionError(TimeError):
 
 
 class Timestamp:
-    """Represents a timestamp with a time zone specified in the IANA
-    format.
+    """Represents a timestamp whose time zone is identified by an IANA
+    time zone name.
 
     Attributes:
         _dt (datetime.datetime): An aware `datetime` object with
@@ -39,7 +39,7 @@ class Timestamp:
 
     @staticmethod
     def _validate_timezone(dt: datetime.datetime) -> None:
-        """Check whether a `datetime` object is aware and has
+        """Check whether a `datetime` object is aware and uses
         a `ZoneInfo` time zone.
 
         Args:
@@ -57,7 +57,7 @@ class Timestamp:
             utc_off = dt.utcoffset()
         except Exception as exc:
             raise InvalidTimezoneError(
-                f"Failed to obtain a UTC offset for '{dt.isoformat()}'. {exc}"
+                f"Failed to obtain the UTC offset for '{dt.isoformat()}'. {exc}"
             ) from exc
 
         if utc_off is None:

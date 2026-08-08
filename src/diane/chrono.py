@@ -117,6 +117,15 @@ class Timestamp:
         return cls(datetime.datetime.now(cls._UTC))
 
     @override
+    def __hash__(self) -> int:
+        """Return a hash based on the UTC moment.
+
+        Returns:
+            int: A UTC-based hash.
+        """
+        return hash(self._dt)
+
+    @override
     def __str__(self) -> str:
         """Return a human-readable string representation
         of the timestamp.

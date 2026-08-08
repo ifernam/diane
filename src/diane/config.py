@@ -7,7 +7,7 @@ from pydantic import ValidationError
 from pydantic_settings import TomlConfigSettingsSource
 
 from diane.app_session import AppConfig, AppSession
-from diane.chrono.timestamp import Timestamp
+from diane.chrono import Timestamp
 from diane.repo import Repository, RepositoryConfig
 
 

@@ -16,8 +16,8 @@ class InvalidTimezoneError(TimeError):
     ...
 
 
-class NonExistentWallTime(TimeError):
-    """A non-existent wall time."""
+class NonExistentTimeError(TimeError):
+    """A non-existent time."""
     ...
 
 
@@ -48,7 +48,7 @@ class Timestamp:
     @staticmethod
     def _validate(dt: datetime.datetime) -> None:
         """Check whether a `datetime` object is aware, uses a `ZoneInfo`
-        time zone and represents an existing wall time.
+        time zone and represents an existing time.
 
         Args:
             dt (datetime.datetime): A `datetime` object to validate.
@@ -56,8 +56,8 @@ class Timestamp:
         Raises:
             InvalidTimezoneError: If a `datetime` object is naive or its
                 time zone is not a `ZoneInfo` instance.
-            NonExistentWallTime: If a `datetime` object represents
-                a non-existent wall time.
+            NonExistentTimeError: If a `datetime` object represents
+                a non-existent time.
         """
         if dt.tzinfo is None:
             raise InvalidTimezoneError(
@@ -85,9 +85,9 @@ class Timestamp:
         dt_utc = dt.astimezone(Timestamp._UTC)
         dt_roundtripped = dt_utc.astimezone(dt.tzinfo)
         if dt_roundtripped != dt:
-            raise NonExistentWallTime(
+            raise NonExistentTimeError(
                 f"The `datetime` object '{dt.isoformat()} {dt.tzinfo.key}' "
-                "represents a non-existent wall time."
+                "represents a non-existent time."
             )
 
     def __init__(self, dt: datetime.datetime) -> None:
@@ -100,8 +100,8 @@ class Timestamp:
         Raises:
             InvalidTimezoneError: If a `datetime` object is naive
                 or its time zone is not a `ZoneInfo` instance.
-            NonExistentWallTime: If a `datetime` object represents
-                a non-existent wall time.
+            NonExistentTimeError: If a `datetime` object represents
+                a non-existent time.
         """
         self._validate(dt)
         self._dt = dt

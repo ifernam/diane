@@ -21,6 +21,11 @@ class NonExistentWallTime(TimeError):
     ...
 
 
+class RoundingError(TimeError):
+    """A rounding error."""
+    ...
+
+
 @total_ordering
 class Timestamp:
     """Represents a timestamp whose time zone is identified by an IANA
@@ -222,3 +227,100 @@ class Timestamp:
 
         dt = self._dt.astimezone(tz)
         return Timestamp(dt)
+
+    def floor_second(self) -> Timestamp:
+        """Return a new timestamp with the fractional second removed.
+
+        Any fractional second is discarded.
+
+        Returns:
+            Timestamp: A new timestamp at the start of the second.
+
+        Raises:
+            RoundingError: If the timestamp could not be rounded down
+                to the nearest second.
+        """
+        try:
+            dt_utc = self._dt.astimezone(self._UTC)
+        except OverflowError as exc:
+            raise RoundingError(
+                f"Failed to round '{self}' down to the nearest second."
+            ) from exc
+        dt_utc_floor = dt_utc.replace(microsecond=0)
+        try:
+            dt_floor = dt_utc_floor.astimezone(self._dt.tzinfo)
+        except OverflowError as exc:
+            raise RoundingError(
+                f"Failed to round '{self}' down to the nearest second."
+            ) from exc
+        return Timestamp(dt_floor)
+
+    def ceil_second(self) -> Timestamp:
+        """Return a new timestamp rounded up to the nearest second.
+
+        Return the timestamp unchanged if it is already at the start
+        of a second; otherwise, round it up to the next second.
+
+        Returns:
+            Timestamp: A new timestamp at the start of a second.
+
+        Raises:
+            RoundingError: If the timestamp could not be rounded up
+                to the nearest second.
+        """
+        try:
+            dt_utc = self._dt.astimezone(self._UTC)
+        except OverflowError as exc:
+            raise RoundingError(
+                f"Failed to round '{self}' up to the nearest second."
+            ) from exc
+        dt_utc_ceil = dt_utc.replace(microsecond=0)
+        if dt_utc.microsecond:
+            try:
+                dt_utc_ceil += datetime.timedelta(seconds=1)
+            except OverflowError as exc:
+                raise RoundingError(
+                    f"Failed to round '{self}' up to the nearest second."
+                ) from exc
+        try:
+            dt_ceil = dt_utc_ceil.astimezone(self._dt.tzinfo)
+        except OverflowError as exc:
+            raise RoundingError(
+                f"Failed to round '{self}' up to the nearest second."
+            ) from exc
+        return Timestamp(dt_ceil)
+
+    def round_second(self) -> Timestamp:
+        """Return a new timestamp rounded to the nearest second.
+
+        Use half-up rounding: round up when the fractional second is
+        at least 0.5 seconds.
+
+        Returns:
+            Timestamp: A new timestamp rounded to a whole second.
+
+        Raises:
+            RoundingError: If the timestamp could not be rounded
+                to the nearest second.
+        """
+        try:
+            dt_utc = self._dt.astimezone(self._UTC)
+        except OverflowError as exc:
+            raise RoundingError(
+                f"Failed to round '{self}' to the nearest second."
+            ) from exc
+        dt_utc_rounded = dt_utc.replace(microsecond=0)
+        if dt_utc.microsecond >= 500:
+            try:
+                dt_utc_rounded += datetime.timedelta(seconds=1)
+            except OverflowError as exc:
+                raise RoundingError(
+                    f"Failed to round '{self}' to the nearest second."
+                ) from exc
+        try:
+            dt_rounded = dt_utc_rounded.astimezone(self._dt.tzinfo)
+        except OverflowError as exc:
+            raise RoundingError(
+                f"Failed to round '{self}' to the nearest second."
+            ) from exc
+        return Timestamp(dt_rounded)

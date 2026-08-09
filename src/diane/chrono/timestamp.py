@@ -16,6 +16,11 @@ class InvalidTimezoneError(TimeError):
     ...
 
 
+class NonExistentWallTime(TimeError):
+    """A non-existent wall time."""
+    ...
+
+
 @total_ordering
 class Timestamp:
     """Represents a timestamp whose time zone is identified by an IANA
@@ -36,16 +41,18 @@ class Timestamp:
     _dt: datetime.datetime
 
     @staticmethod
-    def _validate_timezone(dt: datetime.datetime) -> None:
-        """Check whether a `datetime` object is aware and uses
-        a `ZoneInfo` time zone.
+    def _validate(dt: datetime.datetime) -> None:
+        """Check whether a `datetime` object is aware, uses a `ZoneInfo`
+        time zone and represents an existing wall time.
 
         Args:
             dt (datetime.datetime): A `datetime` object to validate.
 
         Raises:
-            InvalidTimezoneError: If a `datetime` object is naive
-                or its time zone is not a `ZoneInfo` instance.
+            InvalidTimezoneError: If a `datetime` object is naive or its
+                time zone is not a `ZoneInfo` instance.
+            NonExistentWallTime: If a `datetime` object represents
+                a non-existent wall time.
         """
         if dt.tzinfo is None:
             raise InvalidTimezoneError(
@@ -70,6 +77,14 @@ class Timestamp:
                 f"'{type(dt.tzinfo).__name__}' for '{dt.isoformat()}'."
             )
 
+        dt_utc = dt.astimezone(Timestamp._UTC)
+        dt_roundtripped = dt_utc.astimezone(dt.tzinfo)
+        if dt_roundtripped != dt:
+            raise NonExistentWallTime(
+                f"The `datetime` object '{dt.isoformat()} {dt.tzinfo.key}' "
+                "represents a non-existent wall time."
+            )
+
     def __init__(self, dt: datetime.datetime) -> None:
         """Create a timestamp.
 
@@ -81,7 +96,7 @@ class Timestamp:
             InvalidTimezoneError: If a `datetime` object is naive
                 or its time zone is not a `ZoneInfo` instance.
         """
-        self._validate_timezone(dt)
+        self._validate(dt)
         self._dt = dt
 
     @classmethod

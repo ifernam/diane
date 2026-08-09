@@ -11,12 +11,17 @@ class TimeError(Exception):
     ...
 
 
-class InvalidTimezoneError(TimeError):
+class ValidationError(TimeError):
+    """A time value could not be validated."""
+    ...
+
+
+class InvalidTimezoneError(ValidationError):
     """An invalid time zone."""
     ...
 
 
-class NonExistentTimeError(TimeError):
+class NonExistentTimeError(ValidationError):
     """A non-existent time."""
     ...
 
@@ -54,6 +59,8 @@ class Timestamp:
             dt (datetime.datetime): A `datetime` object to validate.
 
         Raises:
+            ValidationError: If a `datetime` object could not
+                be validated.
             InvalidTimezoneError: If a `datetime` object is naive or its
                 time zone is not a `ZoneInfo` instance.
             NonExistentTimeError: If a `datetime` object represents
@@ -82,8 +89,13 @@ class Timestamp:
                 f"'{type(dt.tzinfo).__name__}' for '{dt.isoformat()}'."
             )
 
-        dt_utc = dt.astimezone(Timestamp._UTC)
-        dt_roundtripped = dt_utc.astimezone(dt.tzinfo)
+        try:
+            dt_utc = dt.astimezone(Timestamp._UTC)
+            dt_roundtripped = dt_utc.astimezone(dt.tzinfo)
+        except OverflowError as exc:
+            raise ValidationError(
+                f"Failed to validate the `datetime` object '{dt.isoformat()} "
+                f"{dt.tzinfo.key}'.") from exc
         if dt_roundtripped != dt:
             raise NonExistentTimeError(
                 f"The `datetime` object '{dt.isoformat()} {dt.tzinfo.key}' "
@@ -98,6 +110,8 @@ class Timestamp:
                 a `ZoneInfo` time zone.
 
         Raises:
+            ValidationError: If a `datetime` object could not
+                be validated.
             InvalidTimezoneError: If a `datetime` object is naive
                 or its time zone is not a `ZoneInfo` instance.
             NonExistentTimeError: If a `datetime` object represents

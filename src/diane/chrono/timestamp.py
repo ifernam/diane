@@ -100,6 +100,8 @@ class Timestamp:
         Raises:
             InvalidTimezoneError: If a `datetime` object is naive
                 or its time zone is not a `ZoneInfo` instance.
+            NonExistentWallTime: If a `datetime` object represents
+                a non-existent wall time.
         """
         self._validate(dt)
         self._dt = dt

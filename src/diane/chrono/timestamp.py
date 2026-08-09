@@ -268,12 +268,7 @@ class Timestamp:
             RoundingError: If the timestamp could not be rounded down
                 to the nearest second.
         """
-        try:
-            dt_utc = self._dt.astimezone(self._UTC)
-        except OverflowError as exc:
-            raise RoundingError(
-                f"Failed to round '{self}' down to the nearest second."
-            ) from exc
+        dt_utc = self._dt.astimezone(self._UTC)
         dt_utc_floor = dt_utc.replace(microsecond=0)
         try:
             dt_floor = dt_utc_floor.astimezone(self._dt.tzinfo)
@@ -296,12 +291,7 @@ class Timestamp:
             RoundingError: If the timestamp could not be rounded up
                 to the nearest second.
         """
-        try:
-            dt_utc = self._dt.astimezone(self._UTC)
-        except OverflowError as exc:
-            raise RoundingError(
-                f"Failed to round '{self}' up to the nearest second."
-            ) from exc
+        dt_utc = self._dt.astimezone(self._UTC)
         dt_utc_ceil = dt_utc.replace(microsecond=0)
         if dt_utc.microsecond:
             try:
@@ -331,12 +321,7 @@ class Timestamp:
             RoundingError: If the timestamp could not be rounded
                 to the nearest second.
         """
-        try:
-            dt_utc = self._dt.astimezone(self._UTC)
-        except OverflowError as exc:
-            raise RoundingError(
-                f"Failed to round '{self}' to the nearest second."
-            ) from exc
+        dt_utc = self._dt.astimezone(self._UTC)
         dt_utc_rounded = dt_utc.replace(microsecond=0)
         if dt_utc.microsecond >= 500:
             try:

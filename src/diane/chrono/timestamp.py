@@ -26,6 +26,11 @@ class NonExistentTimeError(ValidationError):
     ...
 
 
+class TimezoneConversionError(TimeError):
+    """Failed to convert a time zone."""
+    ...
+
+
 class RoundingError(TimeError):
     """A rounding error."""
     ...
@@ -233,6 +238,8 @@ class Timestamp:
 
         Raises:
             InvalidTimezoneError: If an IANA time zone is invalid.
+            TimezoneConversionError: If a time zone could not
+                be converted.
         """
         try:
             tz = zoneinfo.ZoneInfo(timezone)
@@ -241,7 +248,12 @@ class Timestamp:
                 f"The IANA time zone '{timezone}' is invalid."
             ) from exc
 
-        dt = self._dt.astimezone(tz)
+        try:
+            dt = self._dt.astimezone(tz)
+        except OverflowError as exc:
+            raise TimezoneConversionError(
+                f"Failed to convert '{self}' to the time zone '{timezone}'."
+            ) from exc
         return Timestamp(dt)
 
     def floor_second(self) -> Timestamp:

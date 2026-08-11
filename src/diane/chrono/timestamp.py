@@ -294,6 +294,15 @@ class Timestamp:
 
         return NotImplemented
 
+    def iso(self) -> str:
+        """Return a string representing the timestamp in ISO 8601
+        format.
+
+        Returns:
+            str: An ISO 8601 string.
+        """
+        return self._dt.isoformat()
+
     def to_timezone(self, timezone: str) -> Timestamp:
         """Convert this timestamp to an IANA time zone.
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime
 import zoneinfo
 from functools import total_ordering
-from typing import override
+from typing import cast, override
 
 
 class TimeError(Exception):
@@ -302,6 +302,15 @@ class Timestamp:
             str: An ISO 8601 string.
         """
         return self._dt.isoformat()
+
+    @property
+    def iana(self) -> str:
+        """Return the IANA time zone of the timestamp.
+
+        Returns:
+            str: The IANA time zone.
+        """
+        return cast(zoneinfo.ZoneInfo, self._dt.tzinfo).key
 
     def to_timezone(self, timezone: str) -> Timestamp:
         """Convert this timestamp to an IANA time zone.

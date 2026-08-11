@@ -26,6 +26,11 @@ class NonExistentTimeError(ValidationError):
     ...
 
 
+class InvalidISOFormatError(TimeError):
+    """An invalid ISO 8601 format."""
+    ...
+
+
 class TimezoneConversionError(TimeError):
     """Failed to convert a time zone."""
     ...
@@ -156,6 +161,69 @@ class Timestamp:
             Timestamp: A timestamp representing the current UTC time.
         """
         return cls(datetime.datetime.now(cls._UTC))
+
+    @classmethod
+    def from_iso_iana(cls, iso_str: str, timezone: str) -> Timestamp:
+        """Create a timestamp from an ISO 8601 string with an offset
+        and an IANA time zone.
+
+        The method verifies that the offset is consistent with
+        the actual offset of the IANA zone at that moment. If they
+        match, the returned timestamp stores the local time in the given
+        IANA time zone.
+
+        Args:
+            iso_str: An ISO 8601 string that includes an offset
+                (e.g., '2026-08-10T19:55Z', '2026-08-10T19:55+00:00',
+                '2026-08-10T15:55-04:00').
+            timezone: An IANA time zone name (e.g., 'Etc/UTC',
+                'America/New_York').
+
+        Returns:
+            A timestamp representing the time provided in a specified
+            IANA time zone.
+
+        Raises:
+            InvalidISOFormatError: If an ISO 8601 string is invalid.
+            InvalidTimezoneError: If an IANA time zone is invalid,
+                an ISO 8601 string has no offset, or its offset does not
+                match the offset of an IANA time zone.
+            ValidationError: If a timestamp could not be validated.
+            NonExistentTimeError: If an ISO 8601 string with an IANA
+                time zone represents a non-existent time.
+        """
+        try:
+            dt_parsed = datetime.datetime.fromisoformat(iso_str)
+        except ValueError as exc:
+            raise InvalidISOFormatError(
+                f"The string '{iso_str}' does not comply with ISO 8601."
+            ) from exc
+
+        if dt_parsed.utcoffset() is None:
+            raise InvalidTimezoneError(
+                f"The ISO 8601 string '{iso_str}' has no offset."
+            )
+
+        try:
+            tz = zoneinfo.ZoneInfo(timezone)
+        except zoneinfo.ZoneInfoNotFoundError as exc:
+            raise InvalidTimezoneError(
+                f"The IANA time zone '{timezone}' is invalid."
+            ) from exc
+
+        naive_wall = dt_parsed.replace(tzinfo=None)
+        # Try `fold=0` first.
+        dt_candidate = naive_wall.replace(tzinfo=tz, fold=0)
+        if dt_candidate.utcoffset() != dt_parsed.utcoffset():
+            # Try `fold=1`.
+            dt_candidate = naive_wall.replace(tzinfo=tz, fold=1)
+            if dt_candidate.utcoffset() != dt_parsed.utcoffset():
+                raise InvalidTimezoneError(
+                    f"The offset in '{iso_str}' does not match the IANA zone "
+                    f"'{timezone}'."
+                )
+
+        return cls(dt_candidate)
 
     @override
     def __hash__(self) -> int:

@@ -92,8 +92,6 @@ class Timestamp:
             a `ZoneInfo` time zone.
     """
 
-
-
     _UTC: zoneinfo.ZoneInfo = zoneinfo.ZoneInfo('Etc/UTC')
 
     _STR_FORMAT: str = '%Y.%m.%d %H:%M:%S.%f %:z %Z'

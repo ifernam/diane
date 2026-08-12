@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import datetime
 import zoneinfo
+from enum import Enum
 from functools import total_ordering
-from typing import cast, override
+from string import Template
+from typing import ClassVar, cast, override
 
 
 class TimeError(Exception):
@@ -41,6 +43,41 @@ class RoundingError(TimeError):
     ...
 
 
+class TimeSpec(Enum):
+    """Specifies the precision of an ISO 8601 time representation."""
+
+    HOURS = '%H'
+    MINUTES = '%H:%M'
+    SECONDS = '%H:%M:%S'
+    MICROSECONDS = '%H:%M:%S.%f'
+
+
+class TimeStrTemplate(Template):
+    """Represents a template for advanced formatting of `time`
+    objects."""
+
+    delimiter: ClassVar[str] = '%'
+
+    def format(self, t: datetime.time, midnight24: bool = False) -> str:
+        """Format a `time` object according to a specified template.
+
+        The template can represent midnight as '24:00' when requested.
+
+        Args:
+            dt (datetime.time): A `time` object.
+            midnight24 (bool): If `True` and the `time` object refers
+                to midnight, replaces '%H' with '24'.
+
+        Returns:
+            str: A formatted `time` object.
+        """
+        template = (
+            self.safe_substitute(H='24')
+            if midnight24 and t == datetime.time.min
+            else self.template
+        )
+        return t.strftime(template)
+
 @total_ordering
 class Timestamp:
     """Represents a timestamp whose time zone is identified by an IANA
@@ -55,8 +92,13 @@ class Timestamp:
             a `ZoneInfo` time zone.
     """
 
+
+
     _UTC: zoneinfo.ZoneInfo = zoneinfo.ZoneInfo('Etc/UTC')
+
     _STR_FORMAT: str = '%Y.%m.%d %H:%M:%S.%f %:z %Z'
+    _DEFAULT_ISO_TIME_SPEC: TimeSpec = TimeSpec.MICROSECONDS
+    _AUTO_ISO_TIME_SPEC: TimeSpec | None = TimeSpec.MINUTES
 
     _dt: datetime.datetime
 
@@ -293,6 +335,40 @@ class Timestamp:
                 return NotImplemented
 
         return NotImplemented
+
+    def time_iso(
+        self, spec: TimeSpec | None = None, midnight24: bool = False
+    ) -> str:
+        """Return a string representing the time of the timestamp
+        in the ISO 8601 format.
+
+        Args:
+            spec (TimeSpec | None): A time specification. If `None`,
+                select the specification automatically according
+                to `_AUTO_ISO_TIME_SPEC` and the precision
+                of the timestamp.
+
+            midnight24 (bool): If `True`, represents midnight as '24:00'
+                rather than '00:00'. `False` by default.
+
+        Returns:
+            str: An ISO 8601 time string.
+        """
+        t = self._dt.time()
+        if spec is None:
+            if (auto_spec := self._AUTO_ISO_TIME_SPEC) is not None:
+                if t.microsecond or auto_spec is TimeSpec.MICROSECONDS:
+                    spec = TimeSpec.MICROSECONDS
+                elif t.second or auto_spec is TimeSpec.SECONDS:
+                    spec = TimeSpec.SECONDS
+                elif t.minute or auto_spec is TimeSpec.MINUTES:
+                    spec = TimeSpec.MINUTES
+                else:
+                    spec = TimeSpec.HOURS
+            else:
+                spec = self._DEFAULT_ISO_TIME_SPEC
+        iso_str = TimeStrTemplate(spec.value).format(t, midnight24)
+        return iso_str
 
     def iso(self) -> str:
         """Return a string representing the timestamp in ISO 8601

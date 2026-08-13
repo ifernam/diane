@@ -33,6 +33,11 @@ class InvalidISOFormatError(TimeError):
     ...
 
 
+class DateFormattingError(TimeError):
+    """A date formatting error."""
+    ...
+
+
 class TimezoneConversionError(TimeError):
     """Failed to convert a time zone."""
     ...
@@ -50,6 +55,56 @@ class TimeSpec(Enum):
     MINUTES = '%H:%M'
     SECONDS = '%H:%M:%S'
     MICROSECONDS = '%H:%M:%S.%f'
+
+
+class DateStrTemplate(Template):
+    """Represents a template for advanced formatting of `date`
+    objects."""
+
+    delimiter: ClassVar[str] = '%'
+
+    def format(
+        self,
+        d: datetime.date,
+        t: datetime.time | None = None,
+        midnight24: bool = False
+    ) -> str:
+        """Format a `date` object according to a specified template.
+
+        The template can represent midnight as part of the previous day
+        when requested. It is necessary to specify a time for this.
+
+        Args:
+            d (datetime.date): A `date` object.
+            t (datetime.time): A `time` object. Required to handle
+                midnight.
+            midnight24 (bool): If `True`, midnight is considered
+                to be part of the previous day. `False` by default.
+                A time is required.
+
+        Returns:
+            str: A formatted `date` object.
+
+        Raises:
+            DateFormattingError: If a date could not be formatted
+                (e.g., rolling back to the previous day would exceed
+                `datetime.date.min`).
+        """
+        if midnight24:
+            if t is None:
+                raise DateFormattingError(
+                    'Provide a time for midnight formatting.'
+                )
+            if t == datetime.time.min:
+                try:
+                    previous_day = d - datetime.timedelta(days=1)
+                except OverflowError as exc:
+                    raise DateFormattingError(
+                        'Failed to format the date.'
+                    ) from exc
+                return previous_day.strftime(self.template)
+
+        return d.strftime(self.template)
 
 
 class TimeStrTemplate(Template):
@@ -95,6 +150,7 @@ class Timestamp:
     _UTC: zoneinfo.ZoneInfo = zoneinfo.ZoneInfo('Etc/UTC')
 
     _STR_FORMAT: str = '%Y.%m.%d %H:%M:%S.%f %:z %Z'
+    _ISO_DATE_SPEC: str = '%Y-%m-%d'
     _DEFAULT_ISO_TIME_SPEC: TimeSpec = TimeSpec.MICROSECONDS
     _AUTO_ISO_TIME_SPEC: TimeSpec | None = TimeSpec.MINUTES
 
@@ -333,6 +389,26 @@ class Timestamp:
                 return NotImplemented
 
         return NotImplemented
+
+    def date_iso(self, midnight24: bool = False) -> str:
+        """Return a string representing the date of the timestamp
+        in the ISO 8601 format.
+
+        Args:
+            midnight24 (bool): If `True`, midnight is considered
+                to be part of the previous day. `False` by default.
+
+        Returns:
+            str: An ISO 8601 date string.
+
+        Raises:
+            DateFormattingError: If the date could not be formatted
+                (e.g., rolling back to the previous day would exceed
+                `datetime.date.min`).
+        """
+        template = DateStrTemplate(self._ISO_DATE_SPEC)
+        dt = self._dt
+        return template.format(dt.date(), dt.time(), midnight24)
 
     def time_iso(
         self, spec: TimeSpec | None = None, midnight24: bool = False

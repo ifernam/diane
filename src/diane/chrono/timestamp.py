@@ -133,6 +133,7 @@ class TimeStrTemplate(Template):
         )
         return t.strftime(template)
 
+
 @total_ordering
 class Timestamp:
     """Represents a timestamp whose time zone is identified by an IANA

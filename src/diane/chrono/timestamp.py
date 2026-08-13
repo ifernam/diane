@@ -38,6 +38,11 @@ class DateFormattingError(TimeError):
     ...
 
 
+class OffsetFormattingError(TimeError):
+    """An offset formatting error."""
+    ...
+
+
 class TimezoneConversionError(TimeError):
     """Failed to convert a time zone."""
     ...
@@ -134,6 +139,47 @@ class TimeStrTemplate(Template):
         return t.strftime(template)
 
 
+class OffsetStrTemplate(Template):
+    """Represents a template for advanced formatting of the UTC offset
+    of `datetime` objects."""
+
+    delimiter: ClassVar[str] = '%'
+    idpattern: ClassVar[str] = r'(?a:[_a-z][_a-z0-9]*|:z)'
+
+    def format(
+        self,
+        dt: datetime.datetime,
+        is_utc: bool | None = None,
+        utc_z: bool = True
+    ) -> str:
+        """Format the UTC offset of a `datetime` object according
+        to a specified template.
+
+        Args:
+            dt (datetime.datetime): A `datetime` object.
+            is_utc (bool | None): If `True`, a `datetime` object
+                is treated as UTC-based.
+            utc_z (bool): If `True`, the UTC offset is represented
+                as 'Z'.
+
+        Returns:
+            str: A formatted UTC offset.
+
+        Raises:
+            OffsetFormattingError: If `utc_z` is `True` and `is_utc`
+                is not specified.
+        """
+        if utc_z:
+            if is_utc is None:
+                raise OffsetFormattingError(
+                    'Specify whether the `datetime` object is UTC-based.'
+                )
+            if is_utc:
+                return dt.strftime(self.safe_substitute({'z': 'Z', ':z': 'Z'}))
+
+        return dt.strftime(self.template)
+
+
 @total_ordering
 class Timestamp:
     """Represents a timestamp whose time zone is identified by an IANA
@@ -149,11 +195,17 @@ class Timestamp:
     """
 
     _UTC: zoneinfo.ZoneInfo = zoneinfo.ZoneInfo('Etc/UTC')
+    _UTC_IANA_NAMES: tuple[str, ...] = (
+        'Etc/UCT', 'Etc/UTC', 'Etc/Universal', 'Etc/Zulu',
+        'UCT', 'UTC', 'Universal', 'Zulu'
+    )
 
     _STR_FORMAT: str = '%Y.%m.%d %H:%M:%S.%f %:z %Z'
     _ISO_DATE_SPEC: str = '%Y-%m-%d'
     _DEFAULT_ISO_TIME_SPEC: TimeSpec = TimeSpec.MICROSECONDS
     _AUTO_ISO_TIME_SPEC: TimeSpec | None = TimeSpec.MINUTES
+    _ISO_OFFSET_SPEC: str = '%:z'
+    _ISO_UTC_OFFSET_Z: bool = True
 
     _dt: datetime.datetime
 
@@ -444,6 +496,24 @@ class Timestamp:
                 spec = self._DEFAULT_ISO_TIME_SPEC
         iso_str = TimeStrTemplate(spec.value).format(t, midnight24)
         return iso_str
+
+    def offset_iso(self) -> str:
+        """Return a string representing the UTC offset of the timestamp
+        in the ISO 8601 format.
+
+        If the timestamp's time zone is one of the UTC aliases defined
+        in `_UTC_IANA_NAMES` and `_ISO_UTC_OFFSET_Z` is `True`,
+        the offset is formatted as 'Z'.
+
+        Returns:
+            str: An ISO 8601 offset string.
+        """
+        return OffsetStrTemplate(self._ISO_OFFSET_SPEC).format(
+            self._dt,
+            cast(zoneinfo.ZoneInfo, self._dt.tzinfo).key
+                in self._UTC_IANA_NAMES,
+            self._ISO_UTC_OFFSET_Z
+        )
 
     def iso(self) -> str:
         """Return a string representing the timestamp in ISO 8601

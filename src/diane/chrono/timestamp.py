@@ -206,6 +206,7 @@ class Timestamp:
     _AUTO_ISO_TIME_SPEC: TimeSpec | None = TimeSpec.MINUTES
     _ISO_OFFSET_SPEC: str = '%:z'
     _ISO_UTC_OFFSET_Z: bool = True
+    _ISO_SEP: str = 'T'
 
     _dt: datetime.datetime
 
@@ -515,14 +516,34 @@ class Timestamp:
             self._ISO_UTC_OFFSET_Z
         )
 
-    def iso(self) -> str:
+    def iso(
+        self,
+        time_spec: TimeSpec | None = None,
+        midnight24: bool = False
+    ) -> str:
         """Return a string representing the timestamp in ISO 8601
         format.
 
+        Args:
+            time_spec (TimeSpec | None): A time specification.
+                If `None`, selects the specification automatically
+                according to `_AUTO_ISO_TIME_SPEC` and the precision
+                of the timestamp.
+            midnight24 (bool): If `True`, represents midnight as '24:00'
+                of the previous day. `False` by default.
+
         Returns:
             str: An ISO 8601 string.
+
+        Raises:
+            DateFormattingError: If the date could not be formatted
+                (e.g., rolling back to the previous day would exceed
+                `datetime.date.min`).
         """
-        return self._dt.isoformat()
+        d_str = self.date_iso(midnight24)
+        t_str = self.time_iso(time_spec, midnight24)
+        o_str = self.offset_iso()
+        return f'{d_str}{self._ISO_SEP}{t_str}{o_str}'
 
     @property
     def iana(self) -> str:

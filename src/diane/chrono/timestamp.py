@@ -119,7 +119,7 @@ class TimeStrTemplate(Template):
         The template can represent midnight as '24:00' when requested.
 
         Args:
-            dt (datetime.time): A `time` object.
+            t (datetime.time): A `time` object.
             midnight24 (bool): If `True` and the `time` object refers
                 to midnight, replaces '%H' with '24'.
 

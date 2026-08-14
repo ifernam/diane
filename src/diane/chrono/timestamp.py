@@ -472,10 +472,9 @@ class Timestamp:
 
         Args:
             spec (TimeSpec | None): A time specification. If `None`,
-                select the specification automatically according
+                selects the specification automatically according
                 to `_AUTO_ISO_TIME_SPEC` and the precision
                 of the timestamp.
-
             midnight24 (bool): If `True`, represents midnight as '24:00'
                 rather than '00:00'. `False` by default.
 

@@ -5,7 +5,7 @@ import zoneinfo
 from enum import Enum
 from functools import total_ordering
 from string import Template
-from typing import ClassVar, cast, override
+from typing import ClassVar, cast, overload, override
 
 
 class TimeError(Exception):
@@ -480,6 +480,47 @@ class Timestamp:
                     f"Failed to shift '{self}' by '{other}'."
                 ) from exc
             return Timestamp(dt_shifted)
+
+        return NotImplemented
+
+    @overload
+    def __sub__(self, other: datetime.timedelta) -> Timestamp:
+        ...
+
+    @overload
+    def __sub__(self, other: Timestamp) -> datetime.timedelta:
+        ...
+
+    def __sub__(self, other: object) -> Timestamp | datetime.timedelta:
+        """Shift the timestamp by a time decrement or return
+        the difference between two timestamps.
+
+        - The shift operation is implemented using `__add__`.
+        - The difference is calculated by comparing the underlying UTC
+          instants.
+
+        Args:
+            other (object): A time decrement for shifting
+                (e.g. `datetime.timedelta`), or another timestamp for
+                calculating the difference.
+
+        Returns:
+            Timestamp: A shifted timestamp when `other`
+                is a `timedelta`.
+            datetime.timedelta: The difference between two timestamps
+                when `other` is a `Timestamp`.
+
+        Raises:
+            ShiftError: If the timestamp could not be shifted
+                by a decrement.
+        """
+        if isinstance(other, datetime.timedelta):
+            return self + -other
+
+        if isinstance(other, Timestamp):
+            self_dt_utc = self._dt.astimezone(self._UTC)
+            other_dt_utc = other._dt.astimezone(self._UTC)
+            return self_dt_utc - other_dt_utc
 
         return NotImplemented
 

@@ -18,7 +18,7 @@ class ValidationError(TimeError):
     ...
 
 
-class InvalidTimezoneError(ValidationError):
+class InvalidTimezoneError(TimeError):
     """An invalid time zone."""
     ...
 

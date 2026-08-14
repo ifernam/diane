@@ -33,6 +33,11 @@ class InvalidISOFormatError(TimeError):
     ...
 
 
+class ShiftError(TimeError):
+    """Failed to shift a timestamp."""
+    ...
+
+
 class DateFormattingError(TimeError):
     """A date formatting error."""
     ...
@@ -441,6 +446,40 @@ class Timestamp:
             except TypeError:
                 # The `other` `datetime` object is naive.
                 return NotImplemented
+
+        return NotImplemented
+
+    def __add__(self, other: object) -> Timestamp:
+        """Shift the timestamp by a provided increment.
+
+        The increment is applied to the underlying UTC instant, not
+        to the local wall-clock fields. This guarantees the result
+        is always a real, existing local time (never a DST gap), but
+        means the local time-of-day is not preserved across a DST
+        transition (e.g. adding `timedelta(days=1)` may land
+        on a different wall-clock hour than the original).
+
+        Args:
+            other (object): A time increment
+                (e.g. `datetime.timedelta`).
+
+        Returns:
+            Timestamp: A shifted timestamp.
+
+        Raises:
+            ShiftError: If the timestamp could not be shifted
+                by an increment.
+        """
+        if isinstance(other, datetime.timedelta):
+            dt_utc = self._dt.astimezone(self._UTC)
+            try:
+                dt_utc_shifted = dt_utc + other
+                dt_shifted = dt_utc_shifted.astimezone(self._dt.tzinfo)
+            except OverflowError as exc:
+                raise ShiftError(
+                    f"Failed to shift '{self}' by '{other}'."
+                ) from exc
+            return Timestamp(dt_shifted)
 
         return NotImplemented
 

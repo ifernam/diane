@@ -450,7 +450,7 @@ class Timestamp:
         return NotImplemented
 
     def __add__(self, other: object) -> Timestamp:
-        """Shift the timestamp by a provided increment.
+        """Shift the timestamp by a time increment.
 
         The increment is applied to the underlying UTC instant, not
         to the local wall-clock fields. This guarantees the result

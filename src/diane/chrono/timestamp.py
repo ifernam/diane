@@ -155,7 +155,8 @@ class OffsetStrTemplate(Template):
         self,
         dt: datetime.datetime,
         is_utc: bool | None = None,
-        utc_z: bool = True
+        utc_z: bool = True,
+        iana_timezone: str | None = None
     ) -> str:
         """Format the UTC offset of a `datetime` object according
         to a specified template.
@@ -166,6 +167,8 @@ class OffsetStrTemplate(Template):
                 is treated as UTC-based.
             utc_z (bool): If `True`, the UTC offset is represented
                 as 'Z'.
+            iana_timezone (str): An IANA time zone name to substitute
+                for '%iana', if present in the template. Optional.
 
         Returns:
             str: A formatted UTC offset.
@@ -174,15 +177,20 @@ class OffsetStrTemplate(Template):
             OffsetFormattingError: If `utc_z` is `True` and `is_utc`
                 is not specified.
         """
+        substitutions: dict[str, str] = {}
+
         if utc_z:
             if is_utc is None:
                 raise OffsetFormattingError(
                     'Specify whether the `datetime` object is UTC-based.'
                 )
             if is_utc:
-                return dt.strftime(self.safe_substitute({'z': 'Z', ':z': 'Z'}))
+                substitutions |= {'z': 'Z', ':z': 'Z'}
 
-        return dt.strftime(self.template)
+        if iana_timezone is not None:
+            substitutions |= {'iana': iana_timezone}
+
+        return dt.strftime(self.safe_substitute(substitutions))
 
 
 @total_ordering
@@ -205,13 +213,21 @@ class Timestamp:
         'UCT', 'UTC', 'Universal', 'Zulu'
     )
 
-    _STR_FORMAT: str = '%Y.%m.%d %H:%M:%S.%f %:z %Z'
+    _READABLE_DATE_SPEC: str = '%Y.%m.%d'
+    _DEFAULT_READABLE_TIME_SPEC: TimeSpec = TimeSpec.MINUTES
+    _AUTO_READABLE_TIME_SPEC: TimeSpec | None = TimeSpec.MINUTES
+    _READABLE_OFFSET_SPEC: str = 'UTC%:z'  # Supports '%iana'.
+    _READABLE_UTC_OFFSET_Z: bool = False
+    _READABLE_SEP: str = ' '
+    _READABLE_OFFSET_SEP: str = ' '
+
     _ISO_DATE_SPEC: str = '%Y-%m-%d'
     _DEFAULT_ISO_TIME_SPEC: TimeSpec = TimeSpec.MICROSECONDS
     _AUTO_ISO_TIME_SPEC: TimeSpec | None = TimeSpec.MINUTES
     _ISO_OFFSET_SPEC: str = '%:z'
     _ISO_UTC_OFFSET_Z: bool = True
     _ISO_SEP: str = 'T'
+    _ISO_OFFSET_SEP: str = ''
 
     _dt: datetime.datetime
 
@@ -394,13 +410,10 @@ class Timestamp:
         """Return a human-readable string representation
         of the timestamp.
 
-        The output format is specified by the class variable
-        `_STR_FORMAT`.
-
         Returns:
             str: A human-readable representation of the timestamp.
         """
-        return self._dt.strftime(self._STR_FORMAT)
+        return self.readable()
 
     @override
     def __eq__(self, other: object) -> bool:
@@ -544,6 +557,66 @@ class Timestamp:
         dt = self._dt
         return template.format(dt.date(), dt.time(), midnight24)
 
+    def date_readable(self, midnight24: bool = False) -> str:
+        """Return a string representing the date of the timestamp
+        in the human-readable format.
+
+        Args:
+            midnight24 (bool): If `True`, midnight is considered
+                to be part of the previous day. `False` by default.
+
+        Returns:
+            str: A human-readable date string.
+
+        Raises:
+            DateFormattingError: If the date could not be formatted
+                (e.g., rolling back to the previous day would exceed
+                `datetime.date.min`).
+        """
+        template = DateStrTemplate(self._READABLE_DATE_SPEC)
+        dt = self._dt
+        return template.format(dt.date(), dt.time(), midnight24)
+
+    def _time_str(
+        self,
+        default_spec: TimeSpec,
+        auto_spec: TimeSpec | None,
+        spec: TimeSpec | None = None,
+        midnight24: bool = False
+    ) -> str:
+        """Return a string representing the time of the timestamp
+        according to a given specification.
+
+        Args:
+            default_spec (TimeSpec): A default specification. Used
+                if `spec` and `auto_spec` are not specified.
+            auto_spec (TimeSpec | None): Defines a minimal precision
+                for the string representation of the timestamp.
+            spec (TimeSpec | None): A time specification. If `None`,
+                selects the specification automatically according
+                to `auto_spec` and the precision of the timestamp.
+            midnight24 (bool): If `True`, represents midnight as '24:00'
+                rather than '00:00'. `False` by default.
+
+        Returns:
+            str: A string representation of the timestamp.
+        """
+        t = self._dt.time()
+        if spec is None:
+            if auto_spec is not None:
+                if t.microsecond or auto_spec is TimeSpec.MICROSECONDS:
+                    spec = TimeSpec.MICROSECONDS
+                elif t.second or auto_spec is TimeSpec.SECONDS:
+                    spec = TimeSpec.SECONDS
+                elif t.minute or auto_spec is TimeSpec.MINUTES:
+                    spec = TimeSpec.MINUTES
+                else:
+                    spec = TimeSpec.HOURS
+            else:
+                spec = default_spec
+        iso_str = TimeStrTemplate(spec.value).format(t, midnight24)
+        return iso_str
+
     def time_iso(
         self, spec: TimeSpec | None = None, midnight24: bool = False
     ) -> str:
@@ -561,21 +634,32 @@ class Timestamp:
         Returns:
             str: An ISO 8601 time string.
         """
-        t = self._dt.time()
-        if spec is None:
-            if (auto_spec := self._AUTO_ISO_TIME_SPEC) is not None:
-                if t.microsecond or auto_spec is TimeSpec.MICROSECONDS:
-                    spec = TimeSpec.MICROSECONDS
-                elif t.second or auto_spec is TimeSpec.SECONDS:
-                    spec = TimeSpec.SECONDS
-                elif t.minute or auto_spec is TimeSpec.MINUTES:
-                    spec = TimeSpec.MINUTES
-                else:
-                    spec = TimeSpec.HOURS
-            else:
-                spec = self._DEFAULT_ISO_TIME_SPEC
-        iso_str = TimeStrTemplate(spec.value).format(t, midnight24)
-        return iso_str
+        return self._time_str(
+            self._DEFAULT_ISO_TIME_SPEC, self._AUTO_ISO_TIME_SPEC,
+            spec, midnight24
+        )
+
+    def time_readable(
+        self, spec: TimeSpec | None = None, midnight24: bool = False
+    ) -> str:
+        """Return a string representing the time of the timestamp
+        in the human-readable format.
+
+        Args:
+            spec (TimeSpec | None): A time specification. If `None`,
+                selects the specification automatically according
+                to `_AUTO_READABLE_TIME_SPEC` and the precision
+                of the timestamp.
+            midnight24 (bool): If `True`, represents midnight as '24:00'
+                rather than '00:00'. `False` by default.
+
+        Returns:
+            str: A human-readable time string.
+        """
+        return self._time_str(
+            self._DEFAULT_READABLE_TIME_SPEC, self._AUTO_READABLE_TIME_SPEC,
+            spec, midnight24
+        )
 
     def offset_iso(self) -> str:
         """Return a string representing the UTC offset of the timestamp
@@ -593,6 +677,21 @@ class Timestamp:
             cast(zoneinfo.ZoneInfo, self._dt.tzinfo).key
                 in self._UTC_IANA_NAMES,
             self._ISO_UTC_OFFSET_Z
+        )
+
+    def offset_readable(self) -> str:
+        """Return a string representing the UTC offset of the timestamp
+        in the human-readable format.
+
+        Returns:
+            str: A human-readable offset string.
+        """
+        iana_timezone = cast(zoneinfo.ZoneInfo, self._dt.tzinfo).key
+        return OffsetStrTemplate(self._READABLE_OFFSET_SPEC).format(
+            self._dt,
+            iana_timezone in self._UTC_IANA_NAMES,
+            self._READABLE_UTC_OFFSET_Z,
+            iana_timezone
         )
 
     def iso(
@@ -622,7 +721,39 @@ class Timestamp:
         d_str = self.date_iso(midnight24)
         t_str = self.time_iso(time_spec, midnight24)
         o_str = self.offset_iso()
-        return f'{d_str}{self._ISO_SEP}{t_str}{o_str}'
+        return f'{d_str}{self._ISO_SEP}{t_str}{self._ISO_OFFSET_SEP}{o_str}'
+
+    def readable(
+        self,
+        time_spec: TimeSpec | None = None,
+        midnight24: bool = False
+    ) -> str:
+        """Return a string representing the timestamp
+        in the human-readable format.
+
+        Args:
+            time_spec (TimeSpec | None): A time specification.
+                If `None`, selects the specification automatically
+                according to `_AUTO_READABLE_TIME_SPEC` and
+                the precision of the timestamp.
+            midnight24 (bool): If `True`, represents midnight as '24:00'
+                of the previous day. `False` by default.
+
+        Returns:
+            str: A human-readable timestamp representation.
+
+        Raises:
+            DateFormattingError: If the date could not be formatted
+                (e.g., rolling back to the previous day would exceed
+                `datetime.date.min`).
+        """
+        d_str = self.date_readable(midnight24)
+        t_str = self.time_readable(time_spec, midnight24)
+        o_str = self.offset_readable()
+        return (
+            f'{d_str}{self._READABLE_SEP}{t_str}'
+            f'{self._READABLE_OFFSET_SEP}{o_str}'
+        )
 
     @property
     def iana(self) -> str:

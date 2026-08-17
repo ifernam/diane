@@ -15,6 +15,11 @@ class NormalisationError(TimeIntervalSetError):
     ...
 
 
+class UndefinedEndpointError(TimeIntervalSetError):
+    """An endpoint of a time interval set is undefined."""
+    ...
+
+
 class TimeIntervalSet:
     """Represents a finite bounded disjoint union of time intervals.
 
@@ -218,3 +223,35 @@ class TimeIntervalSet:
             bool: `True` if the time interval set is empty.
         """
         return self._interval_set.empty
+
+    @property
+    def start(self) -> Timestamp:
+        """Return the start of the time interval set.
+
+        Returns:
+            Timestamp: The start of the time interval set.
+
+        Raises:
+            UndefinedEndpointError: If the time interval set is empty.
+        """
+        if self.is_empty:
+            raise UndefinedEndpointError(
+                'An empty time interval set has no defined left endpoint.'
+            )
+        return self._interval_set.lower
+
+    @property
+    def end(self) -> Timestamp:
+        """Return the end of the time interval set.
+
+        Returns:
+            Timestamp: The end of the time interval set.
+
+        Raises:
+            UndefinedEndpointError: If the time interval set is empty.
+        """
+        if self.is_empty:
+            raise UndefinedEndpointError(
+                'An empty time interval set has no defined right endpoint.'
+            )
+        return self._interval_set.upper

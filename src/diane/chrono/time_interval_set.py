@@ -209,3 +209,12 @@ class TimeIntervalSet:
             return TimeIntervalSet(self._interval_set - other._interval_set)
 
         return NotImplemented
+
+    @property
+    def is_empty(self) -> bool:
+        """Check whether the time interval set is empty.
+
+        Returns:
+            bool: `True` if the time interval set is empty.
+        """
+        return self._interval_set.empty

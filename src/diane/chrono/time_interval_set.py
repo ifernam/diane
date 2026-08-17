@@ -149,3 +149,63 @@ class TimeIntervalSet:
             TimeIntervalSet: An open-closed time interval.
         """
         return cls(portion.openclosed(start, end))
+
+    def __and__(self, other: object) -> TimeIntervalSet:
+        """Return the intersection of this time interval set and
+        another temporal object.
+
+        Args:
+            other (object): A temporal object (e.g. `TimeIntervalSet`)
+                to intersect with.
+
+        Returns:
+            TimeIntervalSet: The intersection.
+
+        Raises:
+            NormalisationError: If failed to normalise a time interval
+                set.
+        """
+        if isinstance(other, TimeIntervalSet):
+            return TimeIntervalSet(self._interval_set & other._interval_set)
+
+        return NotImplemented
+
+    def __or__(self, other: object) -> TimeIntervalSet:
+        """Return the union of this time interval set and another
+        temporal object.
+
+        Args:
+            other (object): A temporal object (e.g. `TimeIntervalSet`)
+                to unite with.
+
+        Returns:
+            TimeIntervalSet: The union.
+
+        Raises:
+            NormalisationError: If failed to normalise a time interval
+                set.
+        """
+        if isinstance(other, TimeIntervalSet):
+            return TimeIntervalSet(self._interval_set | other._interval_set)
+
+        return NotImplemented
+
+    def __sub__(self, other: object) -> TimeIntervalSet:
+        """Return the difference between this time interval set and
+        another temporal object.
+
+        Args:
+            other (object): A temporal object (e.g. `TimeIntervalSet`)
+                to be subtracted.
+
+        Returns:
+            TimeIntervalSet: The difference.
+
+        Raises:
+            NormalisationError: If failed to normalise a time interval
+                set.
+        """
+        if isinstance(other, TimeIntervalSet):
+            return TimeIntervalSet(self._interval_set - other._interval_set)
+
+        return NotImplemented

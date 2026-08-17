@@ -201,10 +201,6 @@ class Timestamp:
     Attributes:
         _dt (datetime.datetime): An aware `datetime` object with
             a `ZoneInfo` time zone.
-
-    Args:
-        dt (datetime.datetime): An aware `datetime` object with
-            a `ZoneInfo` time zone.
     """
 
     _UTC: zoneinfo.ZoneInfo = zoneinfo.ZoneInfo('Etc/UTC')
@@ -599,7 +595,7 @@ class Timestamp:
                 rather than '00:00'. `False` by default.
 
         Returns:
-            str: A string representation of the timestamp.
+            str: A string representation of the time of the timestamp.
         """
         t = self._dt.time()
         if spec is None:
@@ -699,7 +695,7 @@ class Timestamp:
         time_spec: TimeSpec | None = None,
         midnight24: bool = False
     ) -> str:
-        """Return a string representing the timestamp in ISO 8601
+        """Return a string representing the timestamp in the ISO 8601
         format.
 
         Args:

@@ -225,6 +225,19 @@ class TimeIntervalSet:
         return self._interval_set.empty
 
     @property
+    def is_connected(self) -> bool:
+        """Check whether the time interval set is connected.
+
+        A time interval set is connected if it has no more than one
+        connected component in the topological sense. An empty time
+        interval set is considered to be connected.
+
+        Returns:
+            bool: `True` if the time interval set is connected.
+        """
+        return self._interval_set.atomic
+
+    @property
     def start(self) -> Timestamp:
         """Return the start of the time interval set.
 

@@ -181,6 +181,24 @@ class TimeIntervalSet:
         """
         yield from (TimeIntervalSet(c) for c in self._interval_set)
 
+    def __contains__(self, item: object) -> bool:
+        """Test if a given item is contained in this time interval set.
+
+        Args:
+            item (object): A comparable object (e.g. `Timestamp`,
+                `TimeIntervalSet`).
+
+        Returns:
+            bool: `True` if contained.
+        """
+        if isinstance(item, Timestamp):
+            return item in self._interval_set
+
+        if isinstance(item, TimeIntervalSet):
+            return item._interval_set in self._interval_set
+
+        return False
+
     def __and__(self, other: object) -> TimeIntervalSet:
         """Return the intersection of this time interval set and
         another temporal object.

@@ -255,3 +255,35 @@ class TimeIntervalSet:
                 'An empty time interval set has no defined right endpoint.'
             )
         return self._interval_set.upper
+
+    @property
+    def is_start_included(self) -> bool:
+        """Check whether the start is included in the time interval set.
+
+        Returns:
+            bool: `True` if the start is included.
+
+        Raises:
+            UndefinedEndpointError: If the time interval set is empty.
+        """
+        if self.is_empty:
+            raise UndefinedEndpointError(
+                'An empty time interval set has no defined start inclusion.'
+            )
+        return self._interval_set.left == portion.CLOSED
+
+    @property
+    def is_end_included(self) -> bool:
+        """Check whether the end is included in the time interval set.
+
+        Returns:
+            bool: `True` if the end is included.
+
+        Raises:
+            UndefinedEndpointError: If the time interval set is empty.
+        """
+        if self.is_empty:
+            raise UndefinedEndpointError(
+                'An empty time interval set has no defined end inclusion.'
+            )
+        return self._interval_set.right == portion.CLOSED

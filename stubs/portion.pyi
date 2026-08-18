@@ -1,4 +1,4 @@
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from enum import Enum
 
 class Bound(Enum):
@@ -46,3 +46,17 @@ def openclosed[T](lower: T, upper: T) -> Interval[T]: ...
 def closedopen[T](lower: T, upper: T) -> Interval[T]: ...
 def singleton[T](value: T) -> Interval[T]: ...
 def empty[T]() -> Interval[T]: ...
+
+def to_string[T](
+    interval: Interval[T],
+    conv: Callable[[T], str] = repr,
+    *,
+    disj: str = ' | ',
+    sep: str = ',',
+    left_open: str = '(',
+    left_closed: str = '[',
+    right_open: str = ')',
+    right_closed: str = ']',
+    pinf: str = '+inf',
+    ninf: str = '-inf'
+) -> str: ...

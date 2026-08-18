@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import override
+
 import portion
 
 from diane.chrono.timestamp import Timestamp, TimezoneConversionError
@@ -154,6 +156,19 @@ class TimeIntervalSet:
             TimeIntervalSet: An open-closed time interval.
         """
         return cls(portion.openclosed(start, end))
+
+    @override
+    def __str__(self) -> str:
+        """Return a human-readable representation of the time interval
+        set.
+
+        Returns:
+            str: A string representation of the time interval set.
+        """
+        if self.is_empty:
+            return '∅'
+
+        return portion.to_string(self._interval_set, str, disj=' ⊔ ', sep=', ')
 
     def __and__(self, other: object) -> TimeIntervalSet:
         """Return the intersection of this time interval set and

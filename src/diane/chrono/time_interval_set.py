@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import override
 
 import portion
@@ -169,6 +170,16 @@ class TimeIntervalSet:
             return '∅'
 
         return portion.to_string(self._interval_set, str, disj=' ⊔ ', sep=', ')
+
+    def __iter__(self) -> Iterator[TimeIntervalSet]:
+        """Iterate over the connected components of the time interval
+        set, in ascending order.
+
+        Yields:
+            TimeIntervalSet: Each connected component, as a single-
+                component time interval set.
+        """
+        yield from (TimeIntervalSet(c) for c in self._interval_set)
 
     def __and__(self, other: object) -> TimeIntervalSet:
         """Return the intersection of this time interval set and

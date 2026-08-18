@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 from collections.abc import Iterator
 from typing import override
 
@@ -344,3 +345,14 @@ class TimeIntervalSet:
                 'An empty time interval set has no defined end inclusion.'
             )
         return self._interval_set.right == portion.CLOSED
+
+    @property
+    def duration(self) -> datetime.timedelta:
+        """Return the total duration of the time interval set.
+
+        For an empty time interval set returns zero.
+
+        Returns:
+            datetime.timedelta: The duration of the time interval set.
+        """
+        return sum((c.end - c.start for c in self), start=datetime.timedelta())

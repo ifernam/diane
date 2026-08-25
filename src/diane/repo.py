@@ -4,6 +4,11 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings
 
+from diane.storage import (
+    MarkdownActivitiesRegisterConfig,
+    MarkdownSessionsRegisterConfig,
+)
+
 
 class RepositoryError(Exception):
     """A general repository error."""
@@ -37,29 +42,18 @@ class RepositoryConfig(BaseSettings):
 
     Attributes:
         name (str): A repository's name.
-        activities_subdir (Path): A subdirectory within a repository's
-            directory where activity notes are stored. For example,
-            'diane_activities'.
         fallback_activity_emoji (str): The fallback activity's Unicode
             emoji. For example, '⚫'.
-        daily_notes_subdir (Path): A subdirectory within a repository's
-            directory where daily notes are stored. For example,
-            'daily_notes'.
-        daily_note_name_format (str): A daily note's name `strftime`
-            format. For example, '%Y-%m-%d'.
-        daily_note_template_path (Path | None): An optional relative
-            path to a daily note's template in a repository.
-            For example, 'templates/daily_note_template'.
+        activities_register (MarkdownActivitiesRegisterConfig):
+            An activities register configuration.
+        sessions_register (MarkdownSessionsRegisterConfig): A sessions
+            register configuration.
     """
 
     name: str = 'Repository'
-
-    activities_subdir: Path = Path('diane_activities')
     fallback_activity_emoji: str = '⚫'
-
-    daily_notes_subdir: Path = Path('daily_notes')
-    daily_note_name_format: str = '%Y-%m-%d'
-    daily_note_template_path: Path | None = None
+    activities_register: MarkdownActivitiesRegisterConfig
+    sessions_register: MarkdownSessionsRegisterConfig
 
 
 class Repository:

@@ -15,7 +15,9 @@ class MarkdownActivitiesRegisterConfig(ActivitiesRegisterConfig):
     path: Path = Path('diane_activities')
 
 
-class MarkdownActivitiesRegister(ActivitiesRegister):
+class MarkdownActivitiesRegister(
+    ActivitiesRegister[MarkdownActivitiesRegisterConfig]
+):
     """Represents a Markdown activities register.
 
     Enables to work with activities that are stored in Markdown notes.

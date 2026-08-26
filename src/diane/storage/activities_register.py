@@ -16,7 +16,9 @@ class ActivitiesRegisterConfig(BaseModel):
     path: Path
 
 
-class ActivitiesRegister(MutableMapping[str, Activity], ABC):
+class ActivitiesRegister[ConfigT: ActivitiesRegisterConfig](
+    MutableMapping[str, Activity], ABC
+):
     """Represents an activities register.
 
     This abstraction enables activities stored on disk to be worked
@@ -30,10 +32,8 @@ class ActivitiesRegister(MutableMapping[str, Activity], ABC):
     """
 
     _storage_path: Path
-    _config: ActivitiesRegisterConfig
+    _config: ConfigT
 
-    def __init__(
-        self, storage_path: Path, config: ActivitiesRegisterConfig
-    ) -> None:
+    def __init__(self, storage_path: Path, config: ConfigT) -> None:
         self._storage_path = storage_path
         self._config = config

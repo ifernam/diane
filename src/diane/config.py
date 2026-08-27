@@ -8,7 +8,7 @@ from pydantic_settings import TomlConfigSettingsSource
 
 from diane.app_session import AppConfig, AppSession
 from diane.chrono import Timestamp
-from diane.repo import Repository, RepositoryConfig
+from diane.repo import NoRepositoryFoundError, Repository, RepositoryConfig
 
 
 class ConfigurationError(Exception):
@@ -129,6 +129,9 @@ class Configurator:
             repo: A repository to initialise.
 
         Raises:
+            NoRepositoryFoundError: If no repository has been found.
+                The presence of a Diane subdirectory indicates
+                the existence of a repository.
             AppNotInitialisedError: If a programme session has not been
                 initialised.
             ConfigurationParseError: If a repository configuration TOML
@@ -140,7 +143,11 @@ class Configurator:
             RepositoryAlreadyInitialisedError: If a repository has
                 already been initialised.
         """
-        config_path = repo.path / repo.diane_subdir / 'config.toml'
+        if not repo.diane_subdir.is_dir():
+            raise NoRepositoryFoundError(
+                f"No repository has been found at '{repo.path}'."
+            )
+        config_path = repo.diane_subdir / 'config.toml'
 
         # Start with the defaults from the application configuration.
         config_data = app_session.config.repo_defaults.model_dump()

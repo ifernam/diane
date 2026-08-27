@@ -15,6 +15,11 @@ class RepositoryError(Exception):
     ...
 
 
+class NoRepositoryFoundError(RepositoryError):
+    """No repository has been found."""
+    ...
+
+
 class RepositoryNotInitialisedError(RepositoryError):
     """A repository has not been initialised."""
 

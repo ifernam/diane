@@ -1,6 +1,6 @@
 from collections.abc import Iterator
 from pathlib import Path
-from typing import override
+from typing import Literal, override
 
 from diane.activity import Activity
 from diane.storage.activities_register import (
@@ -12,6 +12,7 @@ from diane.storage.activities_register import (
 class MarkdownActivitiesRegisterConfig(ActivitiesRegisterConfig):
     """A Markdown activities register configuration."""
 
+    backend: Literal['markdown'] = 'markdown'
     path: Path = Path('diane_activities')
 
 

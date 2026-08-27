@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Literal
 
 from diane.storage.sessions_register import SessionsRegisterConfig
 
@@ -14,6 +15,7 @@ class MarkdownSessionsRegisterConfig(SessionsRegisterConfig):
             For example, 'templates/daily_note_template'.
     """
 
+    backend: Literal['markdown'] = 'markdown'
     path: Path = Path('daily_notes')
     daily_note_name_format: str = '%Y-%m-%d'
     daily_note_template_path: Path | None = None

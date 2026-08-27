@@ -5,8 +5,8 @@ from pathlib import Path
 from pydantic_settings import BaseSettings
 
 from diane.storage import (
-    MarkdownActivitiesRegisterConfig,
-    MarkdownSessionsRegisterConfig,
+    ActivitiesRegisterConfigUnion,
+    SessionsRegisterConfigUnion,
 )
 
 
@@ -49,16 +49,16 @@ class RepositoryConfig(BaseSettings):
         name (str): A repository's name.
         fallback_activity_emoji (str): The fallback activity's Unicode
             emoji. For example, '⚫'.
-        activities_register (MarkdownActivitiesRegisterConfig):
+        activities_register (ActivitiesRegisterConfigUnion):
             An activities register configuration.
-        sessions_register (MarkdownSessionsRegisterConfig): A sessions
+        sessions_register (SessionsRegisterConfigUnion): A sessions
             register configuration.
     """
 
     name: str = 'Repository'
     fallback_activity_emoji: str = '⚫'
-    activities_register: MarkdownActivitiesRegisterConfig
-    sessions_register: MarkdownSessionsRegisterConfig
+    activities_register: ActivitiesRegisterConfigUnion
+    sessions_register: SessionsRegisterConfigUnion
 
 
 class Repository:

@@ -1,5 +1,5 @@
 from collections.abc import Iterator
-from typing import override
+from typing import Literal, override
 
 from diane.activity import Activity
 from diane.storage.activities_register import (
@@ -10,7 +10,8 @@ from diane.storage.activities_register import (
 
 class SQLiteActivitiesRegisterConfig(ActivitiesRegisterConfig):
     """An SQLite activities register configuration."""
-    ...
+
+    backend: Literal['sqlite'] = 'sqlite'
 
 
 class SQLiteActivitiesRegister(

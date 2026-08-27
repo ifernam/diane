@@ -1,3 +1,7 @@
+from typing import Annotated
+
+from pydantic import Field
+
 from .activities_register import ActivitiesRegister, ActivitiesRegisterConfig
 from .markdown_activities_register import (
     MarkdownActivitiesRegister,
@@ -11,6 +15,16 @@ from .sqlite_activities_register import (
 )
 from .sqlite_sessions_register import SQLiteSessionsRegisterConfig
 
+ActivitiesRegisterConfigUnion = Annotated[
+    MarkdownActivitiesRegisterConfig | SQLiteActivitiesRegisterConfig,
+    Field(discriminator='backend'),
+]
+
+SessionsRegisterConfigUnion = Annotated[
+    MarkdownSessionsRegisterConfig | SQLiteSessionsRegisterConfig,
+    Field(discriminator='backend'),
+]
+
 __all__ = [
     'ActivitiesRegister',
     'ActivitiesRegisterConfig',
@@ -21,4 +35,6 @@ __all__ = [
     'SQLiteActivitiesRegister',
     'SQLiteActivitiesRegisterConfig',
     'SQLiteSessionsRegisterConfig',
+    'ActivitiesRegisterConfigUnion',
+    'SessionsRegisterConfigUnion',
 ]

@@ -143,11 +143,11 @@ class Configurator:
             RepositoryAlreadyInitialisedError: If a repository has
                 already been initialised.
         """
-        if not repo.diane_subdir.is_dir():
+        if not repo.diane_dir.is_dir():
             raise NoRepositoryFoundError(
                 f"No repository has been found at '{repo.path}'."
             )
-        config_path = repo.diane_subdir / 'config.toml'
+        config_path = repo.diane_dir / 'config.toml'
 
         # Start with the defaults from the application configuration.
         config_data = app_session.config.repo_defaults.model_dump()

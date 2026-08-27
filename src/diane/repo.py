@@ -110,7 +110,7 @@ class Repository:
         self._config = config
 
     @property
-    def diane_subdir(self) -> Path:
+    def diane_dir(self) -> Path:
         """Return the Diane directory of the repository.
 
         This directory contains the repository's metadata.

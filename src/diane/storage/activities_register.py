@@ -11,8 +11,9 @@ class ActivitiesRegisterConfig(BaseModel):
     """An activities register configuration.
 
     Attributes:
-        path (Path): A relative path where activity notes are stored.
+        path (Path): A relative path where activities are stored.
     """
+
     path: Path
 
 

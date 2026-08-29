@@ -37,3 +37,12 @@ class ActivitiesRegister[ConfigT: ActivitiesRegisterConfig](
     def __init__(self, storage_path: Path, config: ConfigT) -> None:
         self._storage_path = storage_path
         self._config = config
+
+    @property
+    def path(self) -> Path:
+        """Return the path to the activities register.
+
+        Returns:
+            Path: The path to the activities register.
+        """
+        return self._storage_path / self._config.path

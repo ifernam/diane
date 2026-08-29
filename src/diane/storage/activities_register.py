@@ -36,6 +36,13 @@ class ActivitiesRegister[ConfigT: ActivitiesRegisterConfig](
     _config: ConfigT
 
     def __init__(self, storage_path: Path, config: ConfigT) -> None:
+        """Create a new activities register representation.
+
+        Args:
+            storage_path (Path): A path to an activities and sessions
+                storage.
+            config (ConfigT): An activities register configuration.
+        """
         self._storage_path = storage_path
         self._config = config
 

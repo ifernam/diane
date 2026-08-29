@@ -28,8 +28,7 @@ class ActivitiesRegister[ConfigT: ActivitiesRegisterConfig](
     Attributes:
         _storage_path (Path): A path to an activities and sessions
             storage.
-        _config (ActivitiesRegisterConfig): An activities register
-            configuration.
+        _config (ConfigT): An activities register configuration.
     """
 
     _storage_path: Path

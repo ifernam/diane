@@ -26,7 +26,15 @@ class MarkdownActivitiesRegister(
 
     @override
     def __iter__(self) -> Iterator[str]:
-        raise NotImplementedError
+        """Iterate over activity slugs in the register, in alphabetical
+        order.
+
+        Yields:
+            str: An activity slug.
+        """
+        for p in sorted(self.path.glob('*.md')):
+            if p.is_file():
+                yield p.stem
 
     @override
     def __len__(self) -> int:

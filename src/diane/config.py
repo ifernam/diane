@@ -1,6 +1,7 @@
 import datetime
 import tomllib
 import zoneinfo
+from typing import assert_never
 
 import tzlocal
 from pydantic import ValidationError
@@ -9,6 +10,13 @@ from pydantic_settings import TomlConfigSettingsSource
 from diane.app_session import AppConfig, AppSession
 from diane.chrono import Timestamp
 from diane.repo import NoRepositoryFoundError, Repository, RepositoryConfig
+from diane.storage import (
+    ActivitiesRegisterUnion,
+    MarkdownActivitiesRegister,
+    MarkdownActivitiesRegisterConfig,
+    SQLiteActivitiesRegister,
+    SQLiteActivitiesRegisterConfig,
+)
 
 
 class ConfigurationError(Exception):
@@ -266,3 +274,32 @@ class Configurator:
         """
         current_timezone = cls._current_timezone(app_session)
         return Timestamp(datetime.datetime.now(current_timezone))
+
+    @classmethod
+    def activities_register(cls, repo: Repository) -> ActivitiesRegisterUnion:
+        """Create a new activities register.
+
+        An activity register's backend depends on a backend specified
+        in the corresponding repository configuration.
+
+        Args:
+            repo (Repository): A repository.
+
+        Returns:
+            ActivitiesRegisterUnion: A new activities register.
+
+        Raises:
+            AssertionError: If the backend of an activity register's
+                configuration hasn't been recognised.
+        """
+        config = repo.config.activities_register
+
+        if isinstance(config, MarkdownActivitiesRegisterConfig):
+            return MarkdownActivitiesRegister(repo.path, config)
+
+        if isinstance(  # pyright: ignore[reportUnnecessaryIsInstance]
+            config, SQLiteActivitiesRegisterConfig
+        ):
+            return SQLiteActivitiesRegister(repo.path, config)
+
+        assert_never(config)

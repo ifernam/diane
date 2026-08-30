@@ -24,6 +24,18 @@ class MarkdownActivitiesRegister(
     Enables to work with activities that are stored in Markdown notes.
     """
 
+    def _slugs(self) -> Iterator[str]:
+        """Iterate over activity slugs in the register.
+
+        The order is arbitrary.
+
+        Yields:
+            str: An activity slug.
+        """
+        for p in self.path.glob('*.md'):
+            if p.is_file():
+                yield p.stem
+
     @override
     def __iter__(self) -> Iterator[str]:
         """Iterate over activity slugs in the register, in alphabetical
@@ -32,9 +44,7 @@ class MarkdownActivitiesRegister(
         Yields:
             str: An activity slug.
         """
-        for p in sorted(self.path.glob('*.md')):
-            if p.is_file():
-                yield p.stem
+        return iter(sorted(self._slugs()))
 
     @override
     def __len__(self) -> int:

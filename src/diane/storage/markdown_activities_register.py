@@ -48,7 +48,12 @@ class MarkdownActivitiesRegister(
 
     @override
     def __len__(self) -> int:
-        raise NotImplementedError
+        """Return the number of activities in the register.
+
+        Returns:
+            int: The number of activities in the register.
+        """
+        return sum(1 for _ in self._slugs())
 
     @override
     def __getitem__(self, key: str) -> Activity:

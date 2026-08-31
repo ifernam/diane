@@ -49,7 +49,7 @@ class Activity:
     )
 
     _slug: str
-    _data: ActivityData | None
+    _data: ActivityData
 
     @classmethod
     def _validate_slug(cls, slug: str) -> None:
@@ -64,18 +64,19 @@ class Activity:
         if not cls._SLUG_PATTERN.match(slug):
             raise InvalidSlugError(f"The slug '{slug}' is invalid.")
 
-    def __init__(self, slug: str) -> None:
+    def __init__(self, slug: str, data: ActivityData) -> None:
         """Create a new activity.
 
         Args:
             slug (str): An activity's slug.
+            data (ActivityData): An activity's information.
 
         Raises:
             InvalidSlugError: If a slug is invalid.
         """
         self._validate_slug(slug)
         self._slug = slug
-        self._data = None
+        self._data = data
 
     @override
     def __str__(self) -> str:

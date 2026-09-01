@@ -12,7 +12,9 @@ dependencies = [
     "pyyaml",
     "pydantic_settings",
     "tzlocal",
-    "portion"
+    "portion",
+    "pyyaml",
+    "python-frontmatter",
 ]
 
 [project.optional-dependencies]

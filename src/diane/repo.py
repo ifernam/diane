@@ -47,8 +47,6 @@ class RepositoryConfig(BaseSettings):
 
     Attributes:
         name (str): A repository's name.
-        fallback_activity_emoji (str): The fallback activity's Unicode
-            emoji. For example, '⚫'.
         activities_register (ActivitiesRegisterConfigUnion):
             An activities register configuration.
         sessions_register (SessionsRegisterConfigUnion): A sessions
@@ -56,7 +54,6 @@ class RepositoryConfig(BaseSettings):
     """
 
     name: str = 'Repository'
-    fallback_activity_emoji: str = '⚫'
     activities_register: ActivitiesRegisterConfigUnion
     sessions_register: SessionsRegisterConfigUnion
 

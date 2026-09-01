@@ -12,9 +12,12 @@ class ActivitiesRegisterConfig(BaseModel):
 
     Attributes:
         path (Path): A relative path where activities are stored.
+        fallback_emoji (str): The fallback activity's Unicode emoji.
+            '⚫' by default.
     """
 
     path: Path
+    fallback_emoji: str = '⚫'
 
 
 class ActivitiesRegister[ConfigT: ActivitiesRegisterConfig](

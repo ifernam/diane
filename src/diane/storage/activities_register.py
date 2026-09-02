@@ -1,4 +1,4 @@
-from abc import ABC
+from abc import ABC, abstractmethod
 from collections.abc import MutableMapping
 from pathlib import Path
 
@@ -56,3 +56,16 @@ class ActivitiesRegister[ConfigT: ActivitiesRegisterConfig](
             Path: The path to the activities register.
         """
         return self._storage_path / self._config.path
+
+    @abstractmethod
+    def parents(self, *slug: str) -> set[str]:
+        """Return the parents of the given activities.
+
+        Args:
+            *slugs (str): Activity slugs.
+
+        Returns:
+            set[str]: A set of all direct parents of the given
+                activities.
+        """
+        ...

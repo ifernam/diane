@@ -42,3 +42,16 @@ class SQLiteActivitiesRegister(
     @override
     def __delitem__(self, key: str) -> None:
         raise NotImplementedError
+
+    @override
+    def parents(self, *slug: str) -> set[str]:
+        """Return the parents of the given activities.
+
+        Args:
+            *slugs (str): Activity slugs.
+
+        Returns:
+            set[str]: A set of all direct parents of the given
+                activities.
+        """
+        raise NotImplementedError

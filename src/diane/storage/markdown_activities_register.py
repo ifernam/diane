@@ -1,3 +1,4 @@
+import re
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Literal, override
@@ -30,6 +31,11 @@ class ActivityNoteReadError(MarkdownActivitiesRegisterError):
 
 class InvalidActivityNoteDataError(MarkdownActivitiesRegisterError):
     """An invalid data format in a Markdown activity note."""
+    ...
+
+
+class InvalidActivityLinkError(MarkdownActivitiesRegisterError):
+    """An activity link has invalid format."""
     ...
 
 
@@ -227,6 +233,41 @@ class MarkdownActivitiesRegister(
 
         return False
 
+    @property
+    def _activity_link_pattern(self) -> re.Pattern[str]:
+        """Return the activity link pattern.
+
+        The pattern looks like
+        '[[<activities subdirectory>/<activity slug>]]'.
+
+        Returns:
+            re.Pattern[str]: The activity link pattern.
+        """
+        return re.compile(
+            rf'^\[\[{re.escape(self._config.path.as_posix())}/([^\]]+)\]\]$'
+        )
+
+    def _unlink_activity(self, link: str) -> str:
+        """Return the activity slug for the given activity note's link.
+
+        Args:
+            link (str): A link to an activity note.
+
+        Returns:
+            str: An activity slug.
+
+        Raises:
+            InvalidActivityLinkError: If a link format is invalid.
+        """
+        match = self._activity_link_pattern.match(link)
+
+        if not match:
+            raise InvalidActivityLinkError(
+                f"The activity link '{link}' is invalid."
+            )
+
+        return match.group(1)
+
     @override
     def parents(self, *slug: str) -> set[str]:
         """Return the parents of the given activities.
@@ -235,7 +276,24 @@ class MarkdownActivitiesRegister(
             *slug (str): Activity slugs.
 
         Returns:
-            set[str]: A set of all direct parents of the given
-                activities.
+            set[str]: All direct parents of the given activities.
+
+        Raises:
+            ActivityNotFoundError: If an activity could not be found.
+            ActivityNoteReadError: If an activity note could not
+                be read.
+            InvalidActivityNoteDataError: If an activity note has
+                invalid format.
+            InvalidActivityLinkError: If an activity link format
+                is invalid.
         """
-        raise NotImplementedError
+        parents: set[str] = set()
+        for s in set(slug):
+            activity_note_data = self._get_activity_note_data(s)
+            parents_data = activity_note_data.parents
+            if isinstance(parents_data, str):
+                parents.add(self._unlink_activity(parents_data))
+            else:
+                parents.update(self._unlink_activity(p) for p in parents_data)
+
+        return parents

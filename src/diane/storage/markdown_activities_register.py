@@ -93,24 +93,14 @@ class MarkdownActivitiesRegister(
         """
         return iter(sorted(self._slugs()))
 
-    @override
-    def __len__(self) -> int:
-        """Return the number of activities in the register.
-
-        Returns:
-            int: The number of activities in the register.
-        """
-        return sum(1 for _ in self._slugs())
-
-    @override
-    def __getitem__(self, key: str) -> Activity:
-        """Get an activity from the register by its slug.
+    def _get_activity_note_data(self, slug: str) -> ActivityNoteData:
+        """Get an activity note from the register by an activity's slug.
 
         Args:
-            key (str): An activity slug.
+            slug (str): An activity slug.
 
         Returns:
-            Activity: An activity.
+            ActivityNoteData: An activity note's data.
 
         Raises:
             ActivityNotFoundError: If an activity could not be found.
@@ -119,11 +109,11 @@ class MarkdownActivitiesRegister(
             InvalidActivityNoteDataError: If an activity note has
                 invalid format.
         """
-        activity_note_path = self.path / f'{key}.md'
+        activity_note_path = self.path / f'{slug}.md'
 
         if not activity_note_path.is_file():
             raise ActivityNotFoundError(
-                f"The activity '{key}' could not be found."
+                f"The activity '{slug}' could not be found."
             )
 
         try:
@@ -161,11 +151,39 @@ class MarkdownActivitiesRegister(
             ) from exc
 
         try:
-            note_data = ActivityNoteData.model_validate(activity_note.metadata)
+            return ActivityNoteData.model_validate(activity_note.metadata)
         except ValidationError as exc:
             raise InvalidActivityNoteDataError(
                 f"The activity note '{activity_note_path}' has invalid format."
             ) from exc
+
+    @override
+    def __len__(self) -> int:
+        """Return the number of activities in the register.
+
+        Returns:
+            int: The number of activities in the register.
+        """
+        return sum(1 for _ in self._slugs())
+
+    @override
+    def __getitem__(self, key: str) -> Activity:
+        """Get an activity from the register by its slug.
+
+        Args:
+            key (str): An activity slug.
+
+        Returns:
+            Activity: An activity.
+
+        Raises:
+            ActivityNotFoundError: If an activity could not be found.
+            ActivityNoteReadError: If an activity note could not
+                be read.
+            InvalidActivityNoteDataError: If an activity note has
+                invalid format.
+        """
+        note_data = self._get_activity_note_data(key)
 
         emoji = (
             note_data.emoji if note_data.emoji is not None

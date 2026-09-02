@@ -193,6 +193,23 @@ class MarkdownActivitiesRegister(
         raise NotImplementedError
 
     @override
+    def __contains__(self, key: object) -> bool:
+        """Check whether an object is in the register.
+
+        Args:
+            key (object): An object to be checked to see if it is listed
+                in the register.
+
+        Returns:
+            bool: `True` if an object is listed in the register.
+        """
+        if isinstance(key, str):
+            activity_note_path = self.path / f'{key}.md'
+            return activity_note_path.is_file()
+
+        return False
+
+    @override
     def parents(self, *slug: str) -> set[str]:
         """Return the parents of the given activities.
 

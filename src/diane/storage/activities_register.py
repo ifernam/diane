@@ -62,7 +62,7 @@ class ActivitiesRegister[ConfigT: ActivitiesRegisterConfig](
         """Return the parents of the given activities.
 
         Args:
-            *slugs (str): Activity slugs.
+            *slug (str): Activity slugs.
 
         Returns:
             set[str]: A set of all direct parents of the given

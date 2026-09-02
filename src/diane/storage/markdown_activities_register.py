@@ -269,11 +269,11 @@ class MarkdownActivitiesRegister(
         return match.group(1)
 
     @override
-    def parents(self, *slug: str) -> set[str]:
+    def parents(self, *slugs: str) -> set[str]:
         """Return the parents of the given activities.
 
         Args:
-            *slug (str): Activity slugs.
+            *slugs (str): Activity slugs.
 
         Returns:
             set[str]: All direct parents of the given activities.
@@ -288,7 +288,7 @@ class MarkdownActivitiesRegister(
                 is invalid.
         """
         parents: set[str] = set()
-        for s in set(slug):
+        for s in set(slugs):
             activity_note_data = self._get_activity_note_data(s)
             parents_data = activity_note_data.parents
             if isinstance(parents_data, str):

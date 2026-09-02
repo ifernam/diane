@@ -58,11 +58,11 @@ class ActivitiesRegister[ConfigT: ActivitiesRegisterConfig](
         return self._storage_path / self._config.path
 
     @abstractmethod
-    def parents(self, *slug: str) -> set[str]:
+    def parents(self, *slugs: str) -> set[str]:
         """Return the parents of the given activities.
 
         Args:
-            *slug (str): Activity slugs.
+            *slugs (str): Activity slugs.
 
         Returns:
             set[str]: A set of all direct parents of the given

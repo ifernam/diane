@@ -44,11 +44,11 @@ class SQLiteActivitiesRegister(
         raise NotImplementedError
 
     @override
-    def parents(self, *slug: str) -> set[str]:
+    def parents(self, *slugs: str) -> set[str]:
         """Return the parents of the given activities.
 
         Args:
-            *slug (str): Activity slugs.
+            *slugs (str): Activity slugs.
 
         Returns:
             set[str]: A set of all direct parents of the given

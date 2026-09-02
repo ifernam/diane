@@ -290,10 +290,8 @@ class MarkdownActivitiesRegister(
         parents: set[str] = set()
         for s in set(slugs):
             activity_note_data = self._get_activity_note_data(s)
-            parents_data = activity_note_data.parents
-            if isinstance(parents_data, str):
-                parents.add(self._unlink_activity(parents_data))
-            else:
-                parents.update(self._unlink_activity(p) for p in parents_data)
+            raw = activity_note_data.parents
+            links = raw if isinstance(raw, list) else [raw]
+            parents.update(self._unlink_activity(p) for p in links)
 
         return parents

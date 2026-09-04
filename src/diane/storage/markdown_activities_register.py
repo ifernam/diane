@@ -100,7 +100,8 @@ class MarkdownActivitiesRegister(
         return iter(sorted(self._slugs()))
 
     def _load_note_data(self, slug: str) -> ActivityNoteData:
-        """Get an activity note from the register by an activity's slug.
+        """Load an activity note's data from the register
+            by an activity's slug.
 
         Args:
             slug (str): An activity slug.

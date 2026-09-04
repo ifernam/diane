@@ -99,7 +99,7 @@ class MarkdownActivitiesRegister(
         """
         return iter(sorted(self._slugs()))
 
-    def _get_activity_note_data(self, slug: str) -> ActivityNoteData:
+    def _load_note_data(self, slug: str) -> ActivityNoteData:
         """Get an activity note from the register by an activity's slug.
 
         Args:
@@ -189,7 +189,7 @@ class MarkdownActivitiesRegister(
             InvalidActivityNoteDataError: If an activity note has
                 invalid format.
         """
-        note_data = self._get_activity_note_data(key)
+        note_data = self._load_note_data(key)
 
         emoji = (
             note_data.emoji if note_data.emoji is not None
@@ -289,7 +289,7 @@ class MarkdownActivitiesRegister(
         """
         parents: set[str] = set()
         for s in set(slugs):
-            activity_note_data = self._get_activity_note_data(s)
+            activity_note_data = self._load_note_data(s)
             raw = activity_note_data.parents
             links = raw if isinstance(raw, list) else [raw]
             parents.update(self._unlink_activity(p) for p in links)

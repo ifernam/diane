@@ -97,3 +97,12 @@ class Activity:
             str: The unique string identifier (slug) of the activity.
         """
         return self._slug
+
+    @property
+    def data(self) -> ActivityData:
+        """Return a copy of the activity's data.
+
+        Returns:
+            ActivityData: A copy of the activity's data.
+        """
+        return self._data.model_copy()

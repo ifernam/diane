@@ -164,6 +164,40 @@ class MarkdownActivitiesRegister(
                 f"The activity note '{activity_note_path}' has invalid format."
             ) from exc
 
+    def _note_data_to_activity_data(
+        self, note_data: ActivityNoteData
+    ) -> ActivityData:
+        """Convert an activity note's data to an activity's data.
+
+        - If no emoji is specified in an activity note's data,
+          the fallback emoji from the register will be used.
+        - Ignores parents.
+
+        Args:
+            note_data (ActivityNoteData): An activity note's data.
+
+        Returns:
+            ActivityData: An activity's data.
+        """
+        # Determine the emoji.
+        emoji = (
+            note_data.emoji if note_data.emoji is not None
+            else self._config.fallback_emoji
+        )
+
+        # Normalise tags.
+        tags = (
+            note_data.tags if isinstance(note_data.tags, list)
+            else [note_data.tags]
+        )
+
+        return ActivityData(
+            name=note_data.name,
+            description=note_data.description,
+            tags=tags,
+            emoji=emoji
+        )
+
     @override
     def __len__(self) -> int:
         """Return the number of activities in the register.
@@ -191,23 +225,8 @@ class MarkdownActivitiesRegister(
                 invalid format.
         """
         note_data = self._load_note_data(key)
-
-        emoji = (
-            note_data.emoji if note_data.emoji is not None
-            else self._config.fallback_emoji
-        )
-        tags = (
-            note_data.tags if isinstance(note_data.tags, list)
-            else [note_data.tags]
-        )
-        data = ActivityData(
-            name=note_data.name,
-            description=note_data.description,
-            tags=tags,
-            emoji=emoji
-        )
-
-        return Activity(key, data)
+        activity_data = self._note_data_to_activity_data(note_data)
+        return Activity(key, activity_data)
 
     @override
     def __setitem__(self, key: str, value: Activity) -> None:

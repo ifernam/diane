@@ -88,3 +88,12 @@ class Activity:
             str: The string representation.
         """
         return self._slug
+
+    @property
+    def slug(self) -> str:
+        """Return the unique string identifier (slug) of the activity.
+
+        Returns:
+            str: The unique string identifier (slug) of the activity.
+        """
+        return self._slug

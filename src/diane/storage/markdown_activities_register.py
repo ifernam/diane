@@ -242,16 +242,10 @@ class MarkdownActivitiesRegister(
             else self._config.fallback_emoji
         )
 
-        # Normalise tags.
-        tags = (
-            note_data.tags if isinstance(note_data.tags, list)
-            else [note_data.tags]
-        )
-
         return ActivityData(
             name=note_data.name,
             description=note_data.description,
-            tags=tags,
+            tags=note_data.tags,
             emoji=emoji
         )
 
@@ -264,15 +258,7 @@ class MarkdownActivitiesRegister(
 
         Parents should be listed separately.
 
-        Tags and parents round-trip isn't format-preserving.
-        - Because `_note_data_to_activity_data` normalizes both
-          - `tags: 'work'` (bare string),
-          - `tags: ['work']` (single-element list)
-          to the same `ActivityData.tags == ['work']`, the original
-          on-disk representation is lost by the time you get
-          to `ActivityData`. This method then always reconstructs
-          the single-tag case as a bare string.
-        - The single-parent case is always reduced to a bare string.
+        The single-parent case is always reduced to a bare string.
 
         Args:
             activity_data (ActivityData): An activity's data.
@@ -281,8 +267,6 @@ class MarkdownActivitiesRegister(
         Returns:
             ActivityNoteData: An activity note's data.
         """
-        tags = activity_data.tags
-        note_tags = tags[0] if len(tags) == 1 else tags
         if parents is None:
             parents = []
         elif isinstance(parents, str):
@@ -292,7 +276,7 @@ class MarkdownActivitiesRegister(
             else [self._link_activity(p) for p in parents]
         )
         return ActivityNoteData(
-            tags=note_tags,
+            tags=activity_data.tags,
             name=activity_data.name,
             description=activity_data.description,
             emoji=activity_data.emoji,

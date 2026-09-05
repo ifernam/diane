@@ -21,14 +21,14 @@ class ActivityData(BaseModel):
         name (str): A human-readable name.
         description (str): An activity's description. May be empty
             if an activity is clearly understood from its name.
-        tags (list[str]): An activity's tags.
+        tags (list[str] | str): An activity's tags.
         emoji (str): An emoji for visualising activity.
     """
     model_config: ClassVar[ConfigDict] = ConfigDict(extra='forbid')
 
     name: str
     description: str = ''
-    tags: list[str] = []
+    tags: list[str] | str = []
     emoji: str
 
 

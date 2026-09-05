@@ -1,7 +1,7 @@
 import re
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Literal, override
+from typing import Literal, NamedTuple, override
 
 import frontmatter
 import yaml
@@ -65,6 +65,18 @@ class ActivityNoteData(BaseModel):
     parents: list[str] | str = []
 
 
+class ActivityNote(NamedTuple):
+    """Represents an activity note.
+
+    Attributes:
+        data (ActivityNoteData): An activity note's data.
+        content (str): An activity note's Markdown content.
+    """
+
+    data: ActivityNoteData
+    content: str
+
+
 class MarkdownActivitiesRegister(
     ActivitiesRegister[MarkdownActivitiesRegisterConfig]
 ):
@@ -99,15 +111,14 @@ class MarkdownActivitiesRegister(
         """
         return iter(sorted(self._slugs()))
 
-    def _load_note_data(self, slug: str) -> ActivityNoteData:
-        """Load an activity note's data from the register
-            by an activity's slug.
+    def _load_note(self, slug: str) -> ActivityNote:
+        """Load an activity note by an activity's slug.
 
         Args:
             slug (str): An activity slug.
 
         Returns:
-            ActivityNoteData: An activity note's data.
+            ActivityNote: An activity note.
 
         Raises:
             ActivityNotFoundError: If an activity could not be found.
@@ -124,7 +135,7 @@ class MarkdownActivitiesRegister(
             )
 
         try:
-            activity_note = frontmatter.load(activity_note_path)
+            note = frontmatter.load(activity_note_path)
         except FileNotFoundError as exc:
             raise ActivityNoteReadError(
                 f"The activity note '{activity_note_path}' could not be found."
@@ -158,7 +169,10 @@ class MarkdownActivitiesRegister(
             ) from exc
 
         try:
-            return ActivityNoteData.model_validate(activity_note.metadata)
+            return ActivityNote(
+                ActivityNoteData.model_validate(note.metadata),
+                note.content
+            )
         except ValidationError as exc:
             raise InvalidActivityNoteDataError(
                 f"The activity note '{activity_note_path}' has invalid format."
@@ -268,7 +282,7 @@ class MarkdownActivitiesRegister(
             InvalidActivityNoteDataError: If an activity note has
                 invalid format.
         """
-        note_data = self._load_note_data(key)
+        note_data = self._load_note(key).data
         activity_data = self._note_data_to_activity_data(note_data)
         return Activity(key, activity_data)
 
@@ -364,8 +378,7 @@ class MarkdownActivitiesRegister(
         """
         parents: set[str] = set()
         for s in set(slugs):
-            activity_note_data = self._load_note_data(s)
-            raw = activity_note_data.parents
+            raw = self._load_note(s).data.parents
             links = raw if isinstance(raw, list) else [raw]
             parents.update(self._unlink_activity(p) for p in links)
 

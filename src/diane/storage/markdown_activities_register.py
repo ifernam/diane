@@ -1,7 +1,7 @@
 import re
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Literal, NamedTuple, override
+from typing import Literal, NamedTuple, overload, override
 
 import frontmatter
 import yaml
@@ -346,10 +346,7 @@ class MarkdownActivitiesRegister(
             raw_parents, content = note.data.parents, note.content
 
         # Unlink parents.
-        parents = (
-            self._unlink_activity(raw_parents) if isinstance(raw_parents, str)
-            else [self._unlink_activity(p) for p in raw_parents]
-        )
+        parents = self._unlink(raw_parents)
 
         note_data = self._activity_data_to_note_data(value.data, parents)
         note = ActivityNote(note_data, content)
@@ -390,26 +387,37 @@ class MarkdownActivitiesRegister(
             rf'^\[\[{re.escape(self._config.path.as_posix())}/([^\]]+)\]\]$'
         )
 
-    def _unlink_activity(self, link: str) -> str:
-        """Return the activity slug for the given activity note's link.
+    @overload
+    def _unlink(self, links: str) -> str:
+        ...
+
+    @overload
+    def _unlink(self, links: list[str]) -> list[str]:
+        ...
+
+    def _unlink(self, links: list[str] | str) -> list[str] | str:
+        """Return activity slugs for the given links to activity notes.
 
         Args:
-            link (str): A link to an activity note.
+            link (list[str] | str): Links to activity notes.
 
         Returns:
-            str: An activity slug.
+            list[str] | str: Activity slugs.
 
         Raises:
             InvalidActivityLinkError: If a link format is invalid.
         """
-        match = self._activity_link_pattern.match(link)
+        if isinstance(links, str):
+            match = self._activity_link_pattern.match(links)
 
-        if not match:
-            raise InvalidActivityLinkError(
-                f"The activity link '{link}' is invalid."
-            )
+            if not match:
+                raise InvalidActivityLinkError(
+                    f"The activity link '{links}' is invalid."
+                )
 
-        return match.group(1)
+            return match.group(1)
+        else:
+            return [self._unlink(a) for a in links]
 
     def _link_activity(self, slug: str) -> str:
         """Return the activity note's link for the given activity slug.
@@ -443,8 +451,8 @@ class MarkdownActivitiesRegister(
         """
         parents: set[str] = set()
         for s in set(slugs):
-            raw = self._load_note(s).data.parents
-            links = raw if isinstance(raw, list) else [raw]
-            parents.update(self._unlink_activity(p) for p in links)
+            unlinked = self._unlink(self._load_note(s).data.parents)
+            normalised = unlinked if isinstance(unlinked, list) else [unlinked]
+            parents.update(normalised)
 
         return parents

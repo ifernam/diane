@@ -39,6 +39,11 @@ class InvalidActivityLinkError(MarkdownActivitiesRegisterError):
     ...
 
 
+class ActivityNoteWriteError(MarkdownActivitiesRegisterError):
+    """An activity note could not be written."""
+    ...
+
+
 class MarkdownActivitiesRegisterConfig(ActivitiesRegisterConfig):
     """A Markdown activities register configuration."""
 
@@ -176,6 +181,39 @@ class MarkdownActivitiesRegister(
         except ValidationError as exc:
             raise InvalidActivityNoteDataError(
                 f"The activity note '{activity_note_path}' has invalid format."
+            ) from exc
+
+    def _save_note(self, slug: str, note: ActivityNote) -> None:
+        """Save an activity note.
+
+        Args:
+            slug (str): An activity slug.
+            note (ActivityNote): An activity note.
+
+        Raises:
+            ActivityNoteWriteError: If an activity note could not
+                be written.
+        """
+        # Prepare data.
+        path = self.path / f'{slug}.md'
+        data: dict[str, object] = note.data.model_dump()
+        post = frontmatter.Post(note.content, handler=None, **data)
+
+        # Save the note.
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            frontmatter.dump(post, path)
+        except PermissionError as exc:
+            raise ActivityNoteWriteError(
+                f"Permission denied: '{path}'."
+            ) from exc
+        except OSError as exc:
+            raise ActivityNoteWriteError(
+                f"An I/O error occurred while writing '{path}'. {exc}"
+            ) from exc
+        except yaml.YAMLError as exc:
+            raise ActivityNoteWriteError(
+                f"A YAML serialization error for '{path}'. {exc}"
             ) from exc
 
     def _note_data_to_activity_data(

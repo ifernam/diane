@@ -44,6 +44,11 @@ class ActivityNoteWriteError(MarkdownActivitiesRegisterError):
     ...
 
 
+class SlugKeyMatchError(MarkdownActivitiesRegisterError):
+    """An activity slug does not match its key."""
+    ...
+
+
 class MarkdownActivitiesRegisterConfig(ActivitiesRegisterConfig):
     """A Markdown activities register configuration."""
 
@@ -326,7 +331,45 @@ class MarkdownActivitiesRegister(
 
     @override
     def __setitem__(self, key: str, value: Activity) -> None:
-        raise NotImplementedError
+        """Record an activity in the register.
+
+        Args:
+            key (str): An activity slug.
+            value (Activity): An activity.
+
+        Raises:
+            SlugKeyMatchError: If an activity slug does not match its
+                key.
+            ActivityNotFoundError: If an activity could not be found.
+            ActivityNoteReadError: If an activity note could not
+                be read.
+            InvalidActivityNoteDataError: If an activity note has
+                invalid format.
+            InvalidActivityLinkError: If a link format is invalid.
+            ActivityNoteWriteError: If an activity note could not
+                be written.
+        """
+        # Check that the activity slug matches the key.
+        if key != value.slug:
+            raise SlugKeyMatchError(
+                f"The activity slug '{value.slug}' "
+                f"does not match its key '{key}'."
+            )
+
+        raw_parents, content = [], ''
+        if key in self:
+            note = self._load_note(key)
+            raw_parents, content = note.data.parents, note.content
+
+        # Unlink parents.
+        parents = (
+            self._unlink_activity(raw_parents) if isinstance(raw_parents, str)
+            else [self._unlink_activity(p) for p in raw_parents]
+        )
+
+        note_data = self._activity_data_to_note_data(value.data, parents)
+        note = ActivityNote(note_data, content)
+        self._save_note(key, note)
 
     @override
     def __delitem__(self, key: str) -> None:

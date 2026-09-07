@@ -258,8 +258,6 @@ class MarkdownActivitiesRegister(
 
         Parents should be listed separately.
 
-        The single-parent case is always reduced to a bare string.
-
         Args:
             activity_data (ActivityData): An activity's data.
             parents (list[str] | str | None): Optional parents.
@@ -269,18 +267,12 @@ class MarkdownActivitiesRegister(
         """
         if parents is None:
             parents = []
-        elif isinstance(parents, str):
-            parents = [parents]
-        parent_links: list[str] | str = (
-            self._link_activity(parents[0]) if len(parents) == 1
-            else [self._link_activity(p) for p in parents]
-        )
         return ActivityNoteData(
             tags=activity_data.tags,
             name=activity_data.name,
             description=activity_data.description,
             emoji=activity_data.emoji,
-            parents=parent_links
+            parents=self._link(parents)
         )
 
     @override
@@ -419,16 +411,27 @@ class MarkdownActivitiesRegister(
         else:
             return [self._unlink(a) for a in links]
 
-    def _link_activity(self, slug: str) -> str:
-        """Return the activity note's link for the given activity slug.
+    @overload
+    def _link(self, slugs: str) -> str:
+        ...
+
+    @overload
+    def _link(self, slugs: list[str]) -> list[str]:
+        ...
+
+    def _link(self, slugs: list[str] | str) -> list[str] | str:
+        """Return links to activity notes for the given activity slugs.
 
         Args:
-            slug (str): An activity slug.
+            slugs (list[str] | str): Activity slugs.
 
         Returns:
-            str: A link to an activity note.
+            list[str] | str: Links to activity notes.
         """
-        return f'[[{self._config.path.as_posix()}/{slug}]]'
+        if isinstance(slugs, str):
+            return f'[[{self._config.path.as_posix()}/{slugs}]]'
+        else:
+            return [self._link(a) for a in slugs]
 
     @override
     def parents(self, *slugs: str) -> set[str]:

@@ -391,7 +391,7 @@ class MarkdownActivitiesRegister(
         """Return activity slugs for the given links to activity notes.
 
         Args:
-            link (list[str] | str): Links to activity notes.
+            links (list[str] | str): Links to activity notes.
 
         Returns:
             list[str] | str: Activity slugs.

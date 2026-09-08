@@ -240,7 +240,7 @@ class MarkdownActivitiesRegister(
         """
         # Prepare data.
         path = self.path / f'{slug}.md'
-        data: dict[str, object] = note.data.model_dump()
+        data: dict[str, object] = note.data.model_dump(exclude_defaults=True)
         post = frontmatter.Post(note.content, handler=None, **data)
 
         # Save the note.

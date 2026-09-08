@@ -49,6 +49,45 @@ class SlugKeyMatchError(MarkdownActivitiesRegisterError):
     ...
 
 
+class ConnectionAlreadyExistsError(MarkdownActivitiesRegisterError):
+    """A parent-child connection already exists."""
+    ...
+
+
+class AlreadyInListStrError(Exception):
+    """A string is already in `list[str] | str`."""
+    ...
+
+
+def _add_to_liststr(liststr: list[str] | str, new: str) -> list[str] | str:
+    """Add a string to a list of strings or a bare string
+    (`list[str] | str`).
+
+    Args:
+        liststr (list[str] | str): A list of strings or a bare string.
+        new (str): A new string.
+
+    Returns:
+        list[str] | str: An updated `list[str] | str`.
+    """
+    if isinstance(liststr, str):
+        # A bare string.
+        if new in liststr:
+            raise AlreadyInListStrError(
+                f"'{new}' is already in the `list[str] | str`."
+            )
+        return [liststr, new]
+    elif not liststr:
+        # An empty list.
+        return new
+    else:
+        # A non-empty list.
+        if new in liststr:
+            raise AlreadyInListStrError(
+                f"'{new}' is already in the `list[str] | str`."
+            )
+        return liststr + [new]
+
 class MarkdownActivitiesRegisterConfig(ActivitiesRegisterConfig):
     """A Markdown activities register configuration."""
 
@@ -464,8 +503,33 @@ class MarkdownActivitiesRegister(
         Args:
             parent (str): A parent slug.
             child (str): A child slug.
+
+        Raises:
+            ActivityNotFoundError: If a parrent or child could not
+                be found.
+            ActivityNoteReadError: If a child note could not be read.
+            InvalidActivityNoteDataError: If a child note has invalid
+                format.
+            ConnectionAlreadyExistsError: If a parent-child connection
+                already exists.
+            ActivityNoteWriteError: If a child note could not
+                be written.
         """
-        raise NotImplementedError
+        if parent not in self:
+            raise ActivityNotFoundError(
+                f"The activity '{parent}' could not be found."
+            )
+
+        parent_link = self._link(parent)
+        note = self._load_note(child)
+        try:
+            note.data.parents = _add_to_liststr(note.data.parents, parent_link)
+        except AlreadyInListStrError as exc:
+            raise ConnectionAlreadyExistsError(
+                f"The parent-child connection '{parent}'-'{child}' "
+                "already exists."
+            ) from exc
+        self._save_note(child, note)
 
     @override
     def remove_connection(self, parent: str, child: str) -> None:

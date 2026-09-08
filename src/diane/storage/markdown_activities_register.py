@@ -321,7 +321,6 @@ class MarkdownActivitiesRegister(
                 be read.
             InvalidActivityNoteDataError: If an activity note has
                 invalid format.
-            InvalidActivityLinkError: If a link format is invalid.
             ActivityNoteWriteError: If an activity note could not
                 be written.
         """
@@ -332,15 +331,13 @@ class MarkdownActivitiesRegister(
                 f"does not match its key '{key}'."
             )
 
-        raw_parents, content = [], ''
+        parents, content = [], ''
         if key in self:
             note = self._load_note(key)
-            raw_parents, content = note.data.parents, note.content
+            parents, content = note.data.parents, note.content
 
-        # Unlink parents.
-        parents = self._unlink(raw_parents)
-
-        note_data = self._activity_data_to_note_data(value.data, parents)
+        note_data = self._activity_data_to_note_data(value.data)
+        note_data.parents = parents
         note = ActivityNote(note_data, content)
         self._save_note(key, note)
 

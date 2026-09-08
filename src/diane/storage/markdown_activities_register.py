@@ -5,6 +5,7 @@ from typing import Literal, NamedTuple, overload, override
 
 import frontmatter
 import yaml
+from frontmatter.default_handlers import YAMLHandler
 from pydantic import BaseModel, ValidationError
 
 from diane.activity import Activity, ActivityData
@@ -246,7 +247,13 @@ class MarkdownActivitiesRegister(
         # Save the note.
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
-            frontmatter.dump(post, path, sort_keys=False)
+            frontmatter.dump(
+                post,
+                path,
+                handler=YAMLHandler(),
+                Dumper=yaml.SafeDumper,
+                sort_keys=False
+            )
         except PermissionError as exc:
             raise ActivityNoteWriteError(
                 f"Permission denied: '{path}'."

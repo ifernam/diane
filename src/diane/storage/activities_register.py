@@ -69,3 +69,23 @@ class ActivitiesRegister[ConfigT: ActivitiesRegisterConfig](
                 activities.
         """
         ...
+
+    @abstractmethod
+    def add_connection(self, parent: str, child: str) -> None:
+        """Add a parent-child connection between activities.
+
+        Args:
+            parent (str): A parent slug.
+            child (str): A child slug.
+        """
+        ...
+
+    @abstractmethod
+    def remove_connection(self, parent: str, child: str) -> None:
+        """Remove a parent-child connection from the register.
+
+        Args:
+            parent (str): A parent slug.
+            child (str): A child slug.
+        """
+        ...

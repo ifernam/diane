@@ -246,7 +246,7 @@ class MarkdownActivitiesRegister(
         # Save the note.
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
-            frontmatter.dump(post, path)
+            frontmatter.dump(post, path, sort_keys=False)
         except PermissionError as exc:
             raise ActivityNoteWriteError(
                 f"Permission denied: '{path}'."

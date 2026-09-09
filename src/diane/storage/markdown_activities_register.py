@@ -73,7 +73,7 @@ def _add_to_liststr(liststr: list[str] | str, new: str) -> list[str] | str:
     """
     if isinstance(liststr, str):
         # A bare string.
-        if new in liststr:
+        if new == liststr:
             raise AlreadyInListStrError(
                 f"'{new}' is already in the `list[str] | str`."
             )
@@ -88,6 +88,7 @@ def _add_to_liststr(liststr: list[str] | str, new: str) -> list[str] | str:
                 f"'{new}' is already in the `list[str] | str`."
             )
         return liststr + [new]
+
 
 class MarkdownActivitiesRegisterConfig(ActivitiesRegisterConfig):
     """A Markdown activities register configuration."""

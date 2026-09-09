@@ -45,6 +45,11 @@ class ActivityNoteWriteError(MarkdownActivitiesRegisterError):
     ...
 
 
+class ActivityNoteDeleteError(MarkdownActivitiesRegisterError):
+    """An activity note could not be deleted."""
+    ...
+
+
 class SlugKeyMatchError(MarkdownActivitiesRegisterError):
     """An activity slug does not match its key."""
     ...
@@ -444,7 +449,47 @@ class MarkdownActivitiesRegister(
 
     @override
     def __delitem__(self, key: str) -> None:
-        raise NotImplementedError
+        """Remove an activity from the register.
+
+        Args:
+            key (str): An activity slug.
+
+        Raises:
+            ActivityNotFoundError: If an activity could not be found.
+            ActivityNoteReadError: If an activity note could not
+                be read.
+            InvalidActivityNoteDataError: If an activity note has
+                invalid format.
+            InvalidActivityLinkError: If an activity link format
+                is invalid.
+            ConnectionNotFoundError: If a parent-child connection
+                could not be found.
+            ActivityNoteWriteError: If a child note could not
+                be written.
+            ActivityNoteDeleteError: If an activity note could not
+                be deleted.
+        """
+        if key not in self:
+            raise ActivityNotFoundError(
+                f"The activity '{key}' could not be found."
+            )
+
+        for s in self._slugs():
+            if s != key and key in self.parents(s):
+                self.remove_connection(key, s)
+
+        path = self.path / f'{key}.md'
+
+        try:
+            path.unlink(missing_ok=True)
+        except PermissionError as exc:
+            raise ActivityNoteDeleteError(
+                f"Permission denied: '{path}'."
+            ) from exc
+        except OSError as exc:
+            raise ActivityNoteDeleteError(
+                f"An I/O error occurred while deleting '{path}'. {exc}"
+            ) from exc
 
     @override
     def __contains__(self, key: object) -> bool:

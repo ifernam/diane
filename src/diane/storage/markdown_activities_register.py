@@ -55,8 +55,23 @@ class ConnectionAlreadyExistsError(MarkdownActivitiesRegisterError):
     ...
 
 
+class ConnectionNotFoundError(MarkdownActivitiesRegisterError):
+    """A parent-child connection could not be found."""
+    ...
+
+
 class AlreadyInListStrError(Exception):
     """A string is already in `list[str] | str`."""
+    ...
+
+
+class NotInListStrError(Exception):
+    """A string is not contained in `list[str] | str`."""
+    ...
+
+
+class ListStrIsEmptyError(Exception):
+    """`list[str] | str` is empty."""
     ...
 
 
@@ -88,6 +103,45 @@ def _add_to_liststr(liststr: list[str] | str, new: str) -> list[str] | str:
                 f"'{new}' is already in the `list[str] | str`."
             )
         return liststr + [new]
+
+
+def _remove_from_liststr(
+    liststr: list[str] | str, old: str
+) -> list[str] | str:
+    """Remove a string from a list of strings or a bare string
+    (`list[str] | str`).
+
+    Args:
+        liststr (list[str] | str): A list of strings or a bare string.
+        old (str): A string to be removed.
+
+    Returns:
+        list[str] | str: An updated `list[str] | str`.
+    """
+    if isinstance(liststr, str):
+        # A bare string.
+        if old == liststr:
+            return []
+
+        raise NotInListStrError(
+            f"The string '{old}' is not contained in the `list[str] | str`."
+        )
+    elif not liststr:
+        # An empty list.
+        raise ListStrIsEmptyError('The `list[str] | str` is empty.')
+    else:
+        # A non-empty list.
+        if old not in liststr:
+            raise NotInListStrError(
+                f"The string '{old}' is not contained "
+                "in the `list[str] | str`."
+            )
+
+        updated = [s for s in liststr if s != old]
+        if len(updated) == 1:
+            return updated[0]
+        else:
+            return updated
 
 
 class MarkdownActivitiesRegisterConfig(ActivitiesRegisterConfig):
@@ -546,5 +600,32 @@ class MarkdownActivitiesRegister(
         Args:
             parent (str): A parent slug.
             child (str): A child slug.
+
+        Raises:
+            ActivityNotFoundError: If a parent or child could not
+                be found.
+            ActivityNoteReadError: If a child note could not be read.
+            InvalidActivityNoteDataError: If a child note has invalid
+                format.
+            ConnectionNotFoundError: If a parent-child connection
+                could not be found.
+            ActivityNoteWriteError: If a child note could not
+                be written.
         """
-        raise NotImplementedError
+        if parent not in self:
+            raise ActivityNotFoundError(
+                f"The activity '{parent}' could not be found."
+            )
+
+        parent_link = self._link(parent)
+        note = self._load_note(child)
+        try:
+            note.data.parents = _remove_from_liststr(
+                note.data.parents, parent_link
+            )
+        except (NotInListStrError, ListStrIsEmptyError) as exc:
+            raise ConnectionNotFoundError(
+                f"The parent-child connection '{parent}'-'{child}' "
+                "could not be found."
+            ) from exc
+        self._save_note(child, note)

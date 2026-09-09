@@ -513,7 +513,7 @@ class MarkdownActivitiesRegister(
             child (str): A child slug.
 
         Raises:
-            ActivityNotFoundError: If a parrent or child could not
+            ActivityNotFoundError: If a parent or child could not
                 be found.
             ActivityNoteReadError: If a child note could not be read.
             InvalidActivityNoteDataError: If a child note has invalid

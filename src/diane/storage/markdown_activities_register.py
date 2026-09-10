@@ -65,6 +65,11 @@ class ConnectionNotFoundError(MarkdownActivitiesRegisterError):
     ...
 
 
+class PathNotFoundError(MarkdownActivitiesRegisterError):
+    """If no path between two activities has been found."""
+    ...
+
+
 class AlreadyInListStrError(Exception):
     """A string is already in `list[str] | str`."""
     ...
@@ -674,3 +679,61 @@ class MarkdownActivitiesRegister(
                 "could not be found."
             ) from exc
         self._save_note(child, note)
+
+    def _find_path(self, start: str, end: str) -> list[str]:
+        """Find a path from one activity to another.
+
+        The path follows parent-child relationships from the start
+        activity to the end activity. The path found is not guaranteed
+        to be the shortest.
+
+        Args:
+            start (str): A start activity slug.
+            end (str): An end activity slug.
+
+        Returns:
+            list[str]: Activity slugs forming a path from `start`
+                to `end`.
+
+        Raises:
+            ActivityNotFoundError: If an activity could not be found.
+            ActivityNoteReadError: If an activity note could not
+                be read.
+            InvalidActivityNoteDataError: If an activity note has
+                invalid format.
+            InvalidActivityLinkError: If an activity link format
+                is invalid.
+            PathNotFoundError: If no path exists from `start` to `end`.
+        """
+        if start not in self:
+            raise ActivityNotFoundError(
+                f"The activity '{start}' could not be found."
+            )
+        if end not in self:
+            raise ActivityNotFoundError(
+                f"The activity '{end}' could not be found."
+            )
+
+        if start == end:
+            return [start]
+
+        stack = [end]
+        child: dict[str, str | None] = {end: None}
+        while stack:
+            a = stack.pop()
+
+            if a == start:
+                path: list[str] = []
+                while a is not None:
+                    path.append(a)
+                    a = child[a]
+                return path
+
+            for p in self.parents(a):
+                if p not in child:
+                    child[p] = a
+                    stack.append(p)
+
+        raise PathNotFoundError(
+            f"No path has been found from '{start}' to '{end}'."
+        )

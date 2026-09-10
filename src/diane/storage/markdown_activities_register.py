@@ -70,6 +70,33 @@ class PathNotFoundError(MarkdownActivitiesRegisterError):
     ...
 
 
+class CycleError(MarkdownActivitiesRegisterError):
+    """A cycle was detected in the activities graph.
+
+    Attributes:
+        cycle (list[str]): Activity slugs that make up a cycle.
+            The beginning must coincide with the end.
+    """
+
+    cycle: list[str]
+
+    def __init__(
+        self,
+        cycle: list[str],
+        message: str = 'A cycle has been found in the activities graph.'
+    ) -> None:
+        """Create an exception to indicate the presence of a cycle
+        in the activity graph.
+
+        Args:
+            cycle (list[str]): Activity slugs that make up a cycle.
+                The beginning must coincide with the end.
+            message (str): An optional message.
+        """
+        super().__init__(message)
+        self.cycle = cycle
+
+
 class AlreadyInListStrError(Exception):
     """A string is already in `list[str] | str`."""
     ...
@@ -617,21 +644,32 @@ class MarkdownActivitiesRegister(
             child (str): A child slug.
 
         Raises:
-            ActivityNotFoundError: If a parent or child could not
-                be found.
-            ActivityNoteReadError: If a child note could not be read.
-            InvalidActivityNoteDataError: If a child note has invalid
-                format.
+            ActivityNotFoundError: If an activity could not be found.
+            ActivityNoteReadError: If an activity note could not
+                be read.
+            InvalidActivityNoteDataError: If an activity note has
+                invalid format.
+            InvalidActivityLinkError: If an activity link format
+                is invalid.
+            CycleError: If a cycle has been found.
             ConnectionAlreadyExistsError: If a parent-child connection
                 already exists.
             ActivityNoteWriteError: If a child note could not
                 be written.
         """
-        if parent not in self:
-            raise ActivityNotFoundError(
-                f"The activity '{parent}' could not be found."
+        try:
+            path = self._find_path(child, parent)
+        except PathNotFoundError:
+            path = None
+
+        if path is not None:
+            raise CycleError(
+                [parent] + path,
+                f"The parent-child connection '{parent}'-'{child}' "
+                "could not be added. This creates a cycle."
             )
 
+        # No cycle has been found. Add the connection.
         parent_link = self._link(parent)
         note = self._load_note(child)
         try:

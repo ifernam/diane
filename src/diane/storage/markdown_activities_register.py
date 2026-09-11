@@ -66,7 +66,7 @@ class ConnectionNotFoundError(MarkdownActivitiesRegisterError):
 
 
 class PathNotFoundError(MarkdownActivitiesRegisterError):
-    """If no path between two activities has been found."""
+    """No path between two activities could be found."""
     ...
 
 

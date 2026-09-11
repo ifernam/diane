@@ -644,8 +644,28 @@ class MarkdownActivitiesRegister(
 
         Returns:
             set[str]: A set of all ancestors of the given activities.
+
+        Raises:
+            ActivityNotFoundError: If an activity could not be found.
+            ActivityNoteReadError: If an activity note could not
+                be read.
+            InvalidActivityNoteDataError: If an activity note has
+                invalid format.
+            InvalidActivityLinkError: If an activity link format
+                is invalid.
         """
-        raise NotImplementedError
+        given = set(slugs)
+        visited: set[str] = set()
+        for s in given:
+            stack = [s]
+            while stack:
+                a = stack.pop()
+                if a not in visited:
+                    visited.add(a)
+                    for p in self.parents(a):
+                        stack.append(p)
+
+        return visited - given
 
     @override
     def add_connection(self, parent: str, child: str) -> None:

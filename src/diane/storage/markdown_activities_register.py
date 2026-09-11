@@ -651,12 +651,26 @@ class MarkdownActivitiesRegister(
                 invalid format.
             InvalidActivityLinkError: If an activity link format
                 is invalid.
-            CycleError: If a cycle has been found.
             ConnectionAlreadyExistsError: If a parent-child connection
                 already exists.
+            CycleError: If a cycle has been found.
             ActivityNoteWriteError: If a child note could not
                 be written.
         """
+        if parent not in self:
+            raise ActivityNotFoundError(
+                f"A parent activity '{parent}' could not be found."
+            )
+        if child not in self:
+            raise ActivityNotFoundError(
+                f"A child activity '{child}' could not be found."
+            )
+        if parent in self.parents(child):
+            raise ConnectionAlreadyExistsError(
+                f"The parent-child connection '{parent}'-'{child}' "
+                "already exists."
+            )
+
         try:
             path = self._find_path(child, parent)
         except PathNotFoundError:

@@ -57,14 +57,14 @@ class SQLiteActivitiesRegister(
         raise NotImplementedError
 
     @override
-    def descendants(self, *slugs: str) -> set[str]:
-        """Return the descendants of the given activities.
+    def ancestors(self, *slugs: str) -> set[str]:
+        """Return the ancestors of the given activities.
 
         Args:
             *slugs (str): Activity slugs.
 
         Returns:
-            set[str]: A set of all descendants of the given activities.
+            set[str]: A set of all ancestors of the given activities.
         """
         raise NotImplementedError
 

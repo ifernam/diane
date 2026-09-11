@@ -716,7 +716,11 @@ class MarkdownActivitiesRegister(
         """
         if parent not in self:
             raise ActivityNotFoundError(
-                f"The activity '{parent}' could not be found."
+                f"The parent activity '{parent}' could not be found."
+            )
+        if child not in self:
+            raise ActivityNotFoundError(
+                f"The child activity '{child}' could not be found."
             )
 
         parent_link = self._link(parent)

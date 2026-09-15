@@ -8,6 +8,7 @@ import yaml
 from frontmatter.default_handlers import YAMLHandler
 from pydantic import BaseModel, ValidationError
 
+import diane.listr
 from diane.activity import Activity, ActivityData
 from diane.storage.activities_register import (
     ActivitiesRegister,
@@ -95,90 +96,6 @@ class CycleError(MarkdownActivitiesRegisterError):
         """
         super().__init__(message)
         self.cycle = cycle
-
-
-class AlreadyInListStrError(Exception):
-    """A string is already in `list[str] | str`."""
-    ...
-
-
-class NotInListStrError(Exception):
-    """A string is not contained in `list[str] | str`."""
-    ...
-
-
-class ListStrIsEmptyError(Exception):
-    """`list[str] | str` is empty."""
-    ...
-
-
-def _add_to_liststr(liststr: list[str] | str, new: str) -> list[str] | str:
-    """Add a string to a list of strings or a bare string
-    (`list[str] | str`).
-
-    Args:
-        liststr (list[str] | str): A list of strings or a bare string.
-        new (str): A new string.
-
-    Returns:
-        list[str] | str: An updated `list[str] | str`.
-    """
-    if isinstance(liststr, str):
-        # A bare string.
-        if new == liststr:
-            raise AlreadyInListStrError(
-                f"'{new}' is already in the `list[str] | str`."
-            )
-        return [liststr, new]
-    elif not liststr:
-        # An empty list.
-        return new
-    else:
-        # A non-empty list.
-        if new in liststr:
-            raise AlreadyInListStrError(
-                f"'{new}' is already in the `list[str] | str`."
-            )
-        return liststr + [new]
-
-
-def _remove_from_liststr(
-    liststr: list[str] | str, old: str
-) -> list[str] | str:
-    """Remove a string from a list of strings or a bare string
-    (`list[str] | str`).
-
-    Args:
-        liststr (list[str] | str): A list of strings or a bare string.
-        old (str): A string to be removed.
-
-    Returns:
-        list[str] | str: An updated `list[str] | str`.
-    """
-    if isinstance(liststr, str):
-        # A bare string.
-        if old == liststr:
-            return []
-
-        raise NotInListStrError(
-            f"The string '{old}' is not contained in the `list[str] | str`."
-        )
-    elif not liststr:
-        # An empty list.
-        raise ListStrIsEmptyError('The `list[str] | str` is empty.')
-    else:
-        # A non-empty list.
-        if old not in liststr:
-            raise NotInListStrError(
-                f"The string '{old}' is not contained "
-                "in the `list[str] | str`."
-            )
-
-        updated = [s for s in liststr if s != old]
-        if len(updated) == 1:
-            return updated[0]
-        else:
-            return updated
 
 
 class MarkdownActivitiesRegisterConfig(ActivitiesRegisterConfig):
@@ -719,8 +636,8 @@ class MarkdownActivitiesRegister(
         parent_link = self._link(parent)
         note = self._load_note(child)
         try:
-            note.data.parents = _add_to_liststr(note.data.parents, parent_link)
-        except AlreadyInListStrError as exc:
+            note.data.parents = diane.listr.add(note.data.parents, parent_link)
+        except diane.listr.AlreadyInListStrError as exc:
             raise ConnectionAlreadyExistsError(
                 f"The parent-child connection '{parent}'-'{child}' "
                 "already exists."
@@ -758,10 +675,13 @@ class MarkdownActivitiesRegister(
         parent_link = self._link(parent)
         note = self._load_note(child)
         try:
-            note.data.parents = _remove_from_liststr(
+            note.data.parents = diane.listr.remove(
                 note.data.parents, parent_link
             )
-        except (NotInListStrError, ListStrIsEmptyError) as exc:
+        except (
+            diane.listr.NotInListStrError,
+            diane.listr.ListStrIsEmptyError
+        ) as exc:
             raise ConnectionNotFoundError(
                 f"The parent-child connection '{parent}'-'{child}' "
                 "could not be found."

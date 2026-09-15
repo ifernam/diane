@@ -25,6 +25,9 @@ def add(liststr: LiStr, new: str) -> LiStr:
 
     Returns:
         LiStr: An updated `LiStr`.
+
+    Raises:
+        AlreadyInLiStrError: If a string is already in `LiStr`.
     """
     if isinstance(liststr, str):
         # A bare string.
@@ -51,6 +54,10 @@ def remove(liststr: LiStr, old: str) -> LiStr:
 
     Returns:
         LiStr: An updated `LiStr`.
+
+    Raises:
+        NotInLiStrError: If a string is not contained in `LiStr`.
+        LiStrIsEmptyError: If `LiStr` is empty.
     """
     if isinstance(liststr, str):
         # A bare string.

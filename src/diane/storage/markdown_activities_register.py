@@ -637,7 +637,7 @@ class MarkdownActivitiesRegister(
         note = self._load_note(child)
         try:
             note.data.parents = diane.listr.add(note.data.parents, parent_link)
-        except diane.listr.AlreadyInListStrError as exc:
+        except diane.listr.AlreadyInLiStrError as exc:
             raise ConnectionAlreadyExistsError(
                 f"The parent-child connection '{parent}'-'{child}' "
                 "already exists."
@@ -679,8 +679,8 @@ class MarkdownActivitiesRegister(
                 note.data.parents, parent_link
             )
         except (
-            diane.listr.NotInListStrError,
-            diane.listr.ListStrIsEmptyError
+            diane.listr.NotInLiStrError,
+            diane.listr.LiStrIsEmptyError
         ) as exc:
             raise ConnectionNotFoundError(
                 f"The parent-child connection '{parent}'-'{child}' "

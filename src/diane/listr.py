@@ -1,14 +1,19 @@
-class AlreadyInLiStrError(Exception):
+class LiStrError(Exception):
+    """A general LiStr error."""
+    ...
+
+
+class AlreadyInLiStrError(LiStrError):
     """A string is already in `LiStr`."""
     ...
 
 
-class NotInLiStrError(Exception):
+class NotInLiStrError(LiStrError):
     """A string is not contained in `LiStr`."""
     ...
 
 
-class LiStrIsEmptyError(Exception):
+class LiStrIsEmptyError(LiStrError):
     """`LiStr` is empty."""
     ...
 

@@ -6,6 +6,7 @@ from pydantic_settings import BaseSettings
 
 from diane.storage import (
     ActivitiesRegisterConfigUnion,
+    EntriesRegisterConfigUnion,
     SessionsRegisterConfigUnion,
 )
 
@@ -51,11 +52,14 @@ class RepositoryConfig(BaseSettings):
             An activities register configuration.
         sessions_register (SessionsRegisterConfigUnion): A sessions
             register configuration.
+        entries_register (EntriesRegisterConfigUnion): An entries
+            register configuration.
     """
 
     name: str = 'Repository'
     activities_register: ActivitiesRegisterConfigUnion
     sessions_register: SessionsRegisterConfigUnion
+    entries_register: EntriesRegisterConfigUnion
 
 
 class Repository:
@@ -68,8 +72,8 @@ class Repository:
 
     - Does not load a configuration. Use the `Configurator`
       to initialise a repository.
-    - Does not handle user data (activities, sessions, etc.) directly.
-      This is the responsibility of the `StorageEngine`.
+    - Does not handle user data (activities, sessions, entries)
+      directly. This is the responsibility of the `StorageEngine`.
 
     Attributes:
         _path (Path): A path to a repository in the file system.

@@ -18,6 +18,10 @@ from .sqlite_activities_register import (
     SQLiteActivitiesRegister,
     SQLiteActivitiesRegisterConfig,
 )
+from .sqlite_entries_register import (
+    SQLiteEntriesRegister,
+    SQLiteEntriesRegisterConfig,
+)
 from .sqlite_sessions_register import SQLiteSessionsRegisterConfig
 
 ActivitiesRegisterConfigUnion = Annotated[
@@ -54,4 +58,6 @@ __all__ = [
     'EntriesRegisterConfig',
     'MarkdownEntriesRegister',
     'MarkdownEntriesRegisterConfig',
+    'SQLiteEntriesRegister',
+    'SQLiteEntriesRegisterConfig',
 ]

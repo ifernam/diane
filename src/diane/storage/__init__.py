@@ -34,7 +34,13 @@ SessionsRegisterConfigUnion = Annotated[
     Field(discriminator='backend'),
 ]
 
+EntriesRegisterConfigUnion = Annotated[
+    MarkdownEntriesRegisterConfig | SQLiteEntriesRegisterConfig,
+    Field(discriminator='backend'),
+]
+
 ActivitiesRegisterUnion = MarkdownActivitiesRegister | SQLiteActivitiesRegister
+EntriesRegisterUnion = MarkdownEntriesRegister | SQLiteEntriesRegister
 
 __all__ = [
     # Activities register.
@@ -60,4 +66,6 @@ __all__ = [
     'MarkdownEntriesRegisterConfig',
     'SQLiteEntriesRegister',
     'SQLiteEntriesRegisterConfig',
+    'EntriesRegisterUnion',
+    'EntriesRegisterConfigUnion',
 ]

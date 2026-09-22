@@ -12,10 +12,15 @@ from diane.chrono import Timestamp
 from diane.repo import NoRepositoryFoundError, Repository, RepositoryConfig
 from diane.storage import (
     ActivitiesRegisterUnion,
+    EntriesRegisterUnion,
     MarkdownActivitiesRegister,
     MarkdownActivitiesRegisterConfig,
+    MarkdownEntriesRegister,
+    MarkdownEntriesRegisterConfig,
     SQLiteActivitiesRegister,
     SQLiteActivitiesRegisterConfig,
+    SQLiteEntriesRegister,
+    SQLiteEntriesRegisterConfig,
 )
 
 
@@ -301,5 +306,34 @@ class Configurator:
             config, SQLiteActivitiesRegisterConfig
         ):
             return SQLiteActivitiesRegister(repo.path, config)
+
+        assert_never(config)
+
+    @classmethod
+    def entries_register(cls, repo: Repository) -> EntriesRegisterUnion:
+        """Create a new entries register.
+
+        An entries register's backend depends on a backend specified
+        in the corresponding repository configuration.
+
+        Args:
+            repo (Repository): A repository.
+
+        Returns:
+            EntriesRegisterUnion: A new entries register.
+
+        Raises:
+            AssertionError: If the backend of an entries register's
+                configuration hasn't been recognised.
+        """
+        config = repo.config.entries_register
+
+        if isinstance(config, MarkdownEntriesRegisterConfig):
+            return MarkdownEntriesRegister(repo.path, config)
+
+        if isinstance(  # pyright: ignore[reportUnnecessaryIsInstance]
+            config, SQLiteEntriesRegisterConfig
+        ):
+            return SQLiteEntriesRegister(repo.path, config)
 
         assert_never(config)

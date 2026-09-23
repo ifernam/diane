@@ -13,7 +13,6 @@ dependencies = [
     "pydantic_settings",
     "tzlocal",
     "portion",
-    "pyyaml",
     "python-frontmatter",
 ]
 

@@ -1,12 +1,15 @@
 import datetime
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Literal, NamedTuple, override
+from typing import ClassVar, Literal, NamedTuple, override
 
-from pydantic import field_validator
+import frontmatter
+import yaml
+from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 
 from diane.chrono import Timestamp
 from diane.entry import Entry
+from diane.listr import LiStr
 from diane.storage import EntriesRegister, EntriesRegisterConfig
 
 from .entries_register import EntriesRegisterError, NotRelativePathError
@@ -29,6 +32,21 @@ class DailyNoteTemplateNotRelativePathError(
 
 class DailyNoteNameError(MarkdownEntriesRegisterError):
     """A daily note has an invalid name."""
+    ...
+
+
+class DailyNoteNotFoundError(MarkdownEntriesRegisterError):
+    """A daily note could not be found."""
+    ...
+
+
+class DailyNoteReadError(MarkdownEntriesRegisterError):
+    """A daily note could not be read."""
+    ...
+
+
+class InvalidDailyNoteDataError(MarkdownEntriesRegisterError):
+    """An invalid data format in a daily note."""
     ...
 
 
@@ -82,6 +100,48 @@ class DailyNoteEntry(NamedTuple):
 
     date: datetime.date
     name: str
+
+
+class EntryYAMLData(BaseModel):
+    """Stores entry data from daily note's YAML front matter as it is.
+
+    Attributes:
+        time (str): An ISO 8601 time string with a UTC offset.
+        timezone (str): An IANA time zone.
+        tags (LiStr): An entry's tags. Optional.
+        text (str): An entry's Markdown text.
+    """
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra='forbid')
+
+    time: str
+    timezone: str
+    tags: LiStr = []
+    text: str
+
+
+class DailyNoteData(BaseModel):
+    """Stores a daily note's data from a YAML front matter.
+
+    Attributes:
+        tags (LiStr): A daily note's tags. Optional.
+        diane_entries (list[EntryYAMLData]): The user's text entries.
+    """
+
+    tags: LiStr = []
+    diane_entries: list[EntryYAMLData] = []
+
+
+class DailyNote(NamedTuple):
+    """Represents a daily note.
+
+    Attributes:
+        data (DailyNoteData): A daily note's data.
+        content (str): A daily note's Markdown content.
+    """
+
+    data: DailyNoteData
+    content: str
 
 
 class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
@@ -165,6 +225,71 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
                 order.
         """
         return sorted(self._daily_notes(start, end), key=lambda e: e.date)
+
+    def _load_note(self, name: str) -> DailyNote:
+        """Load a daily note by its name.
+
+        Args:
+            name (str): A daily note's name.
+
+        Returns:
+            DailyNote: A daily note.
+
+        Raises:
+            DailyNoteNotFoundError: If a daily note could not be found.
+            DailyNoteReadError: If a daily note could not be read.
+            InvalidDailyNoteDataError: If a daily note has invalid
+                format.
+        """
+        daily_note_path = self.path / f'{name}.md'
+
+        if not daily_note_path.is_file():
+            raise DailyNoteNotFoundError(
+                f"The daily note '{name}' could not be found."
+            )
+
+        try:
+            note = frontmatter.load(daily_note_path)
+        except FileNotFoundError as exc:
+            raise DailyNoteReadError(
+                f"The daily note '{daily_note_path}' could not be found."
+            ) from exc
+        except PermissionError as exc:
+            raise DailyNoteReadError(
+                f"Permission denied: '{daily_note_path}'."
+            ) from exc
+        except OSError as exc:
+            raise DailyNoteReadError(
+                f"An I/O error occurred while reading '{daily_note_path}'. "
+                f"{exc}"
+            ) from exc
+        except UnicodeDecodeError as exc:
+            raise DailyNoteReadError(
+                f"An encoding error in '{daily_note_path}'. Try a different "
+                f"encoding. {exc}"
+            ) from exc
+        except yaml.YAMLError as exc:
+            raise DailyNoteReadError(
+                f"A YAML syntax error in '{daily_note_path}'. {exc}"
+            ) from exc
+        except ValueError as exc:
+            raise DailyNoteReadError(
+                f"'{daily_note_path}' is not a file that can be opened. {exc}"
+            ) from exc
+        except TypeError as exc:
+            raise DailyNoteReadError(
+                f"An invalid input type for '{daily_note_path}'. {exc}"
+            ) from exc
+
+        try:
+            return DailyNote(
+                DailyNoteData.model_validate(note.metadata),
+                note.content
+            )
+        except ValidationError as exc:
+            raise InvalidDailyNoteDataError(
+                f"The daily note '{daily_note_path}' has invalid format."
+            ) from exc
 
     @override
     def __iter__(self) -> Iterator[Timestamp]:

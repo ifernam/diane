@@ -7,7 +7,7 @@ name = "diane"
 authors = [{name = "ifernam"}]
 description = "Human activities tracker"
 version = "0.1.0"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     "pyyaml",
     "pydantic_settings",
@@ -35,7 +35,7 @@ reportImplicitStringConcatenation = false
 stubPath = "stubs"
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py314"
 line-length = 79
 
 [tool.ruff.lint]

@@ -1,6 +1,7 @@
+import datetime
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Literal, override
+from typing import Literal, NamedTuple, override
 
 from pydantic import field_validator
 
@@ -23,6 +24,11 @@ class DailyNoteTemplateNotRelativePathError(
 
     For Pydantic's validation.
     """
+    ...
+
+
+class DailyNoteNameError(MarkdownEntriesRegisterError):
+    """A daily note has an invalid name."""
     ...
 
 
@@ -66,12 +72,99 @@ class MarkdownEntriesRegisterConfig(EntriesRegisterConfig):
         return v
 
 
+class DailyNoteEntry(NamedTuple):
+    """Stores a daily note's date and name.
+
+    Attributes:
+        date (datetime.date): A daily note's date.
+        name (str): A daily note's name.
+    """
+
+    date: datetime.date
+    name: str
+
+
 class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
     """Represents a Markdown entries register.
 
     Enables the user's text entries stored in daily notes to be worked
     with.
     """
+
+    def _name_to_date(self, name: str) -> datetime.date:
+        """Convert a daily note's name to the date it relates to.
+
+        Validates a daily note's name.
+
+        Args:
+            name (str): A daily note's name.
+
+        Returns:
+            datetime.date: A date that a daily note relates to.
+
+        Raises:
+            DailyNoteNameError: If a daily note has invalid name.
+        """
+        name_format = self._config.daily_note_name_format
+        try:
+            return datetime.date.strptime(name, name_format)
+        except ValueError as exc:
+            raise DailyNoteNameError(
+                f"The name '{name}' of the daily note does not match "
+                f"the format '{name_format}'."
+            ) from exc
+
+    def _daily_notes(
+        self,
+        start: datetime.date | None = None,
+        end: datetime.date | None = None
+    ) -> Iterator[DailyNoteEntry]:
+        """Iterate over daily notes relating to the specified date
+        range.
+
+        The start and end dates are included in the specified range.
+        The order is arbitrary.
+
+        Args:
+            start (datetime.date | None): A start date, included.
+            end (datetime.date | None): An end date, included.
+
+        Yields:
+            DailyNoteEntry: A daily note's entry.
+        """
+        for p in self.path.glob('*.md'):
+            if p.is_file():
+                try:
+                    date = self._name_to_date(p.stem)
+
+                    if start is not None and date < start:
+                        continue
+                    if end is not None and date > end:
+                        continue
+
+                    yield DailyNoteEntry(date, p.stem)
+                except DailyNoteNameError:
+                    pass
+
+    def _daily_notes_chrono(
+        self,
+        start: datetime.date | None = None,
+        end: datetime.date | None = None
+    ) -> list[DailyNoteEntry]:
+        """Return a list of daily notes relating to the specified date
+        range, in chronological order.
+
+        The start and end dates are included in the specified range.
+
+        Args:
+            start (datetime.date | None): A start date, included.
+            end (datetime.date | None): An end date, included.
+
+        Returns:
+            list[DailyNoteEntry]: Daily notes entries in chronological
+                order.
+        """
+        return sorted(self._daily_notes(start, end), key=lambda e: e.date)
 
     @override
     def __iter__(self) -> Iterator[Timestamp]:

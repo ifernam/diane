@@ -533,6 +533,16 @@ class Timestamp:
 
         return NotImplemented
 
+    @property
+    def datetime(self) -> datetime.datetime:
+        """Return the underlying aware `datetime` object.
+
+        Returns:
+            datetime.datetime: The timestamp's aware `datetime` using
+                a `ZoneInfo` time zone.
+        """
+        return self._dt
+
     def date_iso(self, midnight24: bool = False) -> str:
         """Return a string representing the date of the timestamp
         in the ISO 8601 format.

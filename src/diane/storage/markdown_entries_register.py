@@ -8,7 +8,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 
 from diane.chrono import Timestamp
-from diane.entry import Entry
+from diane.entry import Entry, EntryData
 from diane.listr import LiStr
 from diane.storage import EntriesRegister, EntriesRegisterConfig
 
@@ -120,6 +120,18 @@ class EntryYAMLData(BaseModel):
     text: str
 
 
+class TimestampedEntry(NamedTuple):
+    """Represents an entry with its timestamp.
+
+    Attributes:
+        timestamp (Timestamp): An entry's timestamp.
+        entry (Entry): An entry.
+    """
+
+    timestamp: Timestamp
+    entry: Entry
+
+
 class DailyNoteData(BaseModel):
     """Stores a daily note's data from a YAML front matter.
 
@@ -142,6 +154,52 @@ class DailyNote(NamedTuple):
 
     data: DailyNoteData
     content: str
+
+
+def yaml_to_entry(yaml_data: EntryYAMLData) -> TimestampedEntry:
+    """Convert raw YAML entry data to a timestamped entry representation.
+
+    Args:
+        yaml_data (EntryYAMLData): Raw entry data from daily note YAML.
+
+    Returns:
+        TimestampedEntry: An entry paired with its timestamp.
+
+    Raises:
+        InvalidISOFormatError: If `yaml_data.time` is not a valid ISO 8601
+            string.
+        InvalidTimezoneError: If `yaml_data.timezone` is invalid or does not
+            match the offset in `yaml_data.time`.
+        ValidationError: If the resulting timestamp could not be validated.
+        NonExistentTimeError: If the provided local time does not exist in the
+            specified IANA time zone.
+    """
+    return TimestampedEntry(
+        timestamp=Timestamp.from_iso_iana(yaml_data.time, yaml_data.timezone),
+        entry=Entry(EntryData(tags=yaml_data.tags, text=yaml_data.text))
+    )
+
+
+def note_to_entries(note: DailyNote) -> list[TimestampedEntry]:
+    """Convert a daily note to a list of its timestamped entries.
+
+    Args:
+        note (DailyNote): A daily note.
+
+    Returns:
+        list[TimestampedEntry]: The daily note's text entries paired
+            with their timestamps.
+
+    Raises:
+        InvalidISOFormatError: If an entry's `time` is not a valid ISO 8601
+            string.
+        InvalidTimezoneError: If an entry's `timezone` is invalid or does not
+            match the offset in `time`.
+        ValidationError: If a resulting timestamp could not be validated.
+        NonExistentTimeError: If a provided local time does not exist in the
+            specified IANA time zone.
+    """
+    return [yaml_to_entry(y) for y in note.data.diane_entries]
 
 
 class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
@@ -317,14 +375,48 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
         """Return a list of entries relating to the specified moment
         in time.
 
+        An entry is returned only once even if it occurs in several
+        daily notes.
+
         Args:
             key (Timestamp): A timestamp.
 
         Returns:
             list[Entry]: A list of entries relating to the specified
                 moment in time.
+
+        Raises:
+            DailyNoteNotFoundError: If a daily note could not be found.
+            DailyNoteReadError: If a daily note could not be read.
+            InvalidDailyNoteDataError: If a daily note has invalid
+                format.
+            InvalidISOFormatError: If an entry's `time` is not a valid
+                ISO 8601 string.
+            InvalidTimezoneError: If an entry's `timezone` is invalid
+                or does not match the offset in `time`.
+            ValidationError: If a resulting timestamp could not
+                be validated.
+            NonExistentTimeError: If a provided local time does not
+                exist in the specified IANA time zone.
         """
-        raise NotImplementedError
+        # Search two days before and after the timestamp because
+        # the same entry can have different calendar dates in different
+        # time zones.
+        ordinal = key.datetime.date().toordinal()
+        lower_date = datetime.date.fromordinal(
+            max(ordinal - 2, datetime.date.min.toordinal())
+        )
+        upper_date = datetime.date.fromordinal(
+            min(ordinal + 2, datetime.date.max.toordinal())
+        )
+
+        entries: list[Entry] = []
+        for dne in self._daily_notes(lower_date, upper_date):
+            dn = self._load_note(dne.name)
+            for te in note_to_entries(dn):
+                if te.timestamp == key and te.entry not in entries:
+                    entries.append(te.entry)
+        return entries
 
     @override
     def __setitem__(self, key: Timestamp, value: list[Entry]) -> None:

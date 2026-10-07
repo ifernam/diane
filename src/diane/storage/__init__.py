@@ -3,7 +3,11 @@ from typing import Annotated
 from pydantic import Field
 
 from .activities_register import ActivitiesRegister, ActivitiesRegisterConfig
-from .entries_register import EntriesRegister, EntriesRegisterConfig
+from .entries_register import (
+    EntriesRegister,
+    EntriesRegisterConfig,
+    Slice,
+)
 from .markdown_activities_register import (
     MarkdownActivitiesRegister,
     MarkdownActivitiesRegisterConfig,
@@ -26,17 +30,17 @@ from .sqlite_sessions_register import SQLiteSessionsRegisterConfig
 
 ActivitiesRegisterConfigUnion = Annotated[
     MarkdownActivitiesRegisterConfig | SQLiteActivitiesRegisterConfig,
-    Field(discriminator='backend'),
+    Field(discriminator="backend"),
 ]
 
 SessionsRegisterConfigUnion = Annotated[
     MarkdownSessionsRegisterConfig | SQLiteSessionsRegisterConfig,
-    Field(discriminator='backend'),
+    Field(discriminator="backend"),
 ]
 
 EntriesRegisterConfigUnion = Annotated[
     MarkdownEntriesRegisterConfig | SQLiteEntriesRegisterConfig,
-    Field(discriminator='backend'),
+    Field(discriminator="backend"),
 ]
 
 ActivitiesRegisterUnion = MarkdownActivitiesRegister | SQLiteActivitiesRegister
@@ -44,28 +48,27 @@ EntriesRegisterUnion = MarkdownEntriesRegister | SQLiteEntriesRegister
 
 __all__ = [
     # Activities register.
-    'ActivitiesRegister',
-    'ActivitiesRegisterConfig',
-    'MarkdownActivitiesRegister',
-    'MarkdownActivitiesRegisterConfig',
-    'SQLiteActivitiesRegister',
-    'SQLiteActivitiesRegisterConfig',
-    'ActivitiesRegisterUnion',
-    'ActivitiesRegisterConfigUnion',
-
+    "ActivitiesRegister",
+    "ActivitiesRegisterConfig",
+    "MarkdownActivitiesRegister",
+    "MarkdownActivitiesRegisterConfig",
+    "SQLiteActivitiesRegister",
+    "SQLiteActivitiesRegisterConfig",
+    "ActivitiesRegisterUnion",
+    "ActivitiesRegisterConfigUnion",
     # Sessions register.
-    'SessionsRegisterConfig',
-    'MarkdownSessionsRegisterConfig',
-    'SQLiteSessionsRegisterConfig',
-    'SessionsRegisterConfigUnion',
-
+    "SessionsRegisterConfig",
+    "MarkdownSessionsRegisterConfig",
+    "SQLiteSessionsRegisterConfig",
+    "SessionsRegisterConfigUnion",
     # Entries register.
-    'EntriesRegister',
-    'EntriesRegisterConfig',
-    'MarkdownEntriesRegister',
-    'MarkdownEntriesRegisterConfig',
-    'SQLiteEntriesRegister',
-    'SQLiteEntriesRegisterConfig',
-    'EntriesRegisterUnion',
-    'EntriesRegisterConfigUnion',
+    "Slice",
+    "EntriesRegister",
+    "EntriesRegisterConfig",
+    "MarkdownEntriesRegister",
+    "MarkdownEntriesRegisterConfig",
+    "SQLiteEntriesRegister",
+    "SQLiteEntriesRegisterConfig",
+    "EntriesRegisterUnion",
+    "EntriesRegisterConfigUnion",
 ]

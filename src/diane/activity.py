@@ -6,11 +6,13 @@ from pydantic import BaseModel, ConfigDict
 
 class ActivityError(Exception):
     """A general activity error."""
+
     ...
 
 
 class InvalidSlugError(ActivityError):
     """An invalid activity slug."""
+
     ...
 
 
@@ -24,10 +26,11 @@ class ActivityData(BaseModel):
         tags (list[str] | str): An activity's tags.
         emoji (str): An emoji for visualising activity.
     """
-    model_config: ClassVar[ConfigDict] = ConfigDict(extra='forbid')
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid")
 
     name: str
-    description: str = ''
+    description: str = ""
     tags: list[str] | str = []
     emoji: str
 
@@ -45,7 +48,7 @@ class Activity:
     """
 
     _SLUG_PATTERN: re.Pattern[str] = re.compile(
-        r'^(?=.*[a-z])[a-z0-9]+(?:_[a-z0-9]+)*$'
+        r"^(?=.*[a-z])[a-z0-9]+(?:_[a-z0-9]+)*$"
     )
 
     _slug: str

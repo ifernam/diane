@@ -13,11 +13,13 @@ from diane.storage import (
 
 class RepositoryError(Exception):
     """A general repository error."""
+
     ...
 
 
 class NoRepositoryFoundError(RepositoryError):
     """No repository has been found."""
+
     ...
 
 
@@ -28,7 +30,7 @@ class RepositoryNotInitialisedError(RepositoryError):
         super().__init__(
             f"The repository at '{repo_path}' has not been initialised."
             if repo_path
-            else 'The repository has not been initialised.'
+            else "The repository has not been initialised."
         )
 
 
@@ -39,7 +41,7 @@ class RepositoryAlreadyInitialisedError(RepositoryError):
         super().__init__(
             f"The repository at '{repo_path}' has already been initialised."
             if repo_path
-            else 'The repository has already been initialised.'
+            else "The repository has already been initialised."
         )
 
 
@@ -56,7 +58,7 @@ class RepositoryConfig(BaseSettings):
             register configuration.
     """
 
-    name: str = 'Repository'
+    name: str = "Repository"
     activities_register: ActivitiesRegisterConfigUnion
     sessions_register: SessionsRegisterConfigUnion
     entries_register: EntriesRegisterConfigUnion
@@ -84,7 +86,7 @@ class Repository:
     """
 
     # Contains a repository's metadata.
-    _diane_subdir: Path = Path('.diane')
+    _diane_subdir: Path = Path(".diane")
 
     _path: Path
     _config: RepositoryConfig | None

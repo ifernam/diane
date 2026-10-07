@@ -18,56 +18,67 @@ from diane.storage.activities_register import (
 
 class MarkdownActivitiesRegisterError(Exception):
     """A general Markdown activities register error."""
+
     ...
 
 
 class ActivityNotFoundError(MarkdownActivitiesRegisterError):
     """An activity could not be found."""
+
     ...
 
 
 class ActivityNoteReadError(MarkdownActivitiesRegisterError):
     """An activity note could not be read."""
+
     ...
 
 
 class InvalidActivityNoteDataError(MarkdownActivitiesRegisterError):
     """An invalid data format in a Markdown activity note."""
+
     ...
 
 
 class InvalidActivityLinkError(MarkdownActivitiesRegisterError):
     """An activity link has invalid format."""
+
     ...
 
 
 class ActivityNoteWriteError(MarkdownActivitiesRegisterError):
     """An activity note could not be written."""
+
     ...
 
 
 class ActivityNoteDeleteError(MarkdownActivitiesRegisterError):
     """An activity note could not be deleted."""
+
     ...
 
 
 class SlugKeyMatchError(MarkdownActivitiesRegisterError):
     """An activity slug does not match its key."""
+
     ...
 
 
 class ConnectionAlreadyExistsError(MarkdownActivitiesRegisterError):
     """A parent-child connection already exists."""
+
     ...
 
 
 class ConnectionNotFoundError(MarkdownActivitiesRegisterError):
     """A parent-child connection could not be found."""
+
     ...
 
 
 class PathNotFoundError(MarkdownActivitiesRegisterError):
     """No path between two activities could be found."""
+
     ...
 
 
@@ -84,7 +95,7 @@ class CycleError(MarkdownActivitiesRegisterError):
     def __init__(
         self,
         cycle: list[str],
-        message: str = 'A cycle has been found in the activities graph.'
+        message: str = "A cycle has been found in the activities graph.",
     ) -> None:
         """Create an exception to indicate the presence of a cycle
         in the activity graph.
@@ -101,8 +112,8 @@ class CycleError(MarkdownActivitiesRegisterError):
 class MarkdownActivitiesRegisterConfig(ActivitiesRegisterConfig):
     """A Markdown activities register configuration."""
 
-    backend: Literal['markdown'] = 'markdown'
-    path: Path = Path('diane_activities')
+    backend: Literal["markdown"] = "markdown"
+    path: Path = Path("diane_activities")
 
 
 class ActivityNoteData(BaseModel):
@@ -119,7 +130,7 @@ class ActivityNoteData(BaseModel):
 
     tags: list[str] | str = []
     name: str
-    description: str = ''
+    description: str = ""
     emoji: str | None = None
     parents: list[str] | str = []
 
@@ -156,7 +167,7 @@ class MarkdownActivitiesRegister(
         Yields:
             str: An activity slug.
         """
-        for p in self.path.glob('*.md'):
+        for p in self.path.glob("*.md"):
             if p.is_file():
                 yield p.stem
 
@@ -186,7 +197,7 @@ class MarkdownActivitiesRegister(
             InvalidActivityNoteDataError: If an activity note has
                 invalid format.
         """
-        activity_note_path = self.path / f'{slug}.md'
+        activity_note_path = self.path / f"{slug}.md"
 
         if not activity_note_path.is_file():
             raise ActivityNotFoundError(
@@ -229,8 +240,7 @@ class MarkdownActivitiesRegister(
 
         try:
             return ActivityNote(
-                ActivityNoteData.model_validate(note.metadata),
-                note.content
+                ActivityNoteData.model_validate(note.metadata), note.content
             )
         except ValidationError as exc:
             raise InvalidActivityNoteDataError(
@@ -249,7 +259,7 @@ class MarkdownActivitiesRegister(
                 be written.
         """
         # Prepare data.
-        path = self.path / f'{slug}.md'
+        path = self.path / f"{slug}.md"
         data: dict[str, object] = note.data.model_dump(exclude_defaults=True)
         post = frontmatter.Post(note.content, handler=None, **data)
 
@@ -261,7 +271,7 @@ class MarkdownActivitiesRegister(
                 path,
                 handler=YAMLHandler(),
                 Dumper=yaml.SafeDumper,
-                sort_keys=False
+                sort_keys=False,
             )
         except PermissionError as exc:
             raise ActivityNoteWriteError(
@@ -293,7 +303,8 @@ class MarkdownActivitiesRegister(
         """
         # Determine the emoji.
         emoji = (
-            note_data.emoji if note_data.emoji is not None
+            note_data.emoji
+            if note_data.emoji is not None
             else self._config.fallback_emoji
         )
 
@@ -301,13 +312,13 @@ class MarkdownActivitiesRegister(
             name=note_data.name,
             description=note_data.description,
             tags=note_data.tags,
-            emoji=emoji
+            emoji=emoji,
         )
 
     def _activity_data_to_note_data(
         self,
         activity_data: ActivityData,
-        parents: list[str] | str | None = None
+        parents: list[str] | str | None = None,
     ) -> ActivityNoteData:
         """Convert an activity's data to an activity note's data.
 
@@ -327,7 +338,7 @@ class MarkdownActivitiesRegister(
             name=activity_data.name,
             description=activity_data.description,
             emoji=activity_data.emoji,
-            parents=self._link(parents)
+            parents=self._link(parents),
         )
 
     @override
@@ -386,7 +397,7 @@ class MarkdownActivitiesRegister(
                 f"does not match its key '{key}'."
             )
 
-        parents, content = [], ''
+        parents, content = [], ""
         if key in self:
             note = self._load_note(key)
             parents, content = note.data.parents, note.content
@@ -427,7 +438,7 @@ class MarkdownActivitiesRegister(
             if s != key and key in self.parents(s):
                 self.remove_connection(key, s)
 
-        path = self.path / f'{key}.md'
+        path = self.path / f"{key}.md"
 
         try:
             path.unlink(missing_ok=True)
@@ -452,7 +463,7 @@ class MarkdownActivitiesRegister(
             bool: `True` if an object is listed in the register.
         """
         if isinstance(key, str):
-            activity_note_path = self.path / f'{key}.md'
+            activity_note_path = self.path / f"{key}.md"
             return activity_note_path.is_file()
 
         return False
@@ -468,16 +479,14 @@ class MarkdownActivitiesRegister(
             re.Pattern[str]: The activity link pattern.
         """
         return re.compile(
-            rf'^\[\[{re.escape(self._config.path.as_posix())}/([^\]]+)\]\]$'
+            rf"^\[\[{re.escape(self._config.path.as_posix())}/([^\]]+)\]\]$"
         )
 
     @overload
-    def _unlink(self, links: str) -> str:
-        ...
+    def _unlink(self, links: str) -> str: ...
 
     @overload
-    def _unlink(self, links: list[str]) -> list[str]:
-        ...
+    def _unlink(self, links: list[str]) -> list[str]: ...
 
     def _unlink(self, links: list[str] | str) -> list[str] | str:
         """Return activity slugs for the given links to activity notes.
@@ -504,12 +513,10 @@ class MarkdownActivitiesRegister(
             return [self._unlink(a) for a in links]
 
     @overload
-    def _link(self, slugs: str) -> str:
-        ...
+    def _link(self, slugs: str) -> str: ...
 
     @overload
-    def _link(self, slugs: list[str]) -> list[str]:
-        ...
+    def _link(self, slugs: list[str]) -> list[str]: ...
 
     def _link(self, slugs: list[str] | str) -> list[str] | str:
         """Return links to activity notes for the given activity slugs.
@@ -521,7 +528,7 @@ class MarkdownActivitiesRegister(
             list[str] | str: Links to activity notes.
         """
         if isinstance(slugs, str):
-            return f'[[{self._config.path.as_posix()}/{slugs}]]'
+            return f"[[{self._config.path.as_posix()}/{slugs}]]"
         else:
             return [self._link(a) for a in slugs]
 
@@ -629,7 +636,7 @@ class MarkdownActivitiesRegister(
             raise CycleError(
                 [parent] + path,
                 f"The parent-child connection '{parent}'-'{child}' "
-                "could not be added. This creates a cycle."
+                "could not be added. This creates a cycle.",
             )
 
         # No cycle has been found. Add the connection.
@@ -680,7 +687,7 @@ class MarkdownActivitiesRegister(
             )
         except (
             diane.listr.NotInLiStrError,
-            diane.listr.LiStrIsEmptyError
+            diane.listr.LiStrIsEmptyError,
         ) as exc:
             raise ConnectionNotFoundError(
                 f"The parent-child connection '{parent}'-'{child}' "

@@ -11,7 +11,7 @@ from diane.storage.activities_register import (
 class SQLiteActivitiesRegisterConfig(ActivitiesRegisterConfig):
     """An SQLite activities register configuration."""
 
-    backend: Literal['sqlite'] = 'sqlite'
+    backend: Literal["sqlite"] = "sqlite"
 
 
 class SQLiteActivitiesRegister(

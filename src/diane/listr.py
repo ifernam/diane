@@ -1,20 +1,24 @@
 class LiStrError(Exception):
     """A general LiStr error."""
+
     ...
 
 
 class AlreadyInLiStrError(LiStrError):
     """A string is already in `LiStr`."""
+
     ...
 
 
 class NotInLiStrError(LiStrError):
     """A string is not contained in `LiStr`."""
+
     ...
 
 
 class LiStrIsEmptyError(LiStrError):
     """`LiStr` is empty."""
+
     ...
 
 
@@ -74,7 +78,7 @@ def remove(liststr: LiStr, old: str) -> LiStr:
         )
     elif not liststr:
         # An empty list.
-        raise LiStrIsEmptyError('The `LiStr` is empty.')
+        raise LiStrIsEmptyError("The `LiStr` is empty.")
     else:
         # A non-empty list.
         if old not in liststr:
@@ -87,3 +91,18 @@ def remove(liststr: LiStr, old: str) -> LiStr:
             return updated[0]
         else:
             return updated
+
+
+def to_set(liststr: LiStr) -> frozenset[str]:
+    """Represent a list of strings or a bare string (`LiStr`) as a set.
+
+    Args:
+        liststr (LiStr): A list of strings or a bare string.
+
+    Returns:
+        frozenset[str]: A set of strings contained in the `LiStr`.
+            An empty `LiStr`, either `[]` or '', yields an empty set.
+    """
+    if isinstance(liststr, str):
+        return frozenset() if not liststr else frozenset((liststr,))
+    return frozenset(liststr)

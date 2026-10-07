@@ -10,74 +10,84 @@ from typing import ClassVar, cast, overload, override
 
 class TimeError(Exception):
     """A general time error."""
+
     ...
 
 
 class ValidationError(TimeError):
     """A time value could not be validated."""
+
     ...
 
 
 class InvalidTimezoneError(TimeError):
     """An invalid time zone."""
+
     ...
 
 
 class NonExistentTimeError(ValidationError):
     """A non-existent time."""
+
     ...
 
 
 class InvalidISOFormatError(TimeError):
     """An invalid ISO 8601 format."""
+
     ...
 
 
 class ShiftError(TimeError):
     """Failed to shift a timestamp."""
+
     ...
 
 
 class DateFormattingError(TimeError):
     """A date formatting error."""
+
     ...
 
 
 class OffsetFormattingError(TimeError):
     """An offset formatting error."""
+
     ...
 
 
 class TimezoneConversionError(TimeError):
     """Failed to convert a time zone."""
+
     ...
 
 
 class RoundingError(TimeError):
     """A rounding error."""
+
     ...
 
 
 class TimeSpec(Enum):
     """Specifies the precision of an ISO 8601 time representation."""
 
-    HOURS = '%H'
-    MINUTES = '%H:%M'
-    SECONDS = '%H:%M:%S'
-    MICROSECONDS = '%H:%M:%S.%f'
+    HOURS = "%H"
+    MINUTES = "%H:%M"
+    SECONDS = "%H:%M:%S"
+    MICROSECONDS = "%H:%M:%S.%f"
 
 
 class DateStrTemplate(Template):
     """Represents a template for advanced formatting of `date`
     objects."""
 
-    delimiter: ClassVar[str] = '%'
+    delimiter: ClassVar[str] = "%"
 
     def format(
         self,
         d: datetime.date,
         t: datetime.time | None = None,
-        midnight24: bool = False
+        midnight24: bool = False,
     ) -> str:
         """Format a `date` object according to a specified template.
 
@@ -103,14 +113,14 @@ class DateStrTemplate(Template):
         if midnight24:
             if t is None:
                 raise DateFormattingError(
-                    'Provide a time for midnight formatting.'
+                    "Provide a time for midnight formatting."
                 )
             if t == datetime.time.min:
                 try:
                     previous_day = d - datetime.timedelta(days=1)
                 except OverflowError as exc:
                     raise DateFormattingError(
-                        'Failed to format the date.'
+                        "Failed to format the date."
                     ) from exc
                 return previous_day.strftime(self.template)
 
@@ -121,7 +131,7 @@ class TimeStrTemplate(Template):
     """Represents a template for advanced formatting of `time`
     objects."""
 
-    delimiter: ClassVar[str] = '%'
+    delimiter: ClassVar[str] = "%"
 
     def format(self, t: datetime.time, midnight24: bool = False) -> str:
         """Format a `time` object according to a specified template.
@@ -137,7 +147,7 @@ class TimeStrTemplate(Template):
             str: A formatted `time` object.
         """
         template = (
-            self.safe_substitute(H='24')
+            self.safe_substitute(H="24")
             if midnight24 and t == datetime.time.min
             else self.template
         )
@@ -148,15 +158,15 @@ class OffsetStrTemplate(Template):
     """Represents a template for advanced formatting of the UTC offset
     of `datetime` objects."""
 
-    delimiter: ClassVar[str] = '%'
-    idpattern: ClassVar[str] = r'(?a:[_a-z][_a-z0-9]*|:z)'
+    delimiter: ClassVar[str] = "%"
+    idpattern: ClassVar[str] = r"(?a:[_a-z][_a-z0-9]*|:z)"
 
     def format(
         self,
         dt: datetime.datetime,
         is_utc: bool | None = None,
         utc_z: bool = True,
-        iana_timezone: str | None = None
+        iana_timezone: str | None = None,
     ) -> str:
         """Format the UTC offset of a `datetime` object according
         to a specified template.
@@ -182,13 +192,13 @@ class OffsetStrTemplate(Template):
         if utc_z:
             if is_utc is None:
                 raise OffsetFormattingError(
-                    'Specify whether the `datetime` object is UTC-based.'
+                    "Specify whether the `datetime` object is UTC-based."
                 )
             if is_utc:
-                substitutions |= {'z': 'Z', ':z': 'Z'}
+                substitutions |= {"z": "Z", ":z": "Z"}
 
         if iana_timezone is not None:
-            substitutions |= {'iana': iana_timezone}
+            substitutions |= {"iana": iana_timezone}
 
         return dt.strftime(self.safe_substitute(substitutions))
 
@@ -203,27 +213,33 @@ class Timestamp:
             a `ZoneInfo` time zone.
     """
 
-    _UTC: zoneinfo.ZoneInfo = zoneinfo.ZoneInfo('Etc/UTC')
+    _UTC: zoneinfo.ZoneInfo = zoneinfo.ZoneInfo("Etc/UTC")
     _UTC_IANA_NAMES: tuple[str, ...] = (
-        'Etc/UCT', 'Etc/UTC', 'Etc/Universal', 'Etc/Zulu',
-        'UCT', 'UTC', 'Universal', 'Zulu'
+        "Etc/UCT",
+        "Etc/UTC",
+        "Etc/Universal",
+        "Etc/Zulu",
+        "UCT",
+        "UTC",
+        "Universal",
+        "Zulu",
     )
 
-    _READABLE_DATE_SPEC: str = '%Y.%m.%d'
+    _READABLE_DATE_SPEC: str = "%Y.%m.%d"
     _DEFAULT_READABLE_TIME_SPEC: TimeSpec = TimeSpec.MINUTES
     _AUTO_READABLE_TIME_SPEC: TimeSpec | None = TimeSpec.MINUTES
-    _READABLE_OFFSET_SPEC: str = 'UTC%:z'  # Supports '%iana'.
+    _READABLE_OFFSET_SPEC: str = "UTC%:z"  # Supports '%iana'.
     _READABLE_UTC_OFFSET_Z: bool = False
-    _READABLE_SEP: str = ' '
-    _READABLE_OFFSET_SEP: str = ' '
+    _READABLE_SEP: str = " "
+    _READABLE_OFFSET_SEP: str = " "
 
-    _ISO_DATE_SPEC: str = '%Y-%m-%d'
+    _ISO_DATE_SPEC: str = "%Y-%m-%d"
     _DEFAULT_ISO_TIME_SPEC: TimeSpec = TimeSpec.MICROSECONDS
     _AUTO_ISO_TIME_SPEC: TimeSpec | None = TimeSpec.MINUTES
-    _ISO_OFFSET_SPEC: str = '%:z'
+    _ISO_OFFSET_SPEC: str = "%:z"
     _ISO_UTC_OFFSET_Z: bool = True
-    _ISO_SEP: str = 'T'
-    _ISO_OFFSET_SEP: str = ''
+    _ISO_SEP: str = "T"
+    _ISO_OFFSET_SEP: str = ""
 
     _dt: datetime.datetime
 
@@ -245,7 +261,8 @@ class Timestamp:
         """
         if dt.tzinfo is None:
             raise InvalidTimezoneError(
-                f"No time zone has been specified for '{dt.isoformat()}'.")
+                f"No time zone has been specified for '{dt.isoformat()}'."
+            )
 
         try:
             utc_off = dt.utcoffset()
@@ -272,7 +289,8 @@ class Timestamp:
         except OverflowError as exc:
             raise ValidationError(
                 f"Failed to validate the `datetime` object '{dt.isoformat()} "
-                f"{dt.tzinfo.key}'.") from exc
+                f"{dt.tzinfo.key}'."
+            ) from exc
         if dt_roundtripped != dt:
             raise NonExistentTimeError(
                 f"The `datetime` object '{dt.isoformat()} {dt.tzinfo.key}' "
@@ -493,12 +511,10 @@ class Timestamp:
         return NotImplemented
 
     @overload
-    def __sub__(self, other: datetime.timedelta) -> Timestamp:
-        ...
+    def __sub__(self, other: datetime.timedelta) -> Timestamp: ...
 
     @overload
-    def __sub__(self, other: Timestamp) -> datetime.timedelta:
-        ...
+    def __sub__(self, other: Timestamp) -> datetime.timedelta: ...
 
     def __sub__(self, other: object) -> Timestamp | datetime.timedelta:
         """Shift the timestamp by a time decrement or return
@@ -588,7 +604,7 @@ class Timestamp:
         default_spec: TimeSpec,
         auto_spec: TimeSpec | None,
         spec: TimeSpec | None = None,
-        midnight24: bool = False
+        midnight24: bool = False,
     ) -> str:
         """Return a string representing the time of the timestamp
         according to a given specification.
@@ -641,8 +657,10 @@ class Timestamp:
             str: An ISO 8601 time string.
         """
         return self._time_str(
-            self._DEFAULT_ISO_TIME_SPEC, self._AUTO_ISO_TIME_SPEC,
-            spec, midnight24
+            self._DEFAULT_ISO_TIME_SPEC,
+            self._AUTO_ISO_TIME_SPEC,
+            spec,
+            midnight24,
         )
 
     def time_readable(
@@ -663,8 +681,10 @@ class Timestamp:
             str: A human-readable time string.
         """
         return self._time_str(
-            self._DEFAULT_READABLE_TIME_SPEC, self._AUTO_READABLE_TIME_SPEC,
-            spec, midnight24
+            self._DEFAULT_READABLE_TIME_SPEC,
+            self._AUTO_READABLE_TIME_SPEC,
+            spec,
+            midnight24,
         )
 
     def offset_iso(self) -> str:
@@ -681,8 +701,8 @@ class Timestamp:
         return OffsetStrTemplate(self._ISO_OFFSET_SPEC).format(
             self._dt,
             cast(zoneinfo.ZoneInfo, self._dt.tzinfo).key
-                in self._UTC_IANA_NAMES,
-            self._ISO_UTC_OFFSET_Z
+            in self._UTC_IANA_NAMES,
+            self._ISO_UTC_OFFSET_Z,
         )
 
     def offset_readable(self) -> str:
@@ -697,13 +717,11 @@ class Timestamp:
             self._dt,
             iana_timezone in self._UTC_IANA_NAMES,
             self._READABLE_UTC_OFFSET_Z,
-            iana_timezone
+            iana_timezone,
         )
 
     def iso(
-        self,
-        time_spec: TimeSpec | None = None,
-        midnight24: bool = False
+        self, time_spec: TimeSpec | None = None, midnight24: bool = False
     ) -> str:
         """Return a string representing the timestamp in the ISO 8601
         format.
@@ -727,12 +745,10 @@ class Timestamp:
         d_str = self.date_iso(midnight24)
         t_str = self.time_iso(time_spec, midnight24)
         o_str = self.offset_iso()
-        return f'{d_str}{self._ISO_SEP}{t_str}{self._ISO_OFFSET_SEP}{o_str}'
+        return f"{d_str}{self._ISO_SEP}{t_str}{self._ISO_OFFSET_SEP}{o_str}"
 
     def readable(
-        self,
-        time_spec: TimeSpec | None = None,
-        midnight24: bool = False
+        self, time_spec: TimeSpec | None = None, midnight24: bool = False
     ) -> str:
         """Return a string representing the timestamp
         in the human-readable format.
@@ -757,8 +773,8 @@ class Timestamp:
         t_str = self.time_readable(time_spec, midnight24)
         o_str = self.offset_readable()
         return (
-            f'{d_str}{self._READABLE_SEP}{t_str}'
-            f'{self._READABLE_OFFSET_SEP}{o_str}'
+            f"{d_str}{self._READABLE_SEP}{t_str}"
+            f"{self._READABLE_OFFSET_SEP}{o_str}"
         )
 
     @property

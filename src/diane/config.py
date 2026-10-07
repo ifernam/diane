@@ -26,35 +26,43 @@ from diane.storage import (
 
 class ConfigurationError(Exception):
     """A general configuration error."""
+
     ...
 
 
 class ConfigurationFileNotFoundError(ConfigurationError):
     """No configuration file has been found."""
+
     ...
 
 
 class ConfigurationParseError(ConfigurationError):
     """An error occurred while parsing the configuration file."""
+
     ...
+
 
 class ConfigurationIOError(ConfigurationError):
     """An I/O error occurred while reading the configuration file."""
+
     ...
 
 
 class InvalidConfigurationError(ConfigurationError):
     """An invalid configuration."""
+
     ...
 
 
 class InvalidDefaultTimezoneError(ConfigurationError):
     """The default timezone is invalid."""
+
     ...
 
 
 class LocalTimezoneDetectionError(ConfigurationError):
     """Failed to determine the local time zone."""
+
     ...
 
 
@@ -84,7 +92,7 @@ class Configurator:
                 been initialised.
         """
         programme_dir = app_session.programme_dir
-        config_path = programme_dir / 'config' / 'config.toml'
+        config_path = programme_dir / "config" / "config.toml"
 
         if not config_path.is_file():
             raise ConfigurationFileNotFoundError(
@@ -118,7 +126,6 @@ class Configurator:
 
         # Initialise the session with the loaded config.
         app_session.initialise(config)
-
 
     @classmethod
     def initialise_repo(
@@ -160,7 +167,7 @@ class Configurator:
             raise NoRepositoryFoundError(
                 f"No repository has been found at '{repo.path}'."
             )
-        config_path = repo.diane_dir / 'config.toml'
+        config_path = repo.diane_dir / "config.toml"
 
         # Start with the defaults from the application configuration.
         config_data = app_session.config.repo_defaults.model_dump()
@@ -228,7 +235,7 @@ class Configurator:
                 timezone = tzlocal.get_localzone()
             except Exception as exc:
                 raise LocalTimezoneDetectionError(
-                    f'Failed to determine the local time zone. {exc}'
+                    f"Failed to determine the local time zone. {exc}"
                 ) from exc
 
         return timezone

@@ -1,16 +1,20 @@
-from abc import ABC
+from __future__ import annotations
+
+import datetime
+from abc import ABC, abstractmethod
 from collections.abc import MutableMapping
 from pathlib import Path
-from typing import ClassVar
+from typing import ClassVar, overload, override
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from diane.chrono import Timestamp
-from diane.entry import Entry
+from diane.entry import TimestampedEntry
 
 
 class EntriesRegisterError(Exception):
     """A general entries register error."""
+
     ...
 
 
@@ -19,6 +23,7 @@ class NotRelativePathError(EntriesRegisterError, ValueError):
 
     For Pydantic's validation.
     """
+
     ...
 
 
@@ -29,11 +34,11 @@ class EntriesRegisterConfig(BaseModel):
         path (Path): A relative path where entries are stored.
     """
 
-    model_config: ClassVar[ConfigDict] = ConfigDict(extra='forbid')
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid")
 
     path: Path
 
-    @field_validator('path')
+    @field_validator("path")
     @classmethod
     def _check_relative(cls, v: Path) -> Path:
         """Validate a path.
@@ -52,8 +57,12 @@ class EntriesRegisterConfig(BaseModel):
         return v
 
 
+# A slice of timestamps.
+type Slice = slice[Timestamp | None, Timestamp | None, None]
+
+
 class EntriesRegister[ConfigT: EntriesRegisterConfig](
-    MutableMapping[Timestamp, list[Entry]], ABC
+    MutableMapping[Timestamp, list[TimestampedEntry]], ABC
 ):
     """Represents an entries register.
 
@@ -77,6 +86,22 @@ class EntriesRegister[ConfigT: EntriesRegisterConfig](
         """
         self._storage_path = storage_path
         self._config = config
+
+    @overload
+    def __getitem__(self, key: Timestamp) -> list[TimestampedEntry]: ...
+
+    @overload
+    def __getitem__(self, key: Slice) -> list[TimestampedEntry]: ...
+
+    @overload
+    def __getitem__(self, key: datetime.date) -> list[TimestampedEntry]: ...
+
+    @abstractmethod
+    @override
+    def __getitem__(
+        self, key: Timestamp | Slice | datetime.date
+    ) -> list[TimestampedEntry]:
+        pass
 
     @property
     def path(self) -> Path:

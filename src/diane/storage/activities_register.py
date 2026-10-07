@@ -17,7 +17,7 @@ class ActivitiesRegisterConfig(BaseModel):
     """
 
     path: Path
-    fallback_emoji: str = '⚫'
+    fallback_emoji: str = "⚫"
 
 
 class ActivitiesRegister[ConfigT: ActivitiesRegisterConfig](

@@ -1,22 +1,31 @@
+from __future__ import annotations
+
 import datetime
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import ClassVar, Literal, NamedTuple, override
+from typing import (
+    ClassVar,
+    Literal,
+    NamedTuple,
+    overload,
+    override,
+)
 
 import frontmatter
 import yaml
 from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 
 from diane.chrono import Timestamp
-from diane.entry import Entry, EntryData
+from diane.entry import Entry, EntryData, TimestampedEntry
 from diane.listr import LiStr
-from diane.storage import EntriesRegister, EntriesRegisterConfig
+from diane.storage import EntriesRegister, EntriesRegisterConfig, Slice
 
 from .entries_register import EntriesRegisterError, NotRelativePathError
 
 
 class MarkdownEntriesRegisterError(EntriesRegisterError):
     """A general Markdown entries register error."""
+
     ...
 
 
@@ -27,26 +36,31 @@ class DailyNoteTemplateNotRelativePathError(
 
     For Pydantic's validation.
     """
+
     ...
 
 
 class DailyNoteNameError(MarkdownEntriesRegisterError):
     """A daily note has an invalid name."""
+
     ...
 
 
 class DailyNoteNotFoundError(MarkdownEntriesRegisterError):
     """A daily note could not be found."""
+
     ...
 
 
 class DailyNoteReadError(MarkdownEntriesRegisterError):
     """A daily note could not be read."""
+
     ...
 
 
 class InvalidDailyNoteDataError(MarkdownEntriesRegisterError):
     """An invalid data format in a daily note."""
+
     ...
 
 
@@ -63,12 +77,12 @@ class MarkdownEntriesRegisterConfig(EntriesRegisterConfig):
             For example, 'templates/daily_note_template'.
     """
 
-    backend: Literal['markdown'] = 'markdown'
-    path: Path = Path('daily_notes')
-    daily_note_name_format: str = '%Y-%m-%d'
+    backend: Literal["markdown"] = "markdown"
+    path: Path = Path("daily_notes")
+    daily_note_name_format: str = "%Y-%m-%d"
     daily_note_template_path: Path | None = None
 
-    @field_validator('daily_note_template_path')
+    @field_validator("daily_note_template_path")
     @classmethod
     def _check_daily_note_template_path(cls, v: Path | None) -> Path | None:
         """Validate a daily note template path.
@@ -112,24 +126,12 @@ class EntryYAMLData(BaseModel):
         text (str): An entry's Markdown text.
     """
 
-    model_config: ClassVar[ConfigDict] = ConfigDict(extra='forbid')
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid")
 
     time: str
     timezone: str
     tags: LiStr = []
     text: str
-
-
-class TimestampedEntry(NamedTuple):
-    """Represents an entry with its timestamp.
-
-    Attributes:
-        timestamp (Timestamp): An entry's timestamp.
-        entry (Entry): An entry.
-    """
-
-    timestamp: Timestamp
-    entry: Entry
 
 
 class DailyNoteData(BaseModel):
@@ -148,18 +150,23 @@ class DailyNote(NamedTuple):
     """Represents a daily note.
 
     Attributes:
+        entry (DailyNoteEntry): A daily notes date and name.
         data (DailyNoteData): A daily note's data.
         content (str): A daily note's Markdown content.
     """
 
+    entry: DailyNoteEntry
     data: DailyNoteData
     content: str
 
 
-def yaml_to_entry(yaml_data: EntryYAMLData) -> TimestampedEntry:
+def yaml_to_entry(
+    note_name: str, yaml_data: EntryYAMLData
+) -> TimestampedEntry:
     """Convert raw YAML entry data to a timestamped entry representation.
 
     Args:
+        note_name (str): A daily note's name.
         yaml_data (EntryYAMLData): Raw entry data from daily note YAML.
 
     Returns:
@@ -174,9 +181,10 @@ def yaml_to_entry(yaml_data: EntryYAMLData) -> TimestampedEntry:
         NonExistentTimeError: If the provided local time does not exist in the
             specified IANA time zone.
     """
+    iso = f'{note_name}T{yaml_data.time}'
     return TimestampedEntry(
-        timestamp=Timestamp.from_iso_iana(yaml_data.time, yaml_data.timezone),
-        entry=Entry(EntryData(tags=yaml_data.tags, text=yaml_data.text))
+        timestamp=Timestamp.from_iso_iana(iso, yaml_data.timezone),
+        entry=Entry(EntryData(tags=yaml_data.tags, text=yaml_data.text)),
     )
 
 
@@ -199,7 +207,7 @@ def note_to_entries(note: DailyNote) -> list[TimestampedEntry]:
         NonExistentTimeError: If a provided local time does not exist in the
             specified IANA time zone.
     """
-    return [yaml_to_entry(y) for y in note.data.diane_entries]
+    return [yaml_to_entry(note.entry.name, y) for y in note.data.diane_entries]
 
 
 class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
@@ -208,6 +216,11 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
     Enables the user's text entries stored in daily notes to be worked
     with.
     """
+
+    # How far daily notes are searched around a date an entry is looked
+    # up for, since one and the same moment in time can fall
+    # on different calendar days in different time zones.
+    _DATE_MARGIN_DAYS: ClassVar[int] = 2
 
     def _name_to_date(self, name: str) -> datetime.date:
         """Convert a daily note's name to the date it relates to.
@@ -235,7 +248,7 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
     def _daily_notes(
         self,
         start: datetime.date | None = None,
-        end: datetime.date | None = None
+        end: datetime.date | None = None,
     ) -> Iterator[DailyNoteEntry]:
         """Iterate over daily notes relating to the specified date
         range.
@@ -250,7 +263,7 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
         Yields:
             DailyNoteEntry: A daily note's entry.
         """
-        for p in self.path.glob('*.md'):
+        for p in self.path.glob("*.md"):
             if p.is_file():
                 try:
                     date = self._name_to_date(p.stem)
@@ -267,7 +280,7 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
     def _daily_notes_chrono(
         self,
         start: datetime.date | None = None,
-        end: datetime.date | None = None
+        end: datetime.date | None = None,
     ) -> list[DailyNoteEntry]:
         """Return a list of daily notes relating to the specified date
         range, in chronological order.
@@ -284,7 +297,7 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
         """
         return sorted(self._daily_notes(start, end), key=lambda e: e.date)
 
-    def _load_note(self, name: str) -> DailyNote:
+    def _load_note(self, entry: DailyNoteEntry) -> DailyNote:
         """Load a daily note by its name.
 
         Args:
@@ -299,11 +312,11 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
             InvalidDailyNoteDataError: If a daily note has invalid
                 format.
         """
-        daily_note_path = self.path / f'{name}.md'
+        daily_note_path = self.path / f"{entry.name}.md"
 
         if not daily_note_path.is_file():
             raise DailyNoteNotFoundError(
-                f"The daily note '{name}' could not be found."
+                f"The daily note '{entry.name}' could not be found."
             )
 
         try:
@@ -341,6 +354,7 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
 
         try:
             return DailyNote(
+                entry,
                 DailyNoteData.model_validate(note.metadata),
                 note.content
             )
@@ -348,6 +362,61 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
             raise InvalidDailyNoteDataError(
                 f"The daily note '{daily_note_path}' has invalid format."
             ) from exc
+
+    def _search_span(
+        self, day: datetime.date
+    ) -> tuple[datetime.date, datetime.date]:
+        """Return `day` widened by the date margin on both sides,
+        clamped to the representable date range.
+
+        Args:
+            day (datetime.date): A date to widen.
+
+        Returns:
+            tuple[datetime.date, datetime.date]: The lower and upper
+                bounds, both included.
+        """
+        lower_ordinal = max(
+            day.toordinal() - self._DATE_MARGIN_DAYS,
+            datetime.date.min.toordinal(),
+        )
+        upper_ordinal = min(
+            day.toordinal() + self._DATE_MARGIN_DAYS,
+            datetime.date.max.toordinal(),
+        )
+        return (
+            datetime.date.fromordinal(lower_ordinal),
+            datetime.date.fromordinal(upper_ordinal),
+        )
+
+    def _matching_entries(
+        self,
+        start: datetime.date | None,
+        end: datetime.date | None,
+        keep: Callable[[TimestampedEntry], bool],
+    ) -> list[TimestampedEntry]:
+        """Collect unique entries of daily notes within a date range.
+
+        Args:
+            start (datetime.date | None): A start date, included.
+            end (datetime.date | None): An end date, included.
+            keep (Callable[[TimestampedEntry], bool]): A predicate
+                selecting the entries to return.
+
+        Returns:
+            list[TimestampedEntry]: The matching unique entries in
+                chronological order.
+        """
+        entries: list[TimestampedEntry] = []
+        seen: set[TimestampedEntry] = set()
+
+        for dne in self._daily_notes_chrono(start, end):
+            for e in note_to_entries(self._load_note(dne)):
+                if keep(e) and e not in seen:
+                    seen.add(e)
+                    entries.append(e)
+
+        return sorted(entries, key=lambda e: e.timestamp)
 
     @override
     def __iter__(self) -> Iterator[Timestamp]:
@@ -370,20 +439,34 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
         """
         raise NotImplementedError
 
+    @overload
+    def __getitem__(self, key: Timestamp) -> list[TimestampedEntry]: ...
+
+    @overload
+    def __getitem__(self, key: Slice) -> list[TimestampedEntry]: ...
+
+    @overload
+    def __getitem__(self, key: datetime.date) -> list[TimestampedEntry]: ...
+
     @override
-    def __getitem__(self, key: Timestamp) -> list[Entry]:
+    def __getitem__(
+        self, key: Timestamp | Slice | datetime.date
+    ) -> list[TimestampedEntry]:
         """Return a list of entries relating to the specified moment
-        in time.
+        in time or time range, in chronological order.
 
         An entry is returned only once even if it occurs in several
         daily notes.
 
         Args:
-            key (Timestamp): A timestamp.
+            key (Timestamp | slice | datetime.date): A timestamp, slice
+                of timestamps or a date. The upper bound of a slice
+                is not included.
 
         Returns:
-            list[Entry]: A list of entries relating to the specified
-                moment in time.
+            list[TimestampedEntry]: A list of entries relating
+                to the specified moment in time or time range,
+                in chronological order.
 
         Raises:
             DailyNoteNotFoundError: If a daily note could not be found.
@@ -398,34 +481,71 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
                 be validated.
             NonExistentTimeError: If a provided local time does not
                 exist in the specified IANA time zone.
+            ValueError: If a slice step is not `None`.
+            TypeError: If a key is of an unknown type.
         """
-        # Search two days before and after the timestamp because
-        # the same entry can have different calendar dates in different
-        # time zones.
-        ordinal = key.datetime.date().toordinal()
-        lower_date = datetime.date.fromordinal(
-            max(ordinal - 2, datetime.date.min.toordinal())
-        )
-        upper_date = datetime.date.fromordinal(
-            min(ordinal + 2, datetime.date.max.toordinal())
-        )
+        if isinstance(key, Timestamp):
+            # The same entry can have different calendar dates
+            # in different time zones.
+            start, end = self._search_span(key.datetime.date())
+            return self._matching_entries(
+                start, end, lambda e: e.timestamp == key
+            )
 
-        entries: list[Entry] = []
-        for dne in self._daily_notes(lower_date, upper_date):
-            dn = self._load_note(dne.name)
-            for te in note_to_entries(dn):
-                if te.timestamp == key and te.entry not in entries:
-                    entries.append(te.entry)
-        return entries
+        elif isinstance(key, slice):
+            if key.step is not None:
+                raise ValueError("Slice steps are not supported.")
+
+            start, _ = (
+                self._search_span(key.start.datetime.date())
+                if key.start is not None
+                else (None, None)
+            )
+            _, end = (
+                self._search_span(key.stop.datetime.date())
+                if key.stop is not None
+                else (None, None)
+            )
+
+            return self._matching_entries(
+                start,
+                end,
+                lambda e: (
+                    (key.start is None or e.timestamp >= key.start)
+                    and (key.stop is None or e.timestamp < key.stop)
+                ),
+            )
+
+        elif isinstance(key, datetime.datetime):
+            raise TypeError(
+                "A `datetime.datetime` object is ambiguous. "
+                "Use a `Timestamp` for a moment in time "
+                "or a `datetime.date` for a daily note."
+            )
+
+        elif isinstance(  # pyright: ignore[reportUnnecessaryIsInstance]
+            key, datetime.date
+        ):
+            return self._matching_entries(key, key, lambda e: True)
+
+        else:
+            raise TypeError(  # pyright: ignore[reportUnreachable]
+                "Expected `Timestamp`, `Slice` or `datetime.date`. "
+                f"Got `{type(key)}`."
+            )
 
     @override
-    def __setitem__(self, key: Timestamp, value: list[Entry]) -> None:
+    def __setitem__(
+        self, key: Timestamp, value: list[TimestampedEntry]
+    ) -> None:
         """Record a list of entries relating to the specified moment
         in time.
 
+        The timestamps of all entries must match the key.
+
         Args:
             key (Timestamp): A timestamp.
-            value (list[Entry]): A list of entries.
+            value (list[TimestampedEntry]): A list of entries.
         """
         raise NotImplementedError
 

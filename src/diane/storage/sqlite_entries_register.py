@@ -1,9 +1,10 @@
+import datetime
 from collections.abc import Iterator
 from typing import Literal, override
 
 from diane.chrono import Timestamp
-from diane.entry import Entry
-from diane.storage import EntriesRegister, EntriesRegisterConfig
+from diane.entry import TimestampedEntry
+from diane.storage import EntriesRegister, EntriesRegisterConfig, Slice
 
 
 class SQLiteEntriesRegisterConfig(EntriesRegisterConfig):
@@ -14,7 +15,7 @@ class SQLiteEntriesRegisterConfig(EntriesRegisterConfig):
         path (Path): A relative path where entries are stored.
     """
 
-    backend: Literal['sqlite'] = 'sqlite'
+    backend: Literal["sqlite"] = "sqlite"
 
 
 class SQLiteEntriesRegister(EntriesRegister[SQLiteEntriesRegisterConfig]):
@@ -46,27 +47,34 @@ class SQLiteEntriesRegister(EntriesRegister[SQLiteEntriesRegisterConfig]):
         raise NotImplementedError
 
     @override
-    def __getitem__(self, key: Timestamp) -> list[Entry]:
+    def __getitem__(
+        self, key: Timestamp | Slice | datetime.date
+    ) -> list[TimestampedEntry]:
         """Return a list of entries relating to the specified moment
-        in time.
+        in time or time range, in chronological order.
 
         Args:
-            key (Timestamp): A timestamp.
+            key (Timestamp | slice | datetime.date): A timestamp, slice
+                of timestamps or a date. The upper bound of a slice
+                is not included.
 
         Returns:
-            list[Entry]: A list of entries relating to the specified
-                moment in time.
+            list[TimestampedEntry]: A list of entries relating
+                to the specified moment in time or time range,
+                in chronological order.
         """
         raise NotImplementedError
 
     @override
-    def __setitem__(self, key: Timestamp, value: list[Entry]) -> None:
+    def __setitem__(
+        self, key: Timestamp, value: list[TimestampedEntry]
+    ) -> None:
         """Record a list of entries relating to the specified moment
         in time.
 
         Args:
             key (Timestamp): A timestamp.
-            value (list[Entry]): A list of entries.
+            value (list[TimestampedEntry]): A list of entries.
         """
         raise NotImplementedError
 

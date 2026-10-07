@@ -11,16 +11,19 @@ from diane.chrono.timestamp import Timestamp, TimezoneConversionError
 
 class TimeIntervalSetError(Exception):
     """A general time interval set error."""
+
     ...
 
 
 class NormalisationError(TimeIntervalSetError):
     """A time interval set could not be normalised."""
+
     ...
 
 
 class UndefinedEndpointError(TimeIntervalSetError):
     """An endpoint of a time interval set is undefined."""
+
     ...
 
 
@@ -40,10 +43,7 @@ class TimeIntervalSet:
 
     _interval_set: portion.Interval[Timestamp]
 
-    def __init__(
-        self,
-        interval_set: portion.Interval[Timestamp]
-    ) -> None:
+    def __init__(self, interval_set: portion.Interval[Timestamp]) -> None:
         """Create a time interval set.
 
         All endpoints are converted to the time zone of the earliest
@@ -64,11 +64,11 @@ class TimeIntervalSet:
                 try:
                     norm_c = c.replace(
                         lower=c.lower.to_timezone(tz),
-                        upper=c.upper.to_timezone(tz)
+                        upper=c.upper.to_timezone(tz),
                     )
                 except TimezoneConversionError as exc:
                     raise NormalisationError(
-                        'Failed to normalise the time interval set.'
+                        "Failed to normalise the time interval set."
                     ) from exc
                 norm_components.append(norm_c)
             interval_set = portion.Interval(*norm_components)
@@ -168,9 +168,9 @@ class TimeIntervalSet:
             str: A string representation of the time interval set.
         """
         if self.is_empty:
-            return '∅'
+            return "∅"
 
-        return portion.to_string(self._interval_set, str, disj=' ⊔ ', sep=', ')
+        return portion.to_string(self._interval_set, str, disj=" ⊔ ", sep=", ")
 
     def __iter__(self) -> Iterator[TimeIntervalSet]:
         """Iterate over the connected components of the time interval
@@ -294,7 +294,7 @@ class TimeIntervalSet:
         """
         if self.is_empty:
             raise UndefinedEndpointError(
-                'An empty time interval set has no defined left endpoint.'
+                "An empty time interval set has no defined left endpoint."
             )
         return self._interval_set.lower
 
@@ -310,7 +310,7 @@ class TimeIntervalSet:
         """
         if self.is_empty:
             raise UndefinedEndpointError(
-                'An empty time interval set has no defined right endpoint.'
+                "An empty time interval set has no defined right endpoint."
             )
         return self._interval_set.upper
 
@@ -326,7 +326,7 @@ class TimeIntervalSet:
         """
         if self.is_empty:
             raise UndefinedEndpointError(
-                'An empty time interval set has no defined start inclusion.'
+                "An empty time interval set has no defined start inclusion."
             )
         return self._interval_set.left == portion.CLOSED
 
@@ -342,7 +342,7 @@ class TimeIntervalSet:
         """
         if self.is_empty:
             raise UndefinedEndpointError(
-                'An empty time interval set has no defined end inclusion.'
+                "An empty time interval set has no defined end inclusion."
             )
         return self._interval_set.right == portion.CLOSED
 

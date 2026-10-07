@@ -9,16 +9,19 @@ from diane.repo import RepositoryConfig
 
 class AppSessionError(Exception):
     """A general programme session error."""
+
     pass
 
 
 class AppNotInitialisedError(AppSessionError):
     """The programme has not been initialised."""
+
     pass
 
 
 class AppAlreadyInitialisedError(AppSessionError):
     """The programme has already been initialised."""
+
     pass
 
 
@@ -31,7 +34,8 @@ class AppConfig(BaseSettings):
         repo_defaults (RepositoryConfig): A default repository
             configuration.
     """
-    locale: str = 'en-US'
+
+    locale: str = "en-US"
     timezone: str | None = None
     repo_defaults: RepositoryConfig
 
@@ -51,7 +55,6 @@ class AppSession:
     _programme_dir: Path
     _working_dir: Path
     _config: AppConfig | None
-
 
     def __init__(self) -> None:
         """Create a new programme session."""

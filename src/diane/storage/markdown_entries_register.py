@@ -443,14 +443,19 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
     def __getitem__(self, key: Timestamp) -> list[TimestampedEntry]: ...
 
     @overload
-    def __getitem__(self, key: Slice) -> list[TimestampedEntry]: ...
+    def __getitem__(self, key: Slice[Timestamp]) -> list[TimestampedEntry]: ...
+
+    @overload
+    def __getitem__(
+        self, key: Slice[datetime.date]
+    ) -> list[TimestampedEntry]: ...
 
     @overload
     def __getitem__(self, key: datetime.date) -> list[TimestampedEntry]: ...
 
     @override
     def __getitem__(
-        self, key: Timestamp | Slice | datetime.date
+        self, key: Timestamp | Slice[Timestamp | datetime.date] | datetime.date
     ) -> list[TimestampedEntry]:
         """Return a list of entries relating to the specified moment
         in time or time range, in chronological order.
@@ -459,8 +464,8 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
         daily notes.
 
         Args:
-            key (Timestamp | slice | datetime.date): A timestamp, slice
-                of timestamps or a date. The upper bound of a slice
+            key (Timestamp | slice | datetime.date): A time slice.
+                If the endpoints are timestamps the upper bound
                 is not included.
 
         Returns:
@@ -482,7 +487,7 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
             NonExistentTimeError: If a provided local time does not
                 exist in the specified IANA time zone.
             ValueError: If a slice step is not `None`.
-            TypeError: If a key is of an unknown type.
+            TypeError: If a key or slice endpoint is of an unknown type.
         """
         if isinstance(key, Timestamp):
             # The same entry can have different calendar dates
@@ -496,24 +501,66 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
             if key.step is not None:
                 raise ValueError("Slice steps are not supported.")
 
-            start, _ = (
-                self._search_span(key.start.datetime.date())
-                if key.start is not None
-                else (None, None)
-            )
-            _, end = (
-                self._search_span(key.stop.datetime.date())
-                if key.stop is not None
-                else (None, None)
-            )
+            def start_picker(
+                e: TimestampedEntry  # pyright: ignore[reportUnusedParameter]
+            ) -> bool:
+                return True
+
+            def stop_picker(
+                e: TimestampedEntry  # pyright: ignore[reportUnusedParameter]
+            ) -> bool:
+                return True
+
+            if isinstance(key.start, Timestamp):
+                start, _ = self._search_span(key.start.datetime.date())
+
+                def start_picker(e: TimestampedEntry) -> bool:
+                    return e.timestamp >= key.start
+
+            elif isinstance(key.start, datetime.datetime):
+                raise TypeError(
+                    "A `datetime.datetime` object "
+                    "is ambiguous as a slice start. "
+                    "Use a `Timestamp` for a moment in time "
+                    "or a `datetime.date` for a daily note."
+                )
+
+            elif isinstance(key.start, datetime.date):
+                start = key.start
+            elif key.start is None:
+                start = None
+            else:
+                raise TypeError(
+                    "The start of the slice is of unknown type: "
+                    f"'{type(key.start)}'."
+                )
+
+            if isinstance(key.stop, Timestamp):
+                _, end = self._search_span(key.stop.datetime.date())
+
+                def stop_picker(e: TimestampedEntry) -> bool:
+                    return e.timestamp < key.stop
+
+            elif isinstance(key.stop, datetime.datetime):
+                raise TypeError(
+                    "A `datetime.datetime` object "
+                    "is ambiguous as a slice end. "
+                    "Use a `Timestamp` for a moment in time "
+                    "or a `datetime.date` for a daily note."
+                )
+
+            elif isinstance(key.stop, datetime.date):
+                end = key.stop
+            elif key.stop is None:
+                end = None
+            else:
+                raise TypeError(
+                    "The end of the slice is of unknown type:"
+                    f"'{type(key.stop)}'."
+                )
 
             return self._matching_entries(
-                start,
-                end,
-                lambda e: (
-                    (key.start is None or e.timestamp >= key.start)
-                    and (key.stop is None or e.timestamp < key.stop)
-                ),
+                start, end, lambda e: start_picker(e) and stop_picker(e)
             )
 
         elif isinstance(key, datetime.datetime):

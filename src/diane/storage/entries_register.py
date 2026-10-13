@@ -57,8 +57,10 @@ class EntriesRegisterConfig(BaseModel):
         return v
 
 
-# A slice of timestamps.
-type Slice = slice[Timestamp | None, Timestamp | None, None]
+# A time slice.
+type Slice[EndpointT: Timestamp | datetime.date] = slice[
+    EndpointT | None, EndpointT | None, None
+]
 
 
 class EntriesRegister[ConfigT: EntriesRegisterConfig](
@@ -91,7 +93,12 @@ class EntriesRegister[ConfigT: EntriesRegisterConfig](
     def __getitem__(self, key: Timestamp) -> list[TimestampedEntry]: ...
 
     @overload
-    def __getitem__(self, key: Slice) -> list[TimestampedEntry]: ...
+    def __getitem__(self, key: Slice[Timestamp]) -> list[TimestampedEntry]: ...
+
+    @overload
+    def __getitem__(
+        self, key: Slice[datetime.date]
+    ) -> list[TimestampedEntry]: ...
 
     @overload
     def __getitem__(self, key: datetime.date) -> list[TimestampedEntry]: ...
@@ -99,7 +106,7 @@ class EntriesRegister[ConfigT: EntriesRegisterConfig](
     @abstractmethod
     @override
     def __getitem__(
-        self, key: Timestamp | Slice | datetime.date
+        self, key: Timestamp | Slice[Timestamp | datetime.date] | datetime.date
     ) -> list[TimestampedEntry]:
         pass
 

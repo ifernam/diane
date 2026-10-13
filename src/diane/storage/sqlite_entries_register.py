@@ -48,7 +48,7 @@ class SQLiteEntriesRegister(EntriesRegister[SQLiteEntriesRegisterConfig]):
 
     @override
     def __getitem__(
-        self, key: Timestamp | Slice | datetime.date
+        self, key: Timestamp | Slice[Timestamp | datetime.date] | datetime.date
     ) -> list[TimestampedEntry]:
         """Return a list of entries relating to the specified moment
         in time or time range, in chronological order.

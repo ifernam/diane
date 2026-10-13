@@ -5,10 +5,8 @@ class Bound(Enum):
     CLOSED = True
     OPEN = False
 
-
 CLOSED: Bound
 OPEN: Bound
-
 
 class Interval[T]:
     def __init__(self, *intervals: Interval[T]) -> None: ...
@@ -35,9 +33,9 @@ class Interval[T]:
         lower: T | None = None,
         upper: T | None = None,
         right: Bound | None = None,
-        *, ignore_inf: bool = True
+        *,
+        ignore_inf: bool = True,
     ) -> Interval[T]: ...
-
 
 def open[T](lower: T, upper: T) -> Interval[T]: ...
 def closed[T](lower: T, upper: T) -> Interval[T]: ...
@@ -45,17 +43,16 @@ def openclosed[T](lower: T, upper: T) -> Interval[T]: ...
 def closedopen[T](lower: T, upper: T) -> Interval[T]: ...
 def singleton[T](value: T) -> Interval[T]: ...
 def empty[T]() -> Interval[T]: ...
-
 def to_string[T](
     interval: Interval[T],
     conv: Callable[[T], str] = repr,
     *,
-    disj: str = ' | ',
-    sep: str = ',',
-    left_open: str = '(',
-    left_closed: str = '[',
-    right_open: str = ')',
-    right_closed: str = ']',
-    pinf: str = '+inf',
-    ninf: str = '-inf'
+    disj: str = " | ",
+    sep: str = ",",
+    left_open: str = "(",
+    left_closed: str = "[",
+    right_open: str = ")",
+    right_closed: str = "]",
+    pinf: str = "+inf",
+    ninf: str = "-inf",
 ) -> str: ...

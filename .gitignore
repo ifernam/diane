@@ -28,6 +28,7 @@ env/
 htmlcov/
 
 # Local environment / editor
+.idea/
 .env
 .env.*
 .python-version

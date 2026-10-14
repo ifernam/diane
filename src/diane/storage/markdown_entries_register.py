@@ -439,6 +439,26 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
         """
         raise NotImplementedError
 
+    @override
+    def __contains__(self, key: object) -> bool:
+        """Check whether an entry with the given timestamp
+        is listed in the register.
+
+        Args:
+            key (object): The key to check.
+
+        Returns:
+            bool: `True` if the timestamp is listed; `False` for other
+                key types or if it is not listed.
+        """
+        if isinstance(key, Timestamp):
+            start, end = self._search_span(key.datetime.date())
+            return bool(self._matching_entries(
+                start, end, lambda e: e.timestamp == key
+            ))
+
+        return False
+
     @overload
     def __getitem__(self, key: Timestamp) -> list[TimestampedEntry]: ...
 

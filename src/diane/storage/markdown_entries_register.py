@@ -462,7 +462,7 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
         Returns:
             int: The number of entries timestamps in the register.
         """
-        raise NotImplementedError
+        return sum(1 for _ in self)
 
     @override
     def __contains__(self, key: object) -> bool:

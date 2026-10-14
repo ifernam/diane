@@ -425,7 +425,8 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
         Yields:
             Timestamp: An entry's timestamp.
         """
-        raise NotImplementedError
+        entries = self._matching_entries(None, None, lambda _: True)
+        return iter(dict.fromkeys(entry.timestamp for entry in entries))
 
     @override
     def __len__(self) -> int:

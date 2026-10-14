@@ -27,6 +27,24 @@ class NotRelativePathError(EntriesRegisterError, ValueError):
     ...
 
 
+class TimeSliceError(EntriesRegisterError):
+    """A time slice (`Slice`) error."""
+
+    ...
+
+
+class TimeSliceValueError(TimeSliceError, ValueError):
+    """A time slice (`Slice`) value error."""
+
+    ...
+
+
+class TimeSliceTypeError(TimeSliceError, TypeError):
+    """A time slice (`Slice`) type error."""
+
+    ...
+
+
 class EntriesRegisterConfig(BaseModel):
     """An entries register configuration.
 

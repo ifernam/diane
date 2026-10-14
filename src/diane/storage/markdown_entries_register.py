@@ -20,7 +20,12 @@ from diane.entry import Entry, EntryData, TimestampedEntry
 from diane.listr import LiStr
 from diane.storage import EntriesRegister, EntriesRegisterConfig, Slice
 
-from .entries_register import EntriesRegisterError, NotRelativePathError
+from .entries_register import (
+    EntriesRegisterError,
+    NotRelativePathError,
+    TimeSliceValueError,
+    TimeSliceTypeError,
+)
 
 
 class MarkdownEntriesRegisterError(EntriesRegisterError):
@@ -61,6 +66,11 @@ class DailyNoteReadError(MarkdownEntriesRegisterError):
 class InvalidDailyNoteDataError(MarkdownEntriesRegisterError):
     """An invalid data format in a daily note."""
 
+    ...
+
+
+class TimeKeyTypeError(MarkdownEntriesRegisterError, TypeError):
+    """A time key of unknown type."""
     ...
 
 
@@ -406,6 +416,20 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
         Returns:
             list[TimestampedEntry]: The matching unique entries in
                 chronological order.
+
+        Raises:
+            DailyNoteNotFoundError: If a daily note could not be found.
+            DailyNoteReadError: If a daily note could not be read.
+            InvalidDailyNoteDataError: If a daily note has invalid
+                format.
+            InvalidISOFormatError: If an entry's `time` is not a valid
+                ISO 8601 string.
+            InvalidTimezoneError: If an entry's `timezone` is invalid
+                or does not match the offset in `time`.
+            ValidationError: If a resulting timestamp could not be
+                validated.
+            NonExistentTimeError: If a provided local time does not
+                exist in the specified IANA time zone.
         """
         entries: list[TimestampedEntry] = []
         seen: set[TimestampedEntry] = set()
@@ -507,8 +531,11 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
                 be validated.
             NonExistentTimeError: If a provided local time does not
                 exist in the specified IANA time zone.
-            ValueError: If a slice step is not `None`.
-            TypeError: If a key or slice endpoint is of an unknown type.
+            TimeSliceValueError: If a slice step is not `None`.
+            TimeSliceTypeError: If a slice endpoint has an unsupported
+                or ambiguous type.
+            TimeKeyTypeError: If a key has an unsupported or ambiguous
+                type.
         """
         if isinstance(key, Timestamp):
             # The same entry can have different calendar dates
@@ -520,7 +547,7 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
 
         elif isinstance(key, slice):
             if key.step is not None:
-                raise ValueError("Slice steps are not supported.")
+                raise TimeSliceValueError("Slice steps are not supported.")
 
             def start_picker(
                 e: TimestampedEntry  # pyright: ignore[reportUnusedParameter]
@@ -539,7 +566,7 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
                     return e.timestamp >= key.start
 
             elif isinstance(key.start, datetime.datetime):
-                raise TypeError(
+                raise TimeSliceTypeError(
                     "A `datetime.datetime` object "
                     "is ambiguous as a slice start. "
                     "Use a `Timestamp` for a moment in time "
@@ -551,7 +578,7 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
             elif key.start is None:
                 start = None
             else:
-                raise TypeError(
+                raise TimeSliceTypeError(
                     "The start of the slice is of unknown type: "
                     f"'{type(key.start)}'."
                 )
@@ -563,7 +590,7 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
                     return e.timestamp < key.stop
 
             elif isinstance(key.stop, datetime.datetime):
-                raise TypeError(
+                raise TimeSliceTypeError(
                     "A `datetime.datetime` object "
                     "is ambiguous as a slice end. "
                     "Use a `Timestamp` for a moment in time "
@@ -575,7 +602,7 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
             elif key.stop is None:
                 end = None
             else:
-                raise TypeError(
+                raise TimeSliceTypeError(
                     "The end of the slice is of unknown type:"
                     f"'{type(key.stop)}'."
                 )
@@ -585,7 +612,7 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
             )
 
         elif isinstance(key, datetime.datetime):
-            raise TypeError(
+            raise TimeKeyTypeError(
                 "A `datetime.datetime` object is ambiguous. "
                 "Use a `Timestamp` for a moment in time "
                 "or a `datetime.date` for a daily note."
@@ -597,7 +624,7 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
             return self._matching_entries(key, key, lambda e: True)
 
         else:
-            raise TypeError(  # pyright: ignore[reportUnreachable]
+            raise TimeKeyTypeError(  # pyright: ignore[reportUnreachable]
                 "Expected `Timestamp`, `Slice` or `datetime.date`. "
                 f"Got `{type(key)}`."
             )

@@ -12,6 +12,7 @@ from typing import (
 )
 
 import frontmatter
+from frontmatter.default_handlers import YAMLHandler
 import yaml
 from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 
@@ -59,6 +60,12 @@ class DailyNoteNotFoundError(MarkdownEntriesRegisterError):
 
 class DailyNoteReadError(MarkdownEntriesRegisterError):
     """A daily note could not be read."""
+
+    ...
+
+
+class DailyNoteWriteError(MarkdownEntriesRegisterError):
+    """A daily note could not be written."""
 
     ...
 
@@ -371,6 +378,44 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
         except ValidationError as exc:
             raise InvalidDailyNoteDataError(
                 f"The daily note '{daily_note_path}' has invalid format."
+            ) from exc
+
+    def _save_note(self, note: DailyNote) -> None:
+        """Save a daily note.
+
+        Args:
+            note (DailyNote): A daily note.
+
+        Raises:
+            DailyNoteWriteError: If a daily note could not be written.
+        """
+        # Prepare data.
+        path = self.path / f"{note.entry.name}.md"
+        data: dict[str, object] = note.data.model_dump(exclude_defaults=True)
+
+        post = frontmatter.Post(note.content, handler=None, **data)
+
+        # Save the note.
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            frontmatter.dump(
+                post,
+                path,
+                handler=YAMLHandler(),
+                Dumper=yaml.SafeDumper,
+                sort_keys=False,
+            )
+        except PermissionError as exc:
+            raise DailyNoteWriteError(
+                f"Permission denied: '{path}'."
+            ) from exc
+        except OSError as exc:
+            raise DailyNoteWriteError(
+                f"An I/O error occurred while writing '{path}'. {exc}"
+            ) from exc
+        except yaml.YAMLError as exc:
+            raise DailyNoteWriteError(
+                f"A YAML serialization error for '{path}'. {exc}"
             ) from exc
 
     def _search_span(

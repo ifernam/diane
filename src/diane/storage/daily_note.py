@@ -42,7 +42,7 @@ class DailyNoteWriteError(DailyNoteError):
     ...
 
 
-class DailyNoteEntry(NamedTuple):
+class DailyNoteRef(NamedTuple):
     """Stores a daily note's date and path.
 
     Attributes:
@@ -97,18 +97,18 @@ class DailyNote:
     """Represents a daily note.
 
     Attributes:
-        entry (DailyNoteEntry): A daily notes date and path.
+        ref (DailyNoteRef): A daily notes date and path.
         data (DailyNoteData): A daily note's data.
         content (str): A daily note's Markdown content.
     """
 
-    entry: DailyNoteEntry
+    ref: DailyNoteRef
     data: DailyNoteData
     content: str
 
     def __init__(
         self,
-        entry: DailyNoteEntry,
+        ref: DailyNoteRef,
         data: DailyNoteData | None = None,
         content: str = "",
     ) -> None:
@@ -116,13 +116,13 @@ class DailyNote:
         entries.
 
         Args:
-            entry (DailyNoteEntry): A daily notes date and path.
+            ref (DailyNoteRef): A daily notes date and path.
             data (DailyNoteData | None): A daily note's data. Empty
                 by default.
             content (str): A daily note's Markdown content. Empty
                 by default.
         """
-        self.entry = entry
+        self.ref = ref
         self.data = DailyNoteData() if data is None else data
         self.content = content
 
@@ -147,7 +147,7 @@ class DailyNote:
             NonExistentTimeError: If the provided local time does not
                 exist in the specified IANA time zone.
         """
-        iso = f"{self.entry.date.isoformat()}T{yaml_data.time}"
+        iso = f"{self.ref.date.isoformat()}T{yaml_data.time}"
         return TimestampedEntry(
             timestamp=Timestamp.from_iso_iana(iso, yaml_data.timezone),
             entry=Entry(EntryData(tags=yaml_data.tags, text=yaml_data.text)),
@@ -174,11 +174,11 @@ class DailyNote:
         return [self._yaml_to_entry(y) for y in self.data.diane_entries]
 
     @classmethod
-    def load(cls, entry: DailyNoteEntry) -> DailyNote:
+    def load(cls, ref: DailyNoteRef) -> DailyNote:
         """Load a daily note by its name.
 
         Args:
-            entry (DailyNoteEntry): A daily note's date and path.
+            ref (DailyNoteRef): A daily note's date and path.
 
         Returns:
             DailyNote: A daily note.
@@ -189,11 +189,11 @@ class DailyNote:
             InvalidDailyNoteDataError: If a daily note has invalid
                 format.
         """
-        path = entry.path
+        path = ref.path
 
         if not path.is_file():
             raise DailyNoteNotFoundError(
-                f"The daily note '{entry.name}' could not be found."
+                f"The daily note '{ref.name}' could not be found."
             )
 
         try:
@@ -228,7 +228,7 @@ class DailyNote:
 
         try:
             return DailyNote(
-                entry,
+                ref,
                 DailyNoteData.model_validate(note.metadata),
                 note.content,
             )
@@ -247,7 +247,7 @@ class DailyNote:
             DailyNoteWriteError: If a daily note could not be written.
         """
         # Prepare data.
-        path = self.entry.path
+        path = self.ref.path
         data: dict[str, object] = self.data.model_dump(exclude_defaults=True)
 
         post = frontmatter.Post(self.content, handler=None, **data)

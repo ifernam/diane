@@ -15,7 +15,7 @@ from pydantic import field_validator
 from diane.chrono import Timestamp
 from diane.entry import TimestampedEntry
 from diane.storage import EntriesRegister, EntriesRegisterConfig, Slice
-from diane.storage.daily_note import DailyNote, DailyNoteEntry
+from diane.storage.daily_note import DailyNote, DailyNoteRef
 
 from .entries_register import (
     EntriesRegisterError,
@@ -133,7 +133,7 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
         self,
         start: datetime.date | None = None,
         end: datetime.date | None = None,
-    ) -> Iterator[DailyNoteEntry]:
+    ) -> Iterator[DailyNoteRef]:
         """Iterate over daily notes relating to the specified date
         range.
 
@@ -145,7 +145,7 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
             end (datetime.date | None): An end date, included.
 
         Yields:
-            DailyNoteEntry: A daily note's entry.
+            DailyNoteRef: A daily note's reference.
         """
         for p in self.path.glob("*.md"):
             if p.is_file():
@@ -157,7 +157,7 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
                     if end is not None and date > end:
                         continue
 
-                    yield DailyNoteEntry(date, p)
+                    yield DailyNoteRef(date, p)
                 except DailyNoteNameError:
                     pass
 
@@ -165,7 +165,7 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
         self,
         start: datetime.date | None = None,
         end: datetime.date | None = None,
-    ) -> list[DailyNoteEntry]:
+    ) -> list[DailyNoteRef]:
         """Return a list of daily notes relating to the specified date
         range, in chronological order.
 
@@ -176,7 +176,7 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
             end (datetime.date | None): An end date, included.
 
         Returns:
-            list[DailyNoteEntry]: Daily notes entries in chronological
+            list[DailyNoteRef]: Daily notes references in chronological
                 order.
         """
         return sorted(self._daily_notes(start, end), key=lambda e: e.date)

@@ -147,7 +147,7 @@ class DailyNote:
             NonExistentTimeError: If the provided local time does not
                 exist in the specified IANA time zone.
         """
-        iso = f"{self.entry.name}T{yaml_data.time}"
+        iso = f"{self.entry.date.isoformat()}T{yaml_data.time}"
         return TimestampedEntry(
             timestamp=Timestamp.from_iso_iana(iso, yaml_data.timezone),
             entry=Entry(EntryData(tags=yaml_data.tags, text=yaml_data.text)),

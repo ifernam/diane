@@ -42,6 +42,12 @@ class DailyNoteWriteError(DailyNoteError):
     ...
 
 
+class EntriesNotFound(DailyNoteError):
+    """No entries have been found."""
+
+    ...
+
+
 class DailyNoteRef(NamedTuple):
     """Stores a daily note's date and path.
 
@@ -209,12 +215,25 @@ class DailyNote:
                 be validated.
             NonExistentTimeError: If the provided local time does not
                 exist in the specified IANA time zone.
+            EntriesNotFound: If no entries related to the specified
+                timestamp have been found in the daily note.
         """
-        self.data.diane_entries = [
-            yaml_data
-            for yaml_data in self.data.diane_entries
-            if self._yaml_to_entry(yaml_data).timestamp != timestamp
-        ]
+        remaining_entries: list[EntryYAMLData] = []
+        found = False
+        for yaml_data in self.data.diane_entries:
+            entry_timestamp = self._yaml_to_entry(yaml_data).timestamp
+            if entry_timestamp == timestamp:
+                found = True
+            else:
+                remaining_entries.append(yaml_data)
+
+        if not found:
+            raise EntriesNotFound(
+                f"No entries related to '{timestamp}' have been found "
+                f"in the daily note '{self.ref.name}'."
+            )
+
+        self.data.diane_entries = remaining_entries
 
     @classmethod
     def load(cls, ref: DailyNoteRef) -> DailyNote:

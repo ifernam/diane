@@ -153,6 +153,24 @@ class DailyNote:
             entry=Entry(EntryData(tags=yaml_data.tags, text=yaml_data.text)),
         )
 
+    def _entry_to_yaml(self, entry: TimestampedEntry) -> EntryYAMLData:
+        """Convert a timestamped entry to YAML.
+
+        Args:
+            entry (TimestampedEntry): A timestamped entry.
+
+        Returns:
+            EntryYAMLData: Entry YAML data.
+        """
+        t = entry.timestamp
+        time_offset_iso = f"{t.time_iso()}{t.offset_iso()}"
+        return EntryYAMLData(
+            time=time_offset_iso,
+            timezone=t.iana,
+            tags=entry.entry.data.tags,
+            text=entry.entry.data.text,
+        )
+
     @property
     def entries(self) -> list[TimestampedEntry]:
         """Return timestamped entries in the daily note.

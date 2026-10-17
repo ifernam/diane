@@ -199,6 +199,16 @@ class DailyNote:
 
         Args:
             timestamp (Timestamp): A timestamp.
+
+        Raises:
+            InvalidISOFormatError: If `yaml_data.time` is not a valid
+                ISO 8601 string.
+            InvalidTimezoneError: If `yaml_data.timezone` is invalid
+                or does not match the offset in `yaml_data.time`.
+            ValidationError: If the resulting timestamp could not
+                be validated.
+            NonExistentTimeError: If the provided local time does not
+                exist in the specified IANA time zone.
         """
         self.data.diane_entries = [
             yaml_data

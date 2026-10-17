@@ -191,6 +191,21 @@ class DailyNote:
         """
         return [self._yaml_to_entry(y) for y in self.data.diane_entries]
 
+    def remove_entries(self, timestamp: Timestamp) -> None:
+        """Remove entries related to the specified timestamp.
+
+        All entries whose timestamps represent the same moment in time
+        are removed.
+
+        Args:
+            timestamp (Timestamp): A timestamp.
+        """
+        self.data.diane_entries = [
+            yaml_data
+            for yaml_data in self.data.diane_entries
+            if self._yaml_to_entry(yaml_data).timestamp != timestamp
+        ]
+
     @classmethod
     def load(cls, ref: DailyNoteRef) -> DailyNote:
         """Load a daily note by its name.

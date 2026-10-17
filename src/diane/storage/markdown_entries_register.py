@@ -15,7 +15,7 @@ from pydantic import field_validator
 from diane.chrono import Timestamp
 from diane.entry import TimestampedEntry
 from diane.storage import EntriesRegister, EntriesRegisterConfig, Slice
-from diane.storage.daily_note import DailyNote, DailyNoteRef
+from diane.storage.daily_note import DailyNote, DailyNoteRef, EntriesNotFound
 
 from .entries_register import (
     EntriesRegisterError,
@@ -456,10 +456,34 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
 
     @override
     def __delitem__(self, key: Timestamp) -> None:
-        """Remove a list of entries relating to the specified moment
-        in time.
+        """Remove all entries relating to the specified moment in time.
+
+        If there are no entries relating to the specified timestamp,
+        terminates silently.
 
         Args:
             key (Timestamp): A timestamp.
+
+        Raises:
+            DailyNoteNotFoundError: If a daily note could not be found.
+            DailyNoteReadError: If a daily note could not be read.
+            InvalidDailyNoteDataError: If a daily note has invalid
+                format.
+            InvalidISOFormatError: If `yaml_data.time` is not a valid
+                ISO 8601 string.
+            InvalidTimezoneError: If `yaml_data.timezone` is invalid
+                or does not match the offset in `yaml_data.time`.
+            ValidationError: If the resulting timestamp could not
+                be validated.
+            NonExistentTimeError: If the provided local time does not
+                exist in the specified IANA time zone.
+            DailyNoteWriteError: If a daily note could not be written.
         """
-        raise NotImplementedError
+        start, end = self._search_span(key.datetime.date())
+        for r in self._daily_notes(start, end):
+            note = DailyNote.load(r)
+            try:
+                note.remove_entries(key)
+            except EntriesNotFound:
+                continue
+            note.save()

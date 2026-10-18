@@ -230,6 +230,28 @@ class DailyNote:
 
         self.data.diane_entries = [self._entry_to_yaml(e) for e in entries]
 
+    def add_entry(self, entry: TimestampedEntry) -> None:
+        """Add an entry to the daily note if it is not already present.
+
+        Args:
+            entry (TimestampedEntry): A new entry.
+
+        Raises:
+            InvalidISOFormatError: If an existing entry's `time`
+                is not a valid ISO 8601 string.
+            InvalidTimezoneError: If an existing entry's `timezone`
+                is invalid or does not match the offset in `time`.
+            ValidationError: If an existing entry's timestamp could not
+                be validated.
+            NonExistentTimeError: If an existing entry's local time
+                does not exist in the specified IANA time zone.
+            DateMatchError: If the local date of the entry does not
+                match the date of the daily note.
+        """
+        entries = self.entries
+        if entry not in entries:
+            self.entries = [*entries, entry]
+
     def remove_entries(self, timestamp: Timestamp) -> None:
         """Remove entries related to the specified timestamp.
 

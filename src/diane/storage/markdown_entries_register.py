@@ -129,6 +129,18 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
                 f"the format '{name_format}'."
             ) from exc
 
+    def _date_to_name(self, date: datetime.date) -> str:
+        """Convert a date to a daily note's name.
+
+        Args:
+            date (datetime.date): A date.
+
+        Returns:
+            str: A daily note's name.
+        """
+        name_format = self._config.daily_note_name_format
+        return date.strftime(name_format)
+
     def _daily_notes(
         self,
         start: datetime.date | None = None,

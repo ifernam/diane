@@ -252,6 +252,36 @@ class DailyNote:
         if entry not in entries:
             self.entries = [*entries, entry]
 
+    def update_entries(
+        self, entries: list[TimestampedEntry]
+    ) -> None:
+        """Add entries to the daily note, skipping duplicates.
+
+        Args:
+            entries (list[TimestampedEntry]): New entries.
+
+        Raises:
+            InvalidISOFormatError: If an existing entry's `time`
+                is not a valid ISO 8601 string.
+            InvalidTimezoneError: If an existing entry's `timezone`
+                is invalid or does not match the offset in `time`.
+            ValidationError: If an existing entry's timestamp could not
+                be validated.
+            NonExistentTimeError: If an existing entry's local time
+                does not exist in the specified IANA time zone.
+            DateMatchError: If the local date of an entry does not
+                match the date of the daily note.
+        """
+        updated_entries = self.entries
+        changed = False
+        for entry in entries:
+            if entry not in updated_entries:
+                updated_entries.append(entry)
+                changed = True
+
+        if changed:
+            self.entries = updated_entries
+
     def remove_entries(self, timestamp: Timestamp) -> None:
         """Remove entries related to the specified timestamp.
 

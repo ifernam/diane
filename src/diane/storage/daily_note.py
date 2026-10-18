@@ -1,4 +1,5 @@
 import datetime
+import textwrap
 from pathlib import Path
 from typing import ClassVar, NamedTuple
 
@@ -44,6 +45,13 @@ class DailyNoteWriteError(DailyNoteError):
 
 class EntriesNotFound(DailyNoteError):
     """No entries have been found."""
+
+    ...
+
+
+class DateMatchError(DailyNoteError):
+    """The local date of an entry does not match the date of a daily
+    note."""
 
     ...
 
@@ -196,6 +204,31 @@ class DailyNote:
                 exist in the specified IANA time zone.
         """
         return [self._yaml_to_entry(y) for y in self.data.diane_entries]
+
+    @entries.setter
+    def entries(self, entries: list[TimestampedEntry]) -> None:
+        """Rewrite all entries in the daily note.
+
+        Args:
+            entries (list[TimestampedEntry]): New entries.
+
+        Raises:
+            DateMatchError: If the local date of an entry does not match
+                the date of the daily note.
+        """
+        for e in entries:
+            entry_date = e.timestamp.datetime.date()
+            if entry_date != self.ref.date:
+                shorten_text = textwrap.shorten(
+                    e.entry.data.text, width=40, placeholder="…"
+                )
+                raise DateMatchError(
+                    f"The local date {entry_date} of the entry "
+                    f"'{shorten_text}' does not match the date "
+                    f"{self.ref.date} of the daily note '{self.ref.name}'."
+                )
+
+        self.data.diane_entries = [self._entry_to_yaml(e) for e in entries]
 
     def remove_entries(self, timestamp: Timestamp) -> None:
         """Remove entries related to the specified timestamp.

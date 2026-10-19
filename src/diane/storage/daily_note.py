@@ -284,6 +284,35 @@ class DailyNote:
         if changed:
             self.entries = updated_entries
 
+    def remove_entry(self, entry: TimestampedEntry) -> None:
+        """Remove an entry from the daily note.
+
+        Args:
+            entry (TimestampedEntry): An entry to be removed.
+
+        Raises:
+            EntriesNotFound: If an entry has not been found in the daily
+                note.
+        """
+        remaining_entries: list[TimestampedEntry] = []
+        found = False
+        for existing in self.entries:
+            if existing == entry:
+                found = True
+            else:
+                remaining_entries.append(existing)
+
+        if not found:
+            shorten_text = textwrap.shorten(
+                    entry.entry.data.text, width=40, placeholder="…"
+                )
+            raise EntriesNotFound(
+                f"The entry '{shorten_text}' dated {entry.timestamp} "
+                f"has not been found in the daily note '{self.ref.name}'."
+            )
+
+        self.entries = remaining_entries
+
     def remove_entries_by_time(self, timestamp: Timestamp) -> None:
         """Remove entries related to the specified timestamp.
 

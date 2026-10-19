@@ -1,7 +1,8 @@
 import datetime
 import textwrap
+from dataclasses import dataclass
 from pathlib import Path
-from typing import ClassVar, NamedTuple
+from typing import ClassVar
 
 import frontmatter
 import yaml
@@ -56,7 +57,8 @@ class DateMatchError(DailyNoteError):
     ...
 
 
-class DailyNoteRef(NamedTuple):
+@dataclass
+class DailyNoteRef:
     """Stores a daily note's date and path.
 
     Attributes:

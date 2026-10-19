@@ -15,7 +15,12 @@ from pydantic import field_validator
 from diane.chrono import Timestamp
 from diane.entry import TimestampedEntry
 from diane.storage import EntriesRegister, EntriesRegisterConfig, Slice
-from diane.storage.daily_note import DailyNote, DailyNoteRef, EntriesNotFound
+from diane.storage.daily_note import (
+    DailyNote,
+    DailyNoteNotFoundError,
+    DailyNoteRef,
+    EntriesNotFound,
+)
 
 from .entries_register import (
     EntriesRegisterError,
@@ -50,6 +55,18 @@ class DailyNoteNameError(MarkdownEntriesRegisterError):
 
 class TimeKeyTypeError(MarkdownEntriesRegisterError, TypeError):
     """A time key of unknown type."""
+
+    ...
+
+
+class TimeKeyMatchError(MarkdownEntriesRegisterError):
+    """An entry timestamp does not match its key."""
+
+    ...
+
+
+class DailyNoteTemplateNotSetError(MarkdownEntriesRegisterError, ValueError):
+    """A template for a daily note has not been set up."""
 
     ...
 
@@ -105,6 +122,24 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
     # up for, since one and the same moment in time can fall
     # on different calendar days in different time zones.
     _DATE_MARGIN_DAYS: ClassVar[int] = 2
+
+    @property
+    def daily_note_template_path(self) -> Path:
+        """Return the path to a daily note's template.
+
+        Returns:
+            Path: The path to a daily note's template.
+
+        Raises:
+            DailyNoteTemplateNotSetError: If a path to a template
+                for a daily note has not been configured.
+        """
+        if self._config.daily_note_template_path is None:
+            raise DailyNoteTemplateNotSetError(
+                "A path to a template for a daily note "
+                "has not been configured."
+            )
+        return self._storage_path / self._config.daily_note_template_path
 
     def _name_to_date(self, name: str) -> datetime.date:
         """Convert a daily note's name to the date it relates to.
@@ -455,16 +490,78 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
     def __setitem__(
         self, key: Timestamp, value: list[TimestampedEntry]
     ) -> None:
-        """Record a list of entries relating to the specified moment
-        in time.
+        """Rewrite the entries relating to the specified moment in time.
 
         The timestamps of all entries must match the key.
 
         Args:
             key (Timestamp): A timestamp.
-            value (list[TimestampedEntry]): A list of entries.
+            value (list[TimestampedEntry]): New entries.
+
+        Raises:
+            TimeKeyMatchError: If an entry timestamp does not match its
+                key.
+            DailyNoteNotFoundError: If a daily note could not be found.
+            DailyNoteReadError: If a daily note could not be read.
+            InvalidDailyNoteDataError: If a daily note has invalid
+                format.
+            InvalidISOFormatError: If `yaml_data.time` is not a valid
+                ISO 8601 string.
+            InvalidTimezoneError: If `yaml_data.timezone` is invalid
+                or does not match the offset in `yaml_data.time`.
+            ValidationError: If the resulting timestamp could not
+                be validated.
+            NonExistentTimeError: If the provided local time does not
+                exist in the specified IANA time zone.
+            DailyNoteWriteError: If a daily note could not be written.
+            DateMatchError: If the local date of an entry does not match
+                the date of the daily note.
         """
-        raise NotImplementedError
+        # Check that entries timestamps match the key.
+        for e in value:
+            if key != e.timestamp:
+                raise TimeKeyMatchError(
+                    f"The entry timestamp {e.timestamp} "
+                    f"does not match its key {key}."
+                )
+
+        # Terminate after removing existing entries if no replacements
+        # were specified.
+        if not value:
+            del self[key]
+            return
+
+        date = key.datetime.date()
+        try:
+            # Try loading the daily note for the specified date.
+            note = DailyNote.load(next(self._daily_notes(date, date)))
+        except (StopIteration, DailyNoteNotFoundError):
+            try:
+                # Try loading the daily note template.
+                ref = DailyNoteRef(date, self.daily_note_template_path)
+                note = DailyNote.load(ref)
+                note.ref.path = (
+                    self.path / f"{self._date_to_name(date)}.md"
+                )
+            except DailyNoteTemplateNotSetError:
+                # Create a new daily note representation.
+                ref = DailyNoteRef(
+                    date,
+                    self.path / f"{self._date_to_name(date)}.md",
+                )
+                note = DailyNote(ref)
+
+        # Prepare and validate the replacement in memory before modifying
+        # any stored daily notes.
+        retained_entries = [
+            entry for entry in note.entries if entry.timestamp != key
+        ]
+        note.entries = retained_entries
+        note.update_entries(value)
+
+        # Once the replacement is valid, remove old copies and save it.
+        del self[key]
+        note.save()
 
     @override
     def __delitem__(self, key: Timestamp) -> None:

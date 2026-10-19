@@ -333,25 +333,26 @@ class DailyNote:
             timestamp (Timestamp): A timestamp.
 
         Raises:
-            InvalidISOFormatError: If `yaml_data.time` is not a valid
+            InvalidISOFormatError: If an entry's `time` is not a valid
                 ISO 8601 string.
-            InvalidTimezoneError: If `yaml_data.timezone` is invalid
-                or does not match the offset in `yaml_data.time`.
-            ValidationError: If the resulting timestamp could not
+            InvalidTimezoneError: If an entry's `timezone` is invalid
+                or does not match the offset in `time`.
+            ValidationError: If a resulting timestamp could not
                 be validated.
-            NonExistentTimeError: If the provided local time does not
+            NonExistentTimeError: If a provided local time does not
                 exist in the specified IANA time zone.
-            EntriesNotFound: If no entries related to the specified
-                timestamp have been found in the daily note.
+            EntriesNotFound: If no entries with the specified timestamp
+                have been found in the daily note.
+            DateMatchError: If the local date of an entry does not match
+                the date of the daily note.
         """
-        remaining_entries: list[EntryYAMLData] = []
+        remaining_entries: list[TimestampedEntry] = []
         found = False
-        for yaml_data in self.data.diane_entries:
-            entry_timestamp = self._yaml_to_entry(yaml_data).timestamp
-            if entry_timestamp == timestamp:
+        for existing in self.entries:
+            if existing.timestamp == timestamp:
                 found = True
             else:
-                remaining_entries.append(yaml_data)
+                remaining_entries.append(existing)
 
         if not found:
             raise EntriesNotFound(
@@ -359,7 +360,7 @@ class DailyNote:
                 f"in the daily note '{self.ref.name}'."
             )
 
-        self.data.diane_entries = remaining_entries
+        self.entries = remaining_entries
 
     @classmethod
     def load(cls, ref: DailyNoteRef) -> DailyNote:

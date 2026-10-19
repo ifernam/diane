@@ -291,8 +291,18 @@ class DailyNote:
             entry (TimestampedEntry): An entry to be removed.
 
         Raises:
+            InvalidISOFormatError: If an entry's `time` is not a valid
+                ISO 8601 string.
+            InvalidTimezoneError: If an entry's `timezone` is invalid
+                or does not match the offset in `time`.
+            ValidationError: If a resulting timestamp could not
+                be validated.
+            NonExistentTimeError: If a provided local time does not
+                exist in the specified IANA time zone.
             EntriesNotFound: If an entry has not been found in the daily
                 note.
+            DateMatchError: If the local date of an entry does not match
+                the date of the daily note.
         """
         remaining_entries: list[TimestampedEntry] = []
         found = False

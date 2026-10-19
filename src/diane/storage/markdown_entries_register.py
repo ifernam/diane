@@ -592,7 +592,7 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
         for r in self._daily_notes(start, end):
             note = DailyNote.load(r)
             try:
-                note.remove_entries(key)
+                note.remove_entries_by_time(key)
             except EntriesNotFound:
                 continue
             note.save()

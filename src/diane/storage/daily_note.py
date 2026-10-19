@@ -284,7 +284,7 @@ class DailyNote:
         if changed:
             self.entries = updated_entries
 
-    def remove_entries(self, timestamp: Timestamp) -> None:
+    def remove_entries_by_time(self, timestamp: Timestamp) -> None:
         """Remove entries related to the specified timestamp.
 
         All entries whose timestamps represent the same moment in time

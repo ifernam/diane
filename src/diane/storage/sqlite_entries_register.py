@@ -87,3 +87,22 @@ class SQLiteEntriesRegister(EntriesRegister[SQLiteEntriesRegisterConfig]):
             key (Timestamp): A timestamp.
         """
         raise NotImplementedError
+
+    @override
+    def add(self, entry: TimestampedEntry) -> None:
+        """Add an entry to the register.
+
+        Args:
+            entry (TimestampedEntry): A new entry.
+        """
+        raise NotImplementedError
+
+
+    @override
+    def remove(self, entry: TimestampedEntry) -> None:
+        """Remove an entry from the register.
+
+        Args:
+            entry (TimestampedEntry): An entry to be removed.
+        """
+        raise NotImplementedError

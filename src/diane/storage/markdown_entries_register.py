@@ -596,3 +596,79 @@ class MarkdownEntriesRegister(EntriesRegister[MarkdownEntriesRegisterConfig]):
             except EntriesNotFound:
                 continue
             note.save()
+
+    @override
+    def add(self, entry: TimestampedEntry) -> None:
+        """Add an entry to the register if it is not already present.
+
+        Args:
+            entry (TimestampedEntry): A new entry.
+
+        Raises:
+            DailyNoteNotFoundError: If a daily note could not be found,
+                including a configured template.
+            DailyNoteReadError: If a daily note could not be read.
+            InvalidDailyNoteDataError: If a daily note has invalid
+                format.
+            InvalidISOFormatError: If an existing entry's `time` is not
+                a valid ISO 8601 string.
+            InvalidTimezoneError: If an existing entry's `timezone` is
+                invalid or does not match the offset in `time`.
+            ValidationError: If an existing entry's timestamp could not
+                be validated.
+            NonExistentTimeError: If an existing entry's local time does
+                not exist in the specified IANA time zone.
+            DateMatchError: If the local date of the new entry does not
+                match the date of its daily note.
+            DailyNoteWriteError: If the daily note could not be written.
+        """
+        date = entry.timestamp.datetime.date()
+        start, end = self._search_span(date)
+        note: DailyNote | None = None
+        for r in self._daily_notes(start, end):
+            current = DailyNote.load(r)
+            if entry in current.entries:
+                # Stop if the entry is already present in one
+                # of the nearby notes.
+                return
+
+            if current.ref.date == date:
+                note = current
+
+        if note is None:
+            try:
+                # Try loading the daily note template.
+                ref = DailyNoteRef(date, self.daily_note_template_path)
+                note = DailyNote.load(ref)
+                note.ref.path = (
+                    self.path / f"{self._date_to_name(date)}.md"
+                )
+            except DailyNoteTemplateNotSetError:
+                # Create a new daily note representation.
+                ref = DailyNoteRef(
+                    date,
+                    self.path / f"{self._date_to_name(date)}.md",
+                )
+                note = DailyNote(ref)
+
+        note.add_entry(entry)
+        note.save()
+
+    @override
+    def remove(self, entry: TimestampedEntry) -> None:
+        """Remove an entry from the register.
+
+        If the entry has not been found, terminates silently.
+
+        Args:
+            entry (TimestampedEntry): An entry to be removed.
+        """
+        date = entry.timestamp.datetime.date()
+        start, end = self._search_span(date)
+        for r in self._daily_notes(start, end):
+            current = DailyNote.load(r)
+            try:
+                current.remove_entry(entry)
+            except EntriesNotFound:
+                continue
+            current.save()

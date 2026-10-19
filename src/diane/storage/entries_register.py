@@ -136,3 +136,21 @@ class EntriesRegister[ConfigT: EntriesRegisterConfig](
             Path: The path to the entries register.
         """
         return self._storage_path / self._config.path
+
+    @abstractmethod
+    def add(self, entry: TimestampedEntry) -> None:
+        """Add an entry to the register.
+
+        Args:
+            entry (TimestampedEntry): A new entry.
+        """
+        pass
+
+    @abstractmethod
+    def remove(self, entry: TimestampedEntry) -> None:
+        """Remove an entry from the register.
+
+        Args:
+            entry (TimestampedEntry): An entry to be removed.
+        """
+        pass

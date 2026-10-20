@@ -1,6 +1,7 @@
 import tomllib
 from pathlib import Path
 
+import tomlkit
 from pydantic import BaseModel, ValidationError
 
 from diane.app_session import AppSession
@@ -41,11 +42,70 @@ class RecentReposCache(BaseModel):
 class RepoManager:
     @classmethod
     def _cache(cls, app_session: AppSession, repo: Repository) -> None:
-        raise NotImplementedError
+        """Add a repository path to the recent-repositories cache.
+
+        The most recently cached repository is placed first. If the
+        repository is already in the cache, its previous entry is moved
+        to the front.
+
+        Raises:
+            RecentReposParseError: If the TOML content in the cache file
+                is invalid.
+            RecentReposIOError: If the cache file could not be read or
+                written.
+            InvalidRecentReposError: If data in the file does not match
+                the schema.
+        """
+        cache_path = app_session.programme_dir / "cache" / "recent_repos.toml"
+        paths = [
+            recent_repo.path
+            for recent_repo in cls.recent(app_session)
+            if recent_repo.path != repo.path
+        ]
+        paths.insert(0, repo.path)
+
+        cache = RecentReposCache(paths=paths)
+        content = tomlkit.dumps(cache.model_dump(mode="json"))
+
+        try:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            _ = cache_path.write_text(content, encoding="utf-8")
+        except OSError as exc:
+            raise RecentReposIOError(
+                f"Failed to write the cache file '{cache_path}'. {exc}"
+            ) from exc
 
     @classmethod
     def _uncache(cls, app_session: AppSession, repo: Repository) -> None:
-        raise NotImplementedError
+        """Remove a repository path from the recent-repositories cache.
+
+        All occurrences of the repository path are removed.
+
+        Raises:
+            RecentReposParseError: If the TOML content in the cache file
+                is invalid.
+            RecentReposIOError: If the cache file could not be read
+                or written.
+            InvalidRecentReposError: If data in the file does not match
+                the schema.
+        """
+        cache_path = app_session.programme_dir / "cache" / "recent_repos.toml"
+        paths = [
+            recent_repo.path for recent_repo in cls.recent(app_session)
+            if recent_repo.path != repo.path
+        ]
+
+        cache = RecentReposCache(paths=paths)
+        content = tomlkit.dumps(cache.model_dump(mode="json"))
+
+        try:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            _ = cache_path.write_text(content, encoding="utf-8")
+        except OSError as exc:
+            raise RecentReposIOError(
+                f"Failed to write the cache file '{cache_path}'. {exc}"
+            ) from exc
+
 
     @classmethod
     def _clear_cache(cls, app_session: AppSession) -> None:
@@ -89,8 +149,7 @@ class RepoManager:
             cache = RecentReposCache.model_validate(tomllib.loads(content))
         except tomllib.TOMLDecodeError as exc:
             raise RecentReposParseError(
-                f"The TOML syntax in the '{cache_path}' file is invalid. "
-                f"{exc}"
+                f"The TOML syntax in the '{cache_path}' file is invalid. {exc}"
             ) from exc
         except ValidationError as exc:
             raise InvalidRecentReposError(

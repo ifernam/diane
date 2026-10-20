@@ -14,6 +14,7 @@ dependencies = [
     "tzlocal",
     "portion",
     "python-frontmatter",
+    "tomlkit",
 ]
 
 [project.optional-dependencies]

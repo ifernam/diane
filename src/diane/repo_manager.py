@@ -109,7 +109,26 @@ class RepoManager:
 
     @classmethod
     def _clear_cache(cls, app_session: AppSession) -> None:
-        raise NotImplementedError
+        """Remove all repository paths from the recent-repositories
+        cache.
+
+        Create the cache file with an empty list if it does not exist.
+
+        Raises:
+            RecentReposIOError: If the cache file could not be written.
+        """
+        cache_path = app_session.programme_dir / "cache" / "recent_repos.toml"
+        cache = RecentReposCache(paths=[])
+        content = tomlkit.dumps(cache.model_dump(mode="json"))
+
+        try:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            _ = cache_path.write_text(content, encoding="utf-8")
+        except OSError as exc:
+            raise RecentReposIOError(
+                f"Failed to write the cache file '{cache_path}'. {exc}"
+            ) from exc
+
 
     @classmethod
     def _update_cache(cls, app_session: AppSession) -> None:

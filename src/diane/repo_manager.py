@@ -91,7 +91,8 @@ class RepoManager:
         """
         cache_path = app_session.programme_dir / "cache" / "recent_repos.toml"
         paths = [
-            recent_repo.path for recent_repo in cls.recent(app_session)
+            recent_repo.path
+            for recent_repo in cls.recent(app_session)
             if recent_repo.path != repo.path
         ]
 
@@ -105,7 +106,6 @@ class RepoManager:
             raise RecentReposIOError(
                 f"Failed to write the cache file '{cache_path}'. {exc}"
             ) from exc
-
 
     @classmethod
     def _clear_cache(cls, app_session: AppSession) -> None:
@@ -128,11 +128,6 @@ class RepoManager:
             raise RecentReposIOError(
                 f"Failed to write the cache file '{cache_path}'. {exc}"
             ) from exc
-
-
-    @classmethod
-    def _update_cache(cls, app_session: AppSession) -> None:
-        raise NotImplementedError
 
     @classmethod
     def recent(cls, app_session: AppSession) -> list[Repository]:
@@ -181,10 +176,6 @@ class RepoManager:
             repos.append(repo)
 
         return repos
-
-    @classmethod
-    def last(cls):
-        raise NotImplementedError
 
     @classmethod
     def initialise(cls, app_session: AppSession, repo: Repository) -> None:

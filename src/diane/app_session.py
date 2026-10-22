@@ -7,24 +7,6 @@ from pydantic_settings import BaseSettings
 from diane.repo import RepositoryConfig
 
 
-class AppSessionError(Exception):
-    """A general programme session error."""
-
-    pass
-
-
-class AppNotInitialisedError(AppSessionError):
-    """The programme has not been initialised."""
-
-    pass
-
-
-class AppAlreadyInitialisedError(AppSessionError):
-    """The programme has already been initialised."""
-
-    pass
-
-
 class AppConfig(BaseSettings):
     """A programme configuration.
 
@@ -47,43 +29,37 @@ class AppSession:
     to function.
 
     Attributes:
-        _programme_dir (Path): The programme's directory.
+        _app_dir (Path): The programme's directory.
         _working_dir (Path): A working directory.
-        _config (AppConfig | None): A programme configuration.
+        _config (AppConfig): A programme configuration.
     """
 
-    _programme_dir: Path
+    _app_dir: Path
     _working_dir: Path
-    _config: AppConfig | None
+    _config: AppConfig
 
-    def __init__(self) -> None:
-        """Create a new programme session."""
-        self._programme_dir = Path(__file__).parent
-        self._working_dir = Path.cwd()
-        self._config = None
-
-    def initialise(self, config: AppConfig) -> None:
-        """Initialise the programme.
+    def __init__(
+        self, app_dir: Path, working_dir: Path, config: AppConfig
+    ) -> None:
+        """Create a new programme session.
 
         Args:
+            app_dir (Path): The programme's directory.
+            working_dir (Path): A working directory.
             config (AppConfig): A programme configuration.
-
-        Raises:
-            AppAlreadyInitialisedError: If the programme has already
-                been initialised.
         """
-        if self._config is not None:
-            raise AppAlreadyInitialisedError()
+        self._app_dir = app_dir
+        self._working_dir = working_dir
         self._config = config
 
     @property
-    def programme_dir(self) -> Path:
+    def app_dir(self) -> Path:
         """Return the programme's directory.
 
         Returns:
             Path: The programme's directory.
         """
-        return self._programme_dir
+        return self._app_dir
 
     @property
     def working_dir(self) -> Path:
@@ -95,25 +71,10 @@ class AppSession:
         return self._working_dir
 
     @property
-    def initialised(self) -> bool:
-        """Check whether the programme has been initialised.
-
-        Returns:
-            bool: `True` if the programme has been initialised.
-        """
-        return self._config is not None
-
-    @property
     def config(self) -> AppConfig:
         """Return a copy of the programme's configuration.
 
         Returns:
             AppConfig: The programme's configuration.
-
-        Raises:
-            AppNotInitialisedError: If the programme has not been
-                initialised.
         """
-        if self._config is None:
-            raise AppNotInitialisedError()
         return self._config.model_copy()

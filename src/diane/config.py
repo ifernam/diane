@@ -1,6 +1,7 @@
 import datetime
 import tomllib
 import zoneinfo
+from pathlib import Path
 from typing import assert_never
 
 import tzlocal
@@ -72,13 +73,13 @@ class Configurator:
     """
 
     @classmethod
-    def initialise_app(cls, app_session: AppSession) -> None:
+    def configure_app(cls) -> AppSession:
         """Load a configuration from
-        '<programme directory>/config/config.toml'
-        and initialise the programme.
+        '<programme directory>/config/config.toml' and create a new
+        programme session.
 
-        Args:
-            app_session: The programme session to initialise.
+        Returns:
+            AppSession: A new programme session.
 
         Raises:
             ConfigurationFileNotFoundError: If the programme
@@ -88,11 +89,9 @@ class Configurator:
                 be read.
             InvalidConfigurationError: If the configuration data does
                 not match the schema.
-            AppAlreadyInitialisedError: If the programme has already
-                been initialised.
         """
-        programme_dir = app_session.programme_dir
-        config_path = programme_dir / "config" / "config.toml"
+        app_dir = Path(__file__).parent
+        config_path = app_dir / "config" / "config.toml"
 
         if not config_path.is_file():
             raise ConfigurationFileNotFoundError(
@@ -124,8 +123,9 @@ class Configurator:
                 f"{exc}"
             ) from exc
 
-        # Initialise the session with the loaded config.
-        app_session.initialise(config)
+        # Create a new session using the loaded config.
+        working_dir = Path.cwd()
+        return AppSession(app_dir, working_dir, config)
 
     @classmethod
     def initialise_repo(
@@ -152,8 +152,6 @@ class Configurator:
             NoRepositoryFoundError: If no repository has been found.
                 The presence of a Diane subdirectory indicates
                 the existence of a repository.
-            AppNotInitialisedError: If a programme session has not been
-                initialised.
             ConfigurationParseError: If a repository configuration TOML
                 file contains invalid syntax.
             ConfigurationIOError: If a repository configuration file

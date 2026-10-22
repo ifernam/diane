@@ -56,7 +56,7 @@ class RepoManager:
             InvalidRecentReposError: If data in the file does not match
                 the schema.
         """
-        cache_path = app_session.programme_dir / "cache" / "recent_repos.toml"
+        cache_path = app_session.app_dir / "cache" / "recent_repos.toml"
         paths = [
             recent_repo.path
             for recent_repo in cls.recent(app_session)
@@ -89,7 +89,7 @@ class RepoManager:
             InvalidRecentReposError: If data in the file does not match
                 the schema.
         """
-        cache_path = app_session.programme_dir / "cache" / "recent_repos.toml"
+        cache_path = app_session.app_dir / "cache" / "recent_repos.toml"
         paths = [
             recent_repo.path
             for recent_repo in cls.recent(app_session)
@@ -117,7 +117,7 @@ class RepoManager:
         Raises:
             RecentReposIOError: If the cache file could not be written.
         """
-        cache_path = app_session.programme_dir / "cache" / "recent_repos.toml"
+        cache_path = app_session.app_dir / "cache" / "recent_repos.toml"
         cache = RecentReposCache(paths=[])
         content = tomlkit.dumps(cache.model_dump(mode="json"))
 
@@ -149,7 +149,7 @@ class RepoManager:
             InvalidRecentReposError: If data in the file does not match
                 the schema.
         """
-        cache_path = app_session.programme_dir / "cache" / "recent_repos.toml"
+        cache_path = app_session.app_dir / "cache" / "recent_repos.toml"
         try:
             content = cache_path.read_text(encoding="utf-8")
         except FileNotFoundError:
@@ -194,8 +194,6 @@ class RepoManager:
         Raises:
             NoRepositoryFoundError: If a repository's Diane directory
                 does not exist.
-            AppNotInitialisedError: If a programme session has not been
-                initialised.
             ConfigurationParseError: If a repository configuration file
                 contains invalid TOML.
             ConfigurationIOError: If a repository configuration file

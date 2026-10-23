@@ -196,6 +196,8 @@ class Configurator:
             ActivitiesRegisterUnion: A new activities register.
 
         Raises:
+            RepositoryNotInitialisedError: If the repository has not
+                been initialised.
             AssertionError: If the backend of an activity register's
                 configuration hasn't been recognised.
         """
@@ -225,6 +227,8 @@ class Configurator:
             EntriesRegisterUnion: A new entries register.
 
         Raises:
+            RepositoryNotInitialisedError: If the repository has not
+                been initialised.
             AssertionError: If the backend of an entries register's
                 configuration hasn't been recognised.
         """

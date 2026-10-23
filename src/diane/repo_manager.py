@@ -178,8 +178,8 @@ class RepoManager:
         return repos
 
     @classmethod
-    def initialise(cls, app_session: AppSession, repo: Repository) -> None:
-        """Initialise a repository and add it to the recent-repositories
+    def configure(cls, app_session: AppSession, repo: Repository) -> None:
+        """Configure a repository and add it to the recent-repositories
         cache.
 
         Load and apply the repository configuration using
@@ -189,7 +189,7 @@ class RepoManager:
         Args:
             app_session (AppSession): The programme session providing
                 the default repository configuration and cache location.
-            repo (Repository): A repository to initialise.
+            repo (Repository): A repository to configure.
 
         Raises:
             NoRepositoryFoundError: If a repository's Diane directory
@@ -200,8 +200,6 @@ class RepoManager:
                 cannot be read.
             InvalidConfigurationError: If the merged configuration
                 does not match the repository configuration schema.
-            RepositoryAlreadyInitialisedError: If a repository has
-                already been initialised.
             RecentReposParseError: If the TOML content
                 in the recent-repositories cache is invalid.
             RecentReposIOError: If the cache file cannot be read
@@ -209,7 +207,7 @@ class RepoManager:
             InvalidRecentReposError: If data in the cache file does not
                 match its schema.
         """
-        Configurator.initialise_repo(app_session, repo)
+        Configurator.configure_repo(app_session, repo)
         cls._cache(app_session, repo)
 
     @classmethod

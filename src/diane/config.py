@@ -112,11 +112,9 @@ class Configurator:
         return AppSession(app_dir, working_dir, config)
 
     @classmethod
-    def initialise_repo(
-        cls, app_session: AppSession, repo: Repository
-    ) -> None:
+    def configure_repo(cls, app_session: AppSession, repo: Repository) -> None:
         """Load a repository configuration, merge it with
-        the programme's default repository configuration, and initialise
+        the programme's default repository configuration, and configure
         a repository.
 
         Configuration values are resolved in the following order
@@ -130,7 +128,7 @@ class Configurator:
         Args:
             app_session: A programme session providing the default
                 repository configuration.
-            repo: A repository to initialise.
+            repo: A repository to configure.
 
         Raises:
             NoRepositoryFoundError: If no repository has been found.
@@ -142,8 +140,6 @@ class Configurator:
                 could not be read.
             InvalidConfigurationError: If a merged configuration
                 does not match the `RepositoryConfig` schema.
-            RepositoryAlreadyInitialisedError: If a repository has
-                already been initialised.
         """
         if not repo.diane_dir.is_dir():
             raise NoRepositoryFoundError(
@@ -180,7 +176,7 @@ class Configurator:
                 f"The configuration in '{config_path}' is invalid. {exc}"
             ) from exc
 
-        repo.initialise(config)
+        repo.config = config
 
     @classmethod
     def activities_register(cls, repo: Repository) -> ActivitiesRegisterUnion:

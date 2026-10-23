@@ -3,7 +3,7 @@ from diane.clock import Clock
 from diane.config import Configurator
 from diane.entry import Entry, EntryData, TimestampedEntry
 from diane.listr import LiStr
-from diane.repo import Repository, RepositoryAlreadyInitialisedError
+from diane.repo import Repository
 from diane.storage import ActivitiesRegisterUnion, EntriesRegisterUnion
 
 
@@ -29,29 +29,16 @@ class Workspace:
 
         Args:
             app_session (AppSession): The programme's session.
-            repo (Repository): A repository.
+            repo (Repository): An initialised repository.
 
         Raises:
-            NoRepositoryFoundError: If no repository has been found.
-                The presence of a Diane subdirectory indicates
-                the existence of a repository.
-            ConfigurationParseError: If a repository configuration TOML
-                file contains invalid syntax.
-            ConfigurationIOError: If a repository configuration file
-                could not be read.
-            InvalidConfigurationError: If a merged configuration
-                does not match the `RepositoryConfig` schema.
+            RepositoryNotInitialisedError: If the repository has not
+                been initialised.
             AssertionError: If the backend of an activities or entries
                 register's configuration hasn't been recognised.
         """
-        # Set up the clock.
+        # Set up the clock and working repository.
         self._clock = Clock(app_session.config.timezone)
-
-        # Set up the working repository.
-        try:
-            Configurator.initialise_repo(app_session, repo)
-        except RepositoryAlreadyInitialisedError:
-            pass
         self._repo = repo
 
         # Setup the user's data registers.

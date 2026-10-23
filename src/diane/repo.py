@@ -96,22 +96,6 @@ class Repository:
         self._path = Path(path)
         self._config = None
 
-    def initialise(self, config: RepositoryConfig) -> None:
-        """Initialise the repository.
-
-        Initialises the repository with a supplied configuration.
-
-        Args:
-           config (RepositoryConfig): A configuration to apply.
-
-        Raises:
-            RepositoryAlreadyInitialisedError: The repository has
-                already been initialised.
-        """
-        if self._config is not None:
-            raise RepositoryAlreadyInitialisedError()
-        self._config = config
-
     @property
     def diane_dir(self) -> Path:
         """Return the Diane directory of the repository.
@@ -156,3 +140,14 @@ class Repository:
         if self._config is None:
             raise RepositoryNotInitialisedError(self.path)
         return self._config.model_copy()
+
+    @config.setter
+    def config(self, config: RepositoryConfig) -> None:
+        """Configure the repository.
+
+        Configures the repository with a supplied configuration.
+
+        Args:
+           config (RepositoryConfig): A configuration to apply.
+        """
+        self._config = config

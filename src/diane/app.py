@@ -1,6 +1,7 @@
 from diane.app_session import AppSession
 from diane.config import Configurator
 from diane.repo import Repository
+from diane.repo_manager import RepoManager
 from diane.workspace import Workspace
 
 
@@ -28,16 +29,22 @@ class App:
             Workspace: A workspace for the repository.
 
         Raises:
-            NoRepositoryFoundError: If no repository has been found.
-                The presence of a Diane subdirectory indicates
-                the existence of a repository.
-            ConfigurationParseError: If a repository configuration TOML
-                file contains invalid syntax.
+            NoRepositoryFoundError: If a repository's Diane directory
+                does not exist.
+            ConfigurationParseError: If a repository configuration file
+                contains invalid TOML.
             ConfigurationIOError: If a repository configuration file
-                could not be read.
-            InvalidConfigurationError: If a merged configuration
-                does not match the `RepositoryConfig` schema.
+                cannot be read.
+            InvalidConfigurationError: If the merged configuration
+                does not match the repository configuration schema.
+            RecentReposParseError: If the TOML content
+                in the recent-repositories cache is invalid.
+            RecentReposIOError: If the cache file cannot be read
+                or written.
+            InvalidRecentReposError: If data in the cache file does not
+                match its schema.
             AssertionError: If the backend of an activities or entries
                 register's configuration hasn't been recognised.
         """
+        RepoManager.configure(self.app_session, repo)
         return Workspace(self.app_session, repo)

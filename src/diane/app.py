@@ -1,7 +1,7 @@
 from diane.app_session import AppSession
 from diane.config import Configurator
 from diane.repo import Repository
-from diane.repo_manager import RepoManager
+from diane.repo_manager import RecentRepoItem, RepoManager
 from diane.workspace import Workspace
 
 
@@ -18,6 +18,27 @@ class App:
     def __init__(self) -> None:
         """Initialise the programme."""
         self.app_session = Configurator.configure_app()
+
+    def recent_repos(self) -> list[RecentRepoItem]:
+        """Return recently used repositories, attempting to configure
+        each one.
+
+        A repository that cannot be found or configured is still
+        included in the result; its error is stored in the corresponding
+        `RecentRepoItem.error` field. Successfully configured
+        repositories have `error` set to `None`.
+
+        Returns:
+            list[RecentRepoItem]: Recently used repositories.
+
+        Raises:
+            RecentReposParseError: If the TOML content in the cache file
+                is invalid.
+            RecentReposIOError: If the cache file could not be read.
+            InvalidRecentReposError: If data in the file does not match
+                the schema.
+        """
+        return RepoManager.recent(self.app_session)
 
     def workspace(self, repo: Repository) -> Workspace:
         """Create a new workspace for working with the given repository.

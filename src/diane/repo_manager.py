@@ -1,12 +1,18 @@
 import tomllib
 from pathlib import Path
+from typing import NamedTuple
 
 import tomlkit
 from pydantic import BaseModel, ValidationError
 
 from diane.app_session import AppSession
-from diane.config import Configurator
-from diane.repo import Repository
+from diane.config import (
+    ConfigurationIOError,
+    ConfigurationParseError,
+    Configurator,
+    InvalidConfigurationError,
+)
+from diane.repo import NoRepositoryFoundError, Repository
 
 
 class RepoManagerError(Exception):
@@ -39,6 +45,11 @@ class RecentReposCache(BaseModel):
     paths: list[Path]
 
 
+class RecentRepoItem(NamedTuple):
+    repo: Repository
+    error: Exception | None
+
+
 class RepoManager:
     @classmethod
     def _cache(cls, app_session: AppSession, repo: Repository) -> None:
@@ -57,11 +68,7 @@ class RepoManager:
                 the schema.
         """
         cache_path = app_session.app_dir / "cache" / "recent_repos.toml"
-        paths = [
-            recent_repo.path
-            for recent_repo in cls.recent(app_session)
-            if recent_repo.path != repo.path
-        ]
+        paths = [p for p in cls._recent_paths(app_session) if p != repo.path]
         paths.insert(0, repo.path)
 
         cache = RecentReposCache(paths=paths)
@@ -90,11 +97,7 @@ class RepoManager:
                 the schema.
         """
         cache_path = app_session.app_dir / "cache" / "recent_repos.toml"
-        paths = [
-            recent_repo.path
-            for recent_repo in cls.recent(app_session)
-            if recent_repo.path != repo.path
-        ]
+        paths = [p for p in cls._recent_paths(app_session) if p != repo.path]
 
         cache = RecentReposCache(paths=paths)
         content = tomlkit.dumps(cache.model_dump(mode="json"))
@@ -130,17 +133,15 @@ class RepoManager:
             ) from exc
 
     @classmethod
-    def recent(cls, app_session: AppSession) -> list[Repository]:
-        """Return recently used repositories.
-
-        Repositories are not initialised.
+    def _recent_paths(cls, app_session: AppSession) -> list[Path]:
+        """Return recently used repository paths.
 
         Args:
             app_session (AppSession): A programme session providing
                 the path to the cache file.
 
         Returns:
-            list[Repository]: Recently used repositories.
+            list[Path]: Recently used repository path.
 
         Raises:
             RecentReposParseError: If the TOML content in the cache file
@@ -170,10 +171,46 @@ class RepoManager:
                 f"The cache file '{cache_path}' is invalid. {exc}"
             ) from exc
 
-        repos: list[Repository] = []
-        for path in cache.paths:
-            repo = Repository(path)
-            repos.append(repo)
+        return cache.paths
+
+    @classmethod
+    def recent(cls, app_session: AppSession) -> list[RecentRepoItem]:
+        """Return recently used repositories, attempting to configure
+        each one.
+
+        A repository that cannot be found or configured is still
+        included in the result; its error is stored in the corresponding
+        `RecentRepoItem.error` field. Successfully configured
+        repositories have `error` set to `None`.
+
+        Args:
+            app_session (AppSession): A programme session providing
+                the path to the cache file.
+
+        Returns:
+            list[RecentRepoItem]: Recently used repositories.
+
+        Raises:
+            RecentReposParseError: If the TOML content in the cache file
+                is invalid.
+            RecentReposIOError: If the cache file could not be read.
+            InvalidRecentReposError: If data in the file does not match
+                the schema.
+        """
+        repos: list[RecentRepoItem] = []
+        for p in cls._recent_paths(app_session):
+            repo = Repository(p)
+            error = None
+            try:
+                Configurator.configure_repo(app_session, repo)
+            except (
+                NoRepositoryFoundError,
+                ConfigurationParseError,
+                ConfigurationIOError,
+                InvalidConfigurationError,
+            ) as exc:
+                error = exc
+            repos.append(RecentRepoItem(repo, error))
 
         return repos
 

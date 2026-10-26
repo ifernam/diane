@@ -56,6 +56,15 @@ class App:
         """
         return RepoManager.recent(self._app_session)
 
+    @property
+    def workspaces(self) -> list[Workspace]:
+        """Return current workspaces.
+
+        Returns:
+            list[Workspace]: Current workspaces.
+        """
+        return self._workspace.copy()
+
     def create_workspace(self, repo: Repository) -> Workspace:
         """Create a new workspace for working with the given repository
         add it to the list of current workspaces.

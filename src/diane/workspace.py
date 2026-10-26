@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from diane.app_session import AppSession
 from diane.clock import Clock
 from diane.config import Configurator
@@ -45,6 +47,15 @@ class Workspace:
         self._activities_register = Configurator.activities_register(repo)
         # self.sessions_register = Configurator.sessions_register(repo)
         self._entries_register = Configurator.entries_register(repo)
+
+    @property
+    def path(self) -> Path:
+        """Return the working repository's path.
+
+        Returns:
+            Path: Return the working repository's path.
+        """
+        return self._repo.path
 
     def write_entry(self, tags: LiStr, text: str) -> None:
         """Write a new entry.

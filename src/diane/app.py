@@ -1,5 +1,6 @@
 from diane.app_session import AppSession
 from diane.config import Configurator
+from diane.listr import LiStr
 from diane.repo import Repository
 from diane.repo_manager import RecentRepoItem, RepoManager
 from diane.workspace import Workspace
@@ -11,9 +12,15 @@ class AppError(Exception):
     ...
 
 
-class WorkspaceAlreadyCreated(AppError):
+class WorkspaceAlreadyCreatedError(AppError):
     """A workspace has already been created for the specified
     repository."""
+
+    ...
+
+
+class NoWorkspaceSpecifiedError(AppError):
+    """No workspace has been specified."""
 
     ...
 
@@ -76,8 +83,8 @@ class App:
             Workspace: A workspace for the repository.
 
         Raises:
-            WorkspaceAlreadyCreated: If a workspace has already been
-                created for the given repository.
+            WorkspaceAlreadyCreatedError: If a workspace has already
+                been created for the given repository.
             NoRepositoryFoundError: If a repository's Diane directory
                 does not exist.
             ConfigurationParseError: If a repository configuration file
@@ -96,7 +103,7 @@ class App:
                 register's configuration hasn't been recognised.
         """
         if any(w.path == repo.path for w in self._workspace):
-            raise WorkspaceAlreadyCreated(
+            raise WorkspaceAlreadyCreatedError(
                 "A workspace has already been created "
                 f"for the '{repo.path}' repository."
             )
@@ -105,3 +112,60 @@ class App:
         workspace = Workspace(self._app_session, repo)
         self._workspace.append(workspace)
         return workspace
+
+    def write_entry(
+        self, tags: LiStr, text: str, *workspaces: Workspace
+    ) -> None:
+        """Write a new entry in the specified workspaces.
+
+        Args:
+            tags (LiStr): Tags.
+            text (str): A text.
+            *workspaces (Workspace): Workspaces for writing.
+
+        Raises:
+            NoWorkspaceSpecifiedError: If no workspaces are provided.
+            ExceptionGroup: If one or more workspace writes fail.
+                The group contains the exceptions raised by those
+                writes; successful writes are not rolled back.
+                The contained exceptions may include:
+                - `InvalidDefaultTimezoneError`: if the configured time
+                  zone is invalid;
+                - `LocalTimezoneDetectionError`: if the local time zone
+                  could not be determined;
+                - `DailyNoteNotFoundError`: if a daily note could not
+                  be found, including a configured template;
+                - `DailyNoteReadError`: if a daily note could not
+                  be read;
+                - `InvalidDailyNoteDataError`: if a daily note has
+                  invalid format;
+                - `InvalidISOFormatError`: if an existing entry's `time`
+                  is not a valid ISO 8601 string;
+                - `InvalidTimezoneError`: if an existing entry's
+                  `timezone` is invalid or does not match the offset
+                  in `time`;
+                - `ValidationError`: if an existing entry's timestamp
+                  could not be validated;
+                - `NonExistentTimeError`: if an existing entry's local
+                  time does not exist in the specified IANA time zone;
+                - `DateMatchError`: if the new entry's local date
+                  does not match the date of its daily note;
+                - `DailyNoteWriteError`: if the daily note could not
+                  be written.
+        """
+        if not workspaces:
+            raise NoWorkspaceSpecifiedError("No workspace has been specified.")
+
+        errors: list[Exception] = []
+
+        for w in workspaces:
+            try:
+                w.write_entry(tags, text)
+            except Exception as exc:
+                exc.add_note(f"Workspace: '{w.path}'.")
+                errors.append(exc)
+
+        if errors:
+            raise ExceptionGroup(
+                "Failed to write the entry in one or more workspaces.", errors
+            )

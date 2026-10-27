@@ -1,6 +1,9 @@
 """System-tray icon for the Diane GUI."""
 
-from PySide6.QtWidgets import QApplication, QMenu, QStyle, QSystemTrayIcon
+from pathlib import Path
+
+from PySide6.QtGui import QIcon
+from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 
 class TrayIcon(QSystemTrayIcon):
@@ -22,9 +25,7 @@ class TrayIcon(QSystemTrayIcon):
             qt_app (QApplication): The Qt application to quit when
                 the user selects Quit.
         """
-        icon = qt_app.style().standardIcon(
-            QStyle.StandardPixmap.SP_ComputerIcon
-        )
+        icon = QIcon(str(Path(__file__).with_name("tray-icon.png")))
         super().__init__(icon, qt_app)
         self.setToolTip("Diane")
 

@@ -25,7 +25,7 @@ class TrayIcon(QSystemTrayIcon):
             qt_app (QApplication): The Qt application to quit when
                 the user selects Quit.
         """
-        icon = QIcon(str(Path(__file__).with_name("tray-icon.png")))
+        icon = QIcon(str(Path(__file__).with_name("tray_icon.png")))
         super().__init__(icon, qt_app)
         self.setToolTip("Diane")
 
